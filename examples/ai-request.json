@@ -1,0 +1,19 @@
+{
+  "goodsId": "100000123",
+  "goodsName": "남성 배기핏 바지",
+  "brand": "ABC",
+  "categoryName": "패션 > 남성의류 > 바지",
+  "coupangCategoryId": "123456",
+  "coupangCategoryName": "남성 바지",
+  "allowedPurchaseOptions": [
+    "색상",
+    "사이즈"
+  ],
+  "requiredPurchaseOptions": ["색상", "사이즈"],
+  "options": [
+    {
+      "optionId": "1",
+      "optionName1": "남색 100"
+    }
+  ]
+}

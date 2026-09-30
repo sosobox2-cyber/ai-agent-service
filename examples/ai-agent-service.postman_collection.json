@@ -1,0 +1,80 @@
+{
+    "info":  {
+                 "name":  "ai-agent-service 구매옵션 추론",
+                 "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+             },
+    "variable":  [
+                     {
+                         "key":  "baseUrl",
+                         "value":  "http://127.0.0.1:8081"
+                     }
+                 ],
+    "item":  [
+                 {
+                     "name":  "모의 추출",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "body":  {
+                                                  "mode":  "raw",
+                                                  "raw":  "{\n  \"goodsId\": \"100000123\",\n  \"goodsName\": \"남성 배기핏 바지\",\n  \"brand\": \"ABC\",\n  \"categoryName\": \"패션 \u003e 남성의류 \u003e 바지\",\n  \"coupangCategoryId\": \"123456\",\n  \"coupangCategoryName\": \"남성 바지\",\n  \"allowedPurchaseOptions\": [\n    \"핏\",\n    \"색상\",\n    \"사이즈\"\n  ],\n  \"requiredPurchaseOptions\": [\"핏\", \"색상\", \"사이즈\"],\n  \"options\": [\n    {\n      \"optionId\": \"1\",\n      \"optionName1\": \"배기핏 남색 100 \"\n    },\n    {\n      \"optionId\": \"2\",\n      \"optionName1\": \"배기핏 남색 150\"\n    },\n    {\n      \"optionId\": \"3\",\n      \"optionName1\": \"배기핏 남색 200\"\n    }\n  ]\n}",
+                                                  "options":  {
+                                                                  "raw":  {
+                                                                              "language":  "json"
+                                                                          }
+                                                              }
+                                              },
+                                     "url":  "{{baseUrl}}/api/v1/coupang/purchase-options/infer?testMode=true"
+                                 }
+                 },
+                 {
+                     "name":  "AI 문맥 추론",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "body":  {
+                                                  "mode":  "raw",
+                                                  "raw":  "{\n  \"goodsId\": \"100000123\",\n  \"goodsName\": \"남성 배기핏 바지\",\n  \"brand\": \"ABC\",\n  \"categoryName\": \"패션 \u003e 남성의류 \u003e 바지\",\n  \"coupangCategoryId\": \"123456\",\n  \"coupangCategoryName\": \"남성 바지\",\n  \"allowedPurchaseOptions\": [\n    \"색상\",\n    \"사이즈\"\n  ],\n  \"requiredPurchaseOptions\": [\"색상\", \"사이즈\"],\n  \"options\": [\n    {\n      \"optionId\": \"1\",\n      \"optionName1\": \"남색 100\"\n    }\n  ]\n}",
+                                                  "options":  {
+                                                                  "raw":  {
+                                                                              "language":  "json"
+                                                                          }
+                                                              }
+                                              },
+                                     "url":  "{{baseUrl}}/api/v1/coupang/purchase-options/infer"
+                                 }
+                 },
+                 {
+                     "name":  "불확실한 옵션",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "body":  {
+                                                  "mode":  "raw",
+                                                  "raw":  "{\n  \"goodsId\": \"100000123\",\n  \"goodsName\": \"남성 오버핏 반팔 티셔츠\",\n  \"brand\": \"ABC\",\n  \"categoryName\": \"패션 \u003e 남성의류 \u003e 티셔츠\",\n  \"coupangCategoryId\": \"123456\",\n  \"coupangCategoryName\": \"남성 티셔츠\",\n  \"allowedPurchaseOptions\": [\n    \"색상\",\n    \"사이즈\"\n  ],\n  \"requiredPurchaseOptions\": [\"색상\", \"사이즈\"],\n  \"options\": [\n    {\n      \"optionId\": \"1\",\n      \"optionName1\": \"A형\"\n    }\n  ]\n}",
+                                                  "options":  {
+                                                                  "raw":  {
+                                                                              "language":  "json"
+                                                                          }
+                                                              }
+                                              },
+                                     "url":  "{{baseUrl}}/api/v1/coupang/purchase-options/infer"
+                                 }
+                 }
+             ]
+}

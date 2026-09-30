@@ -1,0 +1,12 @@
+services:
+  ai-agent-service:
+    build: .
+    image: ai-agent-service:local
+    ports:
+      - "${HOST_ADDRESS:-127.0.0.1}:${HOST_PORT:-8081}:8081"
+    environment:
+      SERVER_ADDRESS: "0.0.0.0"
+      PORT: "8081"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4.1-mini}"
+    restart: unless-stopped

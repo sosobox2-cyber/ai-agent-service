@@ -1,0 +1,9 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="AI Agent Service" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="com.cware.ai.AiAgentServiceApplication" />
+    <module name="ai-agent-service" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

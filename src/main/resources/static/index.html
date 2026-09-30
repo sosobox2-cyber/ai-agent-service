@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>구매옵션 매핑 테스트 · AI Agent Service</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="page-header">
+      <div>
+        <span class="eyebrow">AI AGENT SERVICE / TEST CONSOLE</span>
+        <h1>구매옵션 매핑 테스트</h1>
+        <p>상품과 단품 옵션을 입력해 쿠팡 구매옵션명 매핑 결과를 확인하세요.</p>
+      </div>
+      <span class="environment">로컬 테스트 화면</span>
+    </header>
+
+    <form id="inference-form">
+      <section class="panel" aria-labelledby="product-heading">
+        <div class="section-heading">
+          <div><span class="step">01</span><h2 id="product-heading">상품 정보</h2></div>
+          <p>상품 및 카테고리 정보를 입력합니다.</p>
+        </div>
+        <div class="fields three-columns">
+          <label>상품 ID <span class="required">*</span><input name="goodsId" required maxlength="100" placeholder="예: 100000123"></label>
+          <label>상품명 <span class="required">*</span><input name="goodsName" required maxlength="500" placeholder="예: 남성 오버핏 반팔 티셔츠"></label>
+          <label>브랜드<input name="brand" maxlength="200" placeholder="선택 입력"></label>
+          <label>내부 카테고리 <span class="required">*</span><input name="categoryName" required maxlength="500" placeholder="예: 패션 > 남성의류 > 티셔츠"></label>
+          <label>쿠팡 카테고리 ID <span class="required">*</span><input name="coupangCategoryId" required maxlength="100" placeholder="예: 123456"></label>
+          <label>쿠팡 카테고리명 <span class="required">*</span><input name="coupangCategoryName" required maxlength="500" placeholder="예: 남성 티셔츠"></label>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="allowed-heading">
+        <div class="section-heading">
+          <div><span class="step">02</span><h2 id="allowed-heading">쿠팡 구매옵션명</h2></div>
+          <p>실제 쿠팡 카테고리에서 허용한 이름을 입력하세요.</p>
+        </div>
+        <div class="fields two-columns">
+          <label>허용 옵션명 <span class="required">*</span><textarea name="allowedPurchaseOptions" required rows="3" placeholder="핏, 색상, 사이즈"></textarea><small>쉼표 또는 줄바꿈으로 구분 · 2~20개</small></label>
+          <label>필수 옵션명<textarea name="requiredPurchaseOptions" rows="3" placeholder="선택 입력"></textarea><small>비워두면 필수 옵션이 없습니다. 지정한다면 허용 옵션명 중에서 선택하세요.</small></label>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="options-heading">
+        <div class="section-heading">
+          <div><span class="step">03</span><h2 id="options-heading">원본 단품 옵션</h2></div>
+          <p>한 줄이 단품 하나입니다. 완성된 옵션명을 분리하지 않고 그대로 입력하세요.</p>
+        </div>
+        <div class="table-scroll">
+          <table class="input-table">
+            <thead><tr><th scope="col">단품 ID</th><th scope="col">원본 옵션명</th><th scope="col"><span class="sr-only">삭제</span></th></tr></thead>
+            <tbody id="option-rows"></tbody>
+          </table>
+        </div>
+        <button type="button" class="button subtle" id="add-row">+ 단품 추가</button>
+        <small class="below-table">최대 200개 · 예: 배기핏 남색 100</small>
+      </section>
+
+      <div class="actions">
+        <div class="presets">
+          <span>예제 불러오기</span>
+          <button type="button" class="button quiet" data-example="sample">배기핏 예제</button>
+        </div>
+        <div class="submit-area">
+          <label class="checkbox test-mode"><input type="checkbox" id="test-mode" checked> 테스트 모드 <small>기본 색상·사이즈·핏만 모의 추출 · 자동 적용 불가</small></label>
+          <button type="submit" class="button primary" id="submit-button">매핑 결과 확인 <span aria-hidden="true">→</span></button>
+        </div>
+      </div>
+    </form>
+
+    <section class="panel result-panel" id="result-panel" aria-labelledby="result-heading" hidden>
+      <div class="section-heading">
+        <div><span class="step">04</span><h2 id="result-heading">추론 결과</h2></div>
+        <span id="result-status" class="status" role="status"></span>
+      </div>
+      <p id="result-summary" class="result-summary"></p>
+      <div id="result-details" class="result-details"></div>
+      <details class="json-details"><summary>요청·응답 JSON 보기</summary><div class="json-grid"><div><h3>요청</h3><pre id="request-json"></pre></div><div><h3>응답</h3><pre id="response-json"></pre></div></div></details>
+    </section>
+    <footer>이 화면은 로컬 테스트용입니다. 입력한 데이터는 현재 서버의 추론 API로 전송됩니다.</footer>
+  </main>
+  <template id="option-row-template">
+    <tr>
+      <td><input data-field="optionId" required maxlength="100" aria-label="단품 ID"></td>
+      <td><input data-field="optionName1" required maxlength="500" aria-label="원본 옵션명" placeholder="배기핏 남색 100"></td>
+      <td><button type="button" class="remove-row" aria-label="단품 삭제" title="단품 삭제">×</button></td>
+    </tr>
+  </template>
+</body>
+</html>
