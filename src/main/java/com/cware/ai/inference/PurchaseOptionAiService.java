@@ -82,7 +82,9 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
                 "certain", Map.of("type", "boolean"),
                 "confidence", Map.of("type", "number"),
                 "mappings", Map.of("type", "array", "items", entry),
-                "reason", Map.of("type", "string")));
+                "reason", Map.of("type", "string", "description",
+                        "certain 값과 관계없이 반드시 작성하는 비어 있지 않은 한국어 판단 근거 요약. "
+                        + "1~3문장, 공백과 줄바꿈을 포함하여 2000자 이내. 전체 매핑 목록을 반복하지 않는다.")));
     }
     private static Map<String,Object> object(Map<String,Object> properties) {
         return Map.of("type","object","properties",properties,"required",properties.keySet().stream().sorted().toList(),

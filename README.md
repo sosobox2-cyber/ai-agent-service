@@ -122,6 +122,6 @@ Vercel은 로컬 `.env`나 `compose.yaml`을 실행 환경 설정으로 사용�
 | `PORT` | `8081` |
 | `SERVER_ADDRESS` | `127.0.0.1` |
 | `app.inference.confidence-threshold` | `0.95` |
-| `app.inference.prompt-version` | `coupang-option-v3` |
+| `app.inference.prompt-version` | `coupang-option-v4` |
 
 Java 17과 Maven이 설정된 환경에서 `mvn test`로 요청 검증, 모의 추출, AI 응답 검증 및 API 테스트를 실행할 수 있습니다.
