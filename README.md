@@ -55,6 +55,28 @@ docker run -d --name ai-agent-service -p 127.0.0.1:8081:8081 ai-agent-service:lo
 
 Dockerfile은 [Docker의 다단계 빌드 방식](https://docs.docker.com/build/building/multi-stage/)으로 Maven 빌드 환경과 Java 실행 환경을 분리하며, 실행 컨테이너는 일반 사용자로 동작합니다.
 
+## Vercel 배포
+
+Vercel의 [Container Images](https://vercel.com/docs/functions/container-images) 기능으로 테스트 화면과 Spring Boot API를 함께 배포합니다. 이 기능은 현재 베타이며 Vercel Functions의 요금 및 실행 제한이 적용됩니다. 프로젝트 루트의 `Dockerfile.vercel`을 자동 감지해 Java 17 이미지로 빌드하고 모든 요청을 컨테이너로 연결합니다.
+
+1. 프로젝트를 GitHub 저장소에 올립니다. `.env`와 실제 API 키는 커밋하지 않습니다.
+2. Vercel에서 **Add New → Project**를 선택하고 해당 저장소를 Import합니다. Root Directory는 `pom.xml`과 `Dockerfile.vercel`이 있는 프로젝트 루트로 지정합니다.
+3. 배포 설정의 Environment Variables에 아래 값을 추가합니다. 실제 AI를 사용할 환경(Production 및 필요하면 Preview)에 적용합니다.
+
+| 환경 변수 | 값 |
+|---|---|
+| `PORT` | `8081` — Vercel이 전달할 포트와 서버 포트를 일치시킵니다. |
+| `SERVER_ADDRESS` | `0.0.0.0` |
+| `OPENAI_API_KEY` | 실제 AI 추론에 사용할 API 키. 모의 테스트만 할 때는 생략합니다. |
+| `OPENAI_MODEL` | `gpt-4.1-mini` (선택) |
+
+4. **Deploy**를 실행합니다. 이미지 빌드 중 `mvn verify`로 테스트도 실행합니다.
+5. 발급된 배포 주소의 `/`에 접속하고, 테스트 모드를 켜서 모의 추출을 확인합니다. 실제 AI는 API 키를 설정하고 테스트 모드를 해제해 확인합니다.
+
+Vercel은 로컬 `.env`나 `compose.yaml`을 실행 환경 설정으로 사용하지 않습니다. 환경 변수를 변경했다면 새로 배포해야 반영됩니다. 한동안 요청이 없으면 컨테이너가 내려갔다가 다음 요청에 다시 시작하므로 첫 접속은 느릴 수 있습니다. 실제 AI 호출에 사용하는 페이지이므로 공유 범위에 맞게 Vercel Deployment Protection 또는 앱 인증으로 접근을 제한하세요.
+
+`AI_RATE_LIMIT`(HTTP 429)은 OpenAI의 크레딧 또는 호출·사용 한도 문제일 수 있습니다. Vercel 배포로 해결되지 않으며, OpenAI 계정의 크레딧과 한도를 별도로 확인해야 합니다.
+
 ## API
 
 `POST /api/v1/coupang/purchase-options/infer`로 다음 JSON을 보냅니다. `allowedPurchaseOptions`는 카테고리에서 허용하는 구매옵션명이고, `requiredPurchaseOptions`는 그중 각 단품에 반드시 추출해야 하는 이름입니다. 두 목록에 같은 이름이 들어가는 것은 정상이며 필수 옵션을 여러 개 지정할 수 있습니다.
