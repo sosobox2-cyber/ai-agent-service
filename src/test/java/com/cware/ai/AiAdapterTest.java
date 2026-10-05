@@ -15,6 +15,7 @@ import java.net.SocketTimeoutException;
 import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import org.mockito.ArgumentCaptor;
 
 class AiAdapterTest {
     ChatModel model;
@@ -30,6 +31,18 @@ class AiAdapterTest {
     @Test void parsesStructuredMapping() throws Exception {
         respond(new ObjectMapper().writeValueAsString(Fixtures.proposal()),"stop");
         assertThat(ai.infer(Fixtures.request())).isEqualTo(Fixtures.proposal());
+    }
+    @Test void sendsNoticeAsProductDataWithContextRules() throws Exception {
+        respond(new ObjectMapper().writeValueAsString(Fixtures.proposal()), "stop");
+        String notice = "제품 소재: 면 100%\n색상: 남색\n치수: 100, 150, 200";
+        ai.infer(Fixtures.withNotice(Fixtures.request(), notice));
+        var captured = ArgumentCaptor.forClass(Prompt.class);
+        verify(model).call(captured.capture());
+        String input = captured.getValue().getInstructions().get(1).getText();
+        var product = new ObjectMapper().readTree(input.substring(input.indexOf('{'))).path("product");
+        assertThat(product.path("productNoticeText").asText()).isEqualTo(notice);
+        assertThat(captured.getValue().getInstructions().get(0).getText())
+                .contains("원본 옵션명에 없는 값을 정보고시에서 가져와 채우지 않는다");
     }
     @ParameterizedTest @ValueSource(strings={
         "not json","null","{} {}",

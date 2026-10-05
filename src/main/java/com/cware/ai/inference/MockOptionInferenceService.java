@@ -29,7 +29,7 @@ public final class MockOptionInferenceService {
     private static String extract(String source, String target) {
         String name = target.toUpperCase(Locale.ROOT);
         if (name.equals("옵션") || name.equals("상품옵션")) return source;
-        String[] tokens = source.strip().split("\\s+");
+        String[] tokens = source.strip().split("[\\s/]+");
         if (name.contains("색상") || name.contains("컬러") || name.equals("COLOR")) {
             for (String token : tokens) if (COLORS.contains(token.toLowerCase(Locale.ROOT))) return token;
         }

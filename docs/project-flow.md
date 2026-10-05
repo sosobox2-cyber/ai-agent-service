@@ -1,19 +1,128 @@
 # AI Agent Service 프로젝트 설명
 
-이 문서는 현재 소스 코드를 기준으로 서버 시작, 요청 처리, AI 호출, 결과 검증의 순서를 설명합니다. 순서도의 상자에는 파일명과 메소드명을 함께 적었습니다. Mermaid를 지원하는 Markdown 뷰어에서 순서도를 그림으로 볼 수 있습니다.
+이 문서는 현재 소스 코드를 기준으로 기술 스택, API 사양, 실행 조건과 서버 시작·요청 처리·AI 호출·결과 검증의 순서를 설명합니다. 순서도의 상자에는 파일명과 메소드명을 함께 적었습니다. Mermaid를 지원하는 Markdown 뷰어에서 순서도를 그림으로 볼 수 있습니다.
 
 ## 1. 프로젝트가 하는 일
 
 상품의 원본 단품 옵션명을 분석해서 쿠팡 구매옵션별 값을 추출하는 Spring Boot 서비스입니다.
 
 ```text
-원본 옵션명: "배기핏 남색 100"
-허용 구매옵션명: ["핏", "색상", "사이즈"]
+원본 옵션명: "블랙/90"
+허용 구매옵션명: ["패션의류/잡화 사이즈", "색상"]
               ↓
-구매옵션: {"핏": "배기핏", "색상": "남색", "사이즈": "100"}
+구매옵션: {"패션의류/잡화 사이즈": "90", "색상": "블랙"}
 ```
 
 AI는 매핑을 제안하고, 서버는 그 결과를 검증합니다. 검증과 신뢰도 기준을 통과하면 자동 적용 후보로 반환합니다. 현재 서비스는 상품이나 DB를 직접 수정하지 않습니다. `agent`, `tool` 패키지는 향후 확장을 위한 경계이며 현재 처리 흐름에는 참여하지 않습니다.
+
+### 1.1 기술 스택
+
+아래 사양은 2026-10-05 기준 저장소의 [pom.xml](../pom.xml), [application.yml](../src/main/resources/application.yml) 및 소스 코드에 설정된 값입니다.
+
+| 구분 | 기술 / 버전 | 용도 |
+|---|---|---|
+| 프로젝트 | `com.cware.ai:ai-agent-service:0.1.0-SNAPSHOT` | Maven 프로젝트 및 실행 JAR |
+| 언어 / 실행 환경 | Java 17 | Java record 기반 DTO, 서버 실행 |
+| 서버 프레임워크 | Spring Boot `3.5.16` | 애플리케이션 설정, 의존성 주입, 내장 Tomcat |
+| HTTP API | Spring Web MVC | JSON 요청·응답 및 정적 테스트 페이지 제공 |
+| AI 연동 | Spring AI `1.1.8`, `spring-ai-openai` | `OpenAiChatModel`을 통한 동기 AI 호출 |
+| 기본 AI 모델 | `gpt-4.1-mini` | `OPENAI_MODEL`로 변경 가능 |
+| 데이터 검증 | Jakarta Bean Validation, Spring Validation | 필수 필드, 문자열 길이, 목록 크기 검사 |
+| JSON 처리 | Jackson | DTO 직렬화·역직렬화 및 AI 응답 해석 |
+| 웹 화면 | HTML, CSS, JavaScript | 프레임워크 없이 입력 폼, Fetch API, 결과 표 구현 |
+| 빌드 | Maven, Spring Boot Maven Plugin | 테스트, 실행 JAR 패키징 |
+| 테스트 | Spring Boot Test, JUnit 5, AssertJ, Mockito, MockMvc | API·추론·검증·오류 처리 테스트 |
+| 컨테이너 | Docker 다단계 빌드, Docker Compose | Maven / Temurin 17 빌드, Temurin 17 JRE 실행 |
+
+### 1.2 기능 범위와 구성
+
+한 요청에 상품 하나와 최대 200개 단품을 받아, 단품별 쿠팡 구매옵션명과 값을 매핑합니다. 웹 테스트 화면과 API는 같은 Spring Boot 서버에서 제공합니다. 실제 AI 경로는 요청을 받는 동안 AI 응답을 기다리는 동기 처리 방식입니다.
+
+SK스토아 상품정보고시는 `productNoticeText`라는 긴 텍스트로 입력받습니다. 실제 AI가 원본 옵션명의 의미를 판단하는 보조 자료이며, 정보고시를 별도의 쿠팡 고시 항목으로 변환하는 기능은 없습니다. 상품정보와 허용·필수 구매옵션명은 호출자가 전달하며, SK스토아나 쿠팡에서 자동 조회하지 않습니다.
+
+데이터베이스, 결과 저장, 캐시 저장·조회, 메시지 큐, 배치 작업은 구현되어 있지 않습니다. 추론 결과는 HTTP 응답으로 반환하며, 상품 등록·수정과 자동 적용은 호출 측에서 결정합니다.
+
+### 1.3 API 요청 사양
+
+| 항목 | 사양 |
+|---|---|
+| 웹 테스트 화면 | `GET /` |
+| 추론 API | `POST /api/v1/coupang/purchase-options/infer` |
+| 요청 / 응답 형식 | JSON, 요청 `Content-Type: application/json` |
+| 처리 모드 | 쿼리 매개변수 `testMode`, 기본 `false`; `true`이면 API 키 없이 모의 추출 |
+| 기본 로컬 주소 | `http://127.0.0.1:8081` |
+
+필드 정의의 기준은 [InferenceRequest.java](../src/main/java/com/cware/ai/dto/InferenceRequest.java)와 [SourceOption.java](../src/main/java/com/cware/ai/dto/SourceOption.java)입니다. 문자열 제한은 Java 문자열 길이 기준입니다.
+
+| 요청 필드 | 타입 | 필수 | 제한 / 의미 |
+|---|---|---|---|
+| `goodsId` | 문자열 | 예 | 상품 코드, 최대 100자 |
+| `goodsName` | 문자열 | 예 | 상품명, 최대 500자 |
+| `brand` | 문자열 | 아니요 | 브랜드, 최대 200자 |
+| `categoryName` | 문자열 | 예 | 내부 / SK스토아 카테고리, 최대 500자 |
+| `coupangCategoryId` | 문자열 | 예 | 쿠팡 카테고리 키, 최대 100자 |
+| `coupangCategoryName` | 문자열 | 예 | 쿠팡 카테고리명, 최대 500자 |
+| `allowedPurchaseOptions` | 문자열 배열 | 예 | 2~20개, 각 이름 최대 100자, 중복 불가 |
+| `requiredPurchaseOptions` | 문자열 배열 | 아니요 | 최대 20개, 각 이름 최대 100자, 허용 목록에 포함되어야 하며 중복 불가 |
+| `options` | 객체 배열 | 예 | 1~200개 단품, null 단품 불가 |
+| `options[].optionId` | 문자열 | 예 | 최대 100자, 요청 내 중복 불가 |
+| `options[].optionName1` | 문자열 | 예 | 분리하지 않은 원본 옵션명, 최대 500자 |
+| `productNoticeText` | 문자열 | 아니요 | SK스토아 정보고시 항목명과 값을 이어 붙인 텍스트, 최대 20,000자 |
+
+필수 문자열과 옵션명 배열의 각 이름은 빈 문자열이나 공백만 있는 값을 허용하지 않습니다. 정의되지 않은 JSON 필드는 거부합니다. 필수 구매옵션을 생략하면 빈 목록으로 처리하지만, 각 단품에는 최소 하나의 유효한 매핑이 필요합니다.
+
+기본 테스트 상품은 `68535109`, **아이그너 레터링 자카드 니트탑**입니다. 단품은 `블랙/90`, `블랙/95`, `블랙/100`, `블랙/105` 네 개이며, 허용·필수 구매옵션명은 모두 `패션의류/잡화 사이즈`, `색상`입니다. 예제의 단품 ID `1`~`4`는 테스트용입니다. 전체 요청과 정보고시 9개 항목은 [ai-request.json](../examples/ai-request.json)에서 확인할 수 있습니다.
+
+### 1.4 API 응답과 성공 기준
+
+응답 정의는 [InferenceResponse.java](../src/main/java/com/cware/ai/dto/InferenceResponse.java)를 따릅니다.
+
+| 응답 필드 | 의미 |
+|---|---|
+| `goodsId` | 처리한 상품 코드. 요청 처리 전 예외 응답에서는 null일 수 있음 |
+| `success` | 실제 AI 추론 결과가 성공 기준을 통과했는지 여부 |
+| `autoApplyCandidate` | 호출 측에서 자동 적용을 고려할 수 있는 후보인지 여부 |
+| `confidence` | 전체 및 개별 매핑 신뢰도의 최솟값, 0~1 |
+| `optionMappings` | 단품 ID, 원본 옵션명, 대상 구매옵션명, 추출 값, 개별 신뢰도 |
+| `items` | 단품 ID와 `purchaseOptions` 이름·값 Map으로 구성한 결과 |
+| `reason` | 판단 또는 오류 사유 |
+| `validationErrors` | 누락·중복·허용 범위 위반 등 검증 오류 목록 |
+| `errorCode` | 오류 / 검토 / 테스트 코드, 성공 시 null |
+| `inputHash` | 입력 식별용 SHA-256 해시, 정상 처리 경로에서 64자리 16진수 |
+| `promptVersion` | 프롬프트 버전 표식, 현재 `coupang-option-v5` |
+| `inferenceSource` | 실제 추론 `AI`, 모의 추론 `TEST`, 예외 응답 `NONE` |
+
+실제 AI 결과는 `certain=true`, 최종 신뢰도 `0.95` 이상, 제안 검증 및 단품 결과 검증 통과 조건을 모두 만족해야 성공합니다. 호출 측에서는 HTTP 200 여부만 확인하지 않고 `success`와 `autoApplyCandidate`가 모두 `true`인지 확인해야 합니다.
+
+추출 값은 해당 단품의 원본 옵션명에 연속해서 존재하는 문자열이어야 합니다. `블랙/90`에서 색상은 `블랙`, 사이즈는 `90`이며, 정보고시의 `S(90)`를 참고해도 원본에 없는 `S`로 바꾸지 않습니다. 필수 옵션 누락, 허용 이름 위반, 서로 다른 단품의 동일한 최종 구매옵션 조합은 검증 실패입니다. 실패 응답의 매핑·단품 결과 목록은 비워 반환합니다.
+
+테스트 모드는 공백과 `/`를 구분자로 색상 단어, 숫자 사이즈, 핏 등의 기본 패턴을 모의 추출합니다. 정보고시를 해석하지 않으며 검증을 통과해도 `success=false`, `autoApplyCandidate=false`, `confidence=0`, `errorCode=TEST_MODE`입니다.
+
+### 1.5 실행 및 AI 연동 사양
+
+| 항목 | 현재 설정 |
+|---|---|
+| 서버 포트 / 주소 | `PORT=8081`, `SERVER_ADDRESS=127.0.0.1` 기본값 |
+| API 인증 키 | 실제 추론에 `OPENAI_API_KEY` 필요, 키 없이 서버 시작·테스트 모드 가능 |
+| AI 호출 | 요청당 한 번의 동기 호출, 자동 재시도 없음 |
+| AI 출력 설정 | `temperature=0`, `max-tokens=4096` |
+| 연결 / 응답 읽기 시간 제한 | 연결 `5s`, 읽기 `30s`; 전체 작업 시간 보장값은 아님 |
+| AI 응답 형식 | 엄격한 JSON Schema, 요청의 단품 ID·허용 옵션명으로 `enum` 제한 |
+| AI 응답 본문 제한 | 최대 65,536자, 종료 사유 `stop` 필요 |
+| AI 판단 사유 제한 | 한국어 1~3문장으로 지시, 서버는 비어 있지 않은 최대 2,000자 문자열인지 검증 |
+| 입력 식별 | 해시 버전 `input-v3`, 상품·브랜드·카테고리·정보고시·옵션 목록 포함 |
+
+로컬 실행은 Java 17과 Maven을 사용합니다. 별도 Tomcat 설치는 필요하지 않습니다. `mvn test`로 테스트하고 `mvn package` 또는 `mvn verify`로 실행 JAR을 생성합니다. 실행 파일은 `target/ai-agent-service-0.1.0-SNAPSHOT.jar`입니다.
+
+[Dockerfile](../Dockerfile)과 [Dockerfile.vercel](../Dockerfile.vercel)은 Maven / Temurin 17 빌드 이미지와 Temurin 17 JRE 실행 이미지를 사용합니다. 컨테이너 내부 주소는 `0.0.0.0:8081`이며 일반 사용자 UID `10001`로 실행합니다. Compose의 호스트 주소·포트는 `HOST_ADDRESS`, `HOST_PORT`로 설정하며 기본은 `127.0.0.1:8081`입니다. 빌드 단계에는 `pom.xml`, `src/`와 API 테스트에 필요한 `examples/`를 복사합니다. 실행 이미지에는 패키징한 JAR을 복사합니다.
+
+### 1.6 운영 조건과 검증 범위
+
+현재 애플리케이션에는 사용자 로그인, 호출자 인증, 호출 횟수 제한 기능이 없습니다. 외부 공개 시 접근 제어는 배포 환경 또는 추가 구현으로 마련해야 합니다. 실제 AI 호출에서는 상품·단품·정보고시가 OpenAI API로 전송됩니다. 애플리케이션의 외부 오류 처리기는 API 키나 외부 응답 본문을 클라이언트에 노출하지 않도록 오류를 요약합니다.
+
+AI 통신에는 `api.openai.com:443`에 대한 HTTPS 접근과 서버 JVM이 신뢰하는 인증서 체인이 필요합니다. 회사 VPN / 보안 프록시가 회사 인증서를 제공하면 해당 인증서에 대한 JVM 신뢰 설정이 필요할 수 있습니다. `PKIX path building failed`는 인증서 신뢰 문제를 확인할 단서이며, 현재 API에서는 상세 원인 대신 `AI_UPSTREAM_ERROR`로 반환될 수 있습니다.
+
+테스트는 입력 검증, 모의 추출, AI 요청·응답 형식, 신뢰도와 결과 검증, 입력 해시, API 오류 처리, API 키 없는 서버 시작을 확인합니다. AI 응답은 모의 객체 또는 테스트 HTTP 서버로 검증하며, 실제 모델의 추출 정확도를 보장하는 평가 결과는 아닙니다. 현재 처리량, 동시 접속 한도, 평균 응답 시간, 정확도에 대한 부하·품질 측정값은 정의되어 있지 않습니다. 단품 200개라는 입력 상한도 AI 출력 4,096토큰 내 완료를 보장하지 않습니다.
 
 ## 2. 핵심 파일과 역할
 
@@ -74,7 +183,7 @@ API 키가 없어도 대체 `ChatModel`이 등록되므로 서버를 시작하�
 | `responseErrorHandler(new SafeErrorHandler())` | 사용자 정의 처리기 | 외부 HTTP 오류를 프로젝트 오류로 변환 |
 | `RetryTemplate.builder().maxAttempts(1)` | 1회 시도 | 자동 재시도 없음 |
 | `confidence-threshold` | `0.95` | 실제 AI 결과의 성공 판단 기준 |
-| `prompt-version` | `coupang-option-v3` | 응답에 포함할 프롬프트 버전 표식 |
+| `prompt-version` | `coupang-option-v5` | 응답에 포함할 프롬프트 버전 표식 |
 
 ## 4. 웹 요청 처리 순서
 
@@ -110,7 +219,7 @@ flowchart TD
 2. `InferenceRequest`와 `SourceOption`의 검증 어노테이션이 필수 필드, 길이, 목록 크기 등을 확인합니다.
 3. `RequestValidator.validate()`가 허용 옵션명 중복, 필수 옵션의 허용 목록 포함 여부, 단품 ID 중복 등을 확인합니다.
 
-`InputHashService.hash()`는 상품 정보와 단품 정보를 정렬하여 SHA-256 해시를 생성합니다. 현재 흐름에서는 이 값을 응답의 `inputHash`에 담으며, 해시를 이용해 캐시를 조회하거나 저장하는 코드는 없습니다.
+`InputHashService.hash()`는 상품정보고시를 포함한 상품 정보와 단품 정보를 바탕으로 SHA-256 해시를 생성합니다. 허용·필수 옵션명과 단품 목록은 순서를 정렬하여 반영합니다. 현재 흐름에서는 이 값을 응답의 `inputHash`에 담으며, 해시를 이용해 캐시를 조회하거나 저장하는 코드는 없습니다.
 
 서비스의 `ai` 필드는 `OptionInferenceGateway` 타입입니다. 현재 구현 Bean인 `PurchaseOptionAiService`가 주입되므로 `ai.infer(request)`는 그 클래스의 `infer()`를 실행합니다. 테스트 모드는 별도 분기로 `MockOptionInferenceService.infer()`를 직접 호출합니다.
 
@@ -190,7 +299,7 @@ AI가 제안한 결과를 검사하여 오류 문자열 목록을 반환합니�
 | 단품 매핑 누락 | 각 원본 단품에 최소 하나의 매핑이 있어야 함 |
 | 필수 옵션 | 각 단품에 `effectiveRequiredOptions()`의 모든 이름이 있어야 함 |
 
-원본 값 검사는 `source.optionName1().contains(entry.value())`로 수행합니다. 원본이 `배기핏 남색 100`이면 `남색`은 통과하지만 `네이비`는 실패합니다. 이 검사는 부분 문자열의 존재를 확인하며, AI가 선택한 구매옵션의 의미까지 완전히 보장하지는 않습니다.
+원본 값 검사는 `source.optionName1().contains(entry.value())`로 수행합니다. 원본이 `블랙/90`이면 `블랙`과 `90`은 통과하지만 `검정`이나 `S`는 실패합니다. 이 검사는 부분 문자열의 존재를 확인하며, AI가 선택한 구매옵션의 의미까지 완전히 보장하지는 않습니다.
 
 내부 자료구조:
 
@@ -207,13 +316,12 @@ AI가 제안한 결과를 검사하여 오류 문자열 목록을 반환합니�
 
 ```text
 제안 매핑:
-  optionId=1, 핏=배기핏
-  optionId=1, 색상=남색
-  optionId=1, 사이즈=100
+  optionId=1, 패션의류/잡화 사이즈=90
+  optionId=1, 색상=블랙
                 ↓
 단품 결과:
   optionId=1
-  purchaseOptions={핏=배기핏, 색상=남색, 사이즈=100}
+  purchaseOptions={패션의류/잡화 사이즈=90, 색상=블랙}
 ```
 
 1. `byId` Map에 단품 ID별 구매옵션을 모읍니다.
@@ -309,7 +417,7 @@ flowchart TD
 
 | 객체 | 의미 |
 |---|---|
-| `InferenceRequest` | 상품 정보, 허용·필수 구매옵션명, 원본 단품 목록 |
+| `InferenceRequest` | 상품 정보·정보고시, 허용·필수 구매옵션명, 원본 단품 목록 |
 | `SourceOption` | 단품 ID인 `optionId`와 원본 문자열인 `optionName1` |
 | `MappingProposal` | 추론 단계의 제안: 확실성, 신뢰도, 매핑 목록, 사유 |
 | `MappingProposal.Entry` | 단품 하나의 구매옵션명과 추출 값, 신뢰도 |

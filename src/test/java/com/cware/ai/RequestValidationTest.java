@@ -27,7 +27,7 @@ class RequestValidationTest {
         var base = Fixtures.request();
         var request = new InferenceRequest(base.goodsId(), base.goodsName(), base.brand(), base.categoryName(),
                 base.coupangCategoryId(), base.coupangCategoryName(), base.allowedPurchaseOptions(),
-                List.of("색상", "없는 이름"), base.options());
+                List.of("색상", "없는 이름"), base.options(), base.productNoticeText());
         assertThatThrownBy(() -> validator.validate(request)).hasMessageContaining("입력");
     }
 

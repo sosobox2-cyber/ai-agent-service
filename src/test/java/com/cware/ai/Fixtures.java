@@ -12,17 +12,21 @@ final class Fixtures {
                 "123456","남성 바지",List.of("핏","색상","사이즈"),List.of("핏","색상","사이즈"),List.of(
                 new SourceOption("1","배기핏 남색 100 "),
                 new SourceOption("2","배기핏 남색 150"),
-                new SourceOption("3","배기핏 남색 200")));
+                new SourceOption("3","배기핏 남색 200")), null);
     }
     static InferenceRequest ambiguous() {
         var base = request();
         return new InferenceRequest(base.goodsId(),base.goodsName(),base.brand(),base.categoryName(),
                 base.coupangCategoryId(),base.coupangCategoryName(),List.of("색상","사이즈"),List.of("색상","사이즈"),
-                List.of(new SourceOption("1","남색 100")));
+                List.of(new SourceOption("1","남색 100")), base.productNoticeText());
     }
     static InferenceRequest withOptions(InferenceRequest r,List<SourceOption> options) {
         return new InferenceRequest(r.goodsId(),r.goodsName(),r.brand(),r.categoryName(),r.coupangCategoryId(),
-                r.coupangCategoryName(),r.allowedPurchaseOptions(),r.requiredPurchaseOptions(),options);
+                r.coupangCategoryName(),r.allowedPurchaseOptions(),r.requiredPurchaseOptions(),options,r.productNoticeText());
+    }
+    static InferenceRequest withNotice(InferenceRequest r, String text) {
+        return new InferenceRequest(r.goodsId(),r.goodsName(),r.brand(),r.categoryName(),r.coupangCategoryId(),
+                r.coupangCategoryName(),r.allowedPurchaseOptions(),r.requiredPurchaseOptions(),r.options(),text);
     }
     static MappingProposal proposal() {
         return new MappingProposal(true,.99,List.of(

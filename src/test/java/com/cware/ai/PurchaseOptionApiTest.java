@@ -11,6 +11,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.*;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -37,6 +39,50 @@ class PurchaseOptionApiTest {
         for (String body:new String[]{"{","{}","{\"unexpected\":1}","null"}) {
             mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(body))
                     .andExpect(status().isBadRequest()).andExpect(jsonPath("$.success").value(false));
+        }
+        verifyNoInteractions(ai);
+    }
+    @Test void acceptsNoticeAndKeepsItsTextIntact() throws Exception {
+        when(ai.infer(any())).thenReturn(Fixtures.proposal());
+        String notice = "  제품 소재: 면 100%\n색상: 남색\n치수: 100, 150, 200  ";
+        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(Fixtures.withNotice(Fixtures.request(), notice))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true));
+        verify(ai).infer(argThat(request -> notice.equals(request.productNoticeText())));
+    }
+    @Test void noticeIsOptionalForExistingClients() throws Exception {
+        when(ai.infer(any())).thenReturn(Fixtures.proposal());
+        ObjectNode body = mapper.valueToTree(Fixtures.request());
+        body.remove("productNoticeText");
+        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(body)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true));
+    }
+    @Test void noticeLengthLimitAppliesBeforeAiInBothModes() throws Exception {
+        var request = Fixtures.withNotice(Fixtures.request(), "가".repeat(20001));
+        for (String mode : new String[]{"false", "true"}) {
+            mvc.perform(post(URL).param("testMode", mode).contentType(MediaType.APPLICATION_JSON)
+                            .content(mapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errorCode").value("INVALID_REQUEST"));
+        }
+        verifyNoInteractions(ai);
+    }
+    @Test void aignerExamplesExtractSlashSeparatedColorAndSizesInTestMode() throws Exception {
+        for (String file : new String[]{"rule-request.json", "ai-request.json"}) {
+            mvc.perform(post(URL).param("testMode", "true").contentType(MediaType.APPLICATION_JSON)
+                            .content(Files.readString(Path.of("examples", file))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.goodsId").value("68535109"))
+                    .andExpect(jsonPath("$.errorCode").value("TEST_MODE"))
+                    .andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.autoApplyCandidate").value(false))
+                    .andExpect(jsonPath("$.validationErrors").isEmpty())
+                    .andExpect(jsonPath("$.items.length()").value(4))
+                    .andExpect(jsonPath("$.optionMappings.length()").value(8))
+                    .andExpect(jsonPath("$.items[0].purchaseOptions.색상").value("블랙"))
+                    .andExpect(jsonPath("$.items[0].purchaseOptions['패션의류/잡화 사이즈']").value("90"))
+                    .andExpect(jsonPath("$.items[1].purchaseOptions['패션의류/잡화 사이즈']").value("95"))
+                    .andExpect(jsonPath("$.items[2].purchaseOptions['패션의류/잡화 사이즈']").value("100"))
+                    .andExpect(jsonPath("$.items[3].purchaseOptions['패션의류/잡화 사이즈']").value("105"));
         }
         verifyNoInteractions(ai);
     }

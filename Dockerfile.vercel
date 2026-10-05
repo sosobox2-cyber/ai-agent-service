@@ -4,6 +4,7 @@ WORKDIR /build
 COPY pom.xml .
 RUN mvn -B -ntp dependency:go-offline
 COPY src ./src
+COPY examples ./examples
 RUN mvn -B -ntp verify && cp target/ai-agent-service-*.jar /build/app.jar
 
 FROM eclipse-temurin:17-jre-jammy

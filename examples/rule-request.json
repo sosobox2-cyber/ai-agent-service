@@ -1,28 +1,35 @@
 {
-  "goodsId": "100000123",
-  "goodsName": "남성 배기핏 바지",
-  "brand": "ABC",
-  "categoryName": "패션 > 남성의류 > 바지",
-  "coupangCategoryId": "123456",
-  "coupangCategoryName": "남성 바지",
+  "goodsId": "68535109",
+  "goodsName": "[아이그너](방송에서만 이가격) 아이그너 레터링 자카드 니트탑",
+  "brand": "아이그너",
+  "categoryName": "스포츠/레저>스포츠패션/슈즈/아웃도어>스포츠의류(여성)긴팔",
+  "coupangCategoryId": "1007572",
+  "coupangCategoryName": "스포츠 의류>긴팔>여성 긴팔>",
   "allowedPurchaseOptions": [
-    "핏",
-    "색상",
-    "사이즈"
+    "패션의류/잡화 사이즈",
+    "색상"
   ],
-  "requiredPurchaseOptions": ["핏", "색상", "사이즈"],
+  "requiredPurchaseOptions": [
+    "패션의류/잡화 사이즈",
+    "색상"
+  ],
+  "productNoticeText": "1. 제품 소재 : 소재 : 비스코스 레이온 47% + 폴리에스터 27% + 나일론 22% + 폴리우레탄 4%\n2. 색상 : 블랙\n3. 치수 : S(90) / M(95) / L(100) /XL(105)\n4. 제조자,수입품의 경우 수입자를 함께 표기 : ㈜엘케이플래닝 OEM\n5. 제조국: 베트남\n6. 세탁방법 및 취급시 주의사항: 단독손세탁\n7. 제조연월: 2025년 07월\n8. 품질보증기준: 관련 법 및 소비자 분쟁 해결 기준을 따름\n9. A/S 책임자와 전화번호: 유닉유니온/ 070-8656-3977",
   "options": [
     {
       "optionId": "1",
-      "optionName1": "배기핏 남색 100 "
+      "optionName1": "블랙/90"
     },
     {
       "optionId": "2",
-      "optionName1": "배기핏 남색 150"
+      "optionName1": "블랙/95"
     },
     {
       "optionId": "3",
-      "optionName1": "배기핏 남색 200"
+      "optionName1": "블랙/100"
+    },
+    {
+      "optionId": "4",
+      "optionName1": "블랙/105"
     }
   ]
 }
