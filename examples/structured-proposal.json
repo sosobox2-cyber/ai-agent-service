@@ -1,0 +1,58 @@
+{
+  "certain": true,
+  "confidence": 0.9,
+  "mappings": [
+    {
+      "optionId": "1",
+      "targetPurchaseOptionName": "수량",
+      "value": "1세트",
+      "confidence": 0.9,
+      "evidenceSource": "goodsName",
+      "evidenceText": "[종가][종가] 전라도 포기김치 4.2kg + 파김치 1kg",
+      "calculation": {
+        "operation": "PACK_COUNT",
+        "outputUnit": "세트",
+        "operands": [],
+        "context": {
+          "source": "goodsName",
+          "text": "[종가][종가] 전라도 포기김치 4.2kg + 파김치 1kg"
+        }
+      }
+    },
+    {
+      "optionId": "1",
+      "targetPurchaseOptionName": "개당 중량",
+      "value": "5.2kg",
+      "confidence": 0.9,
+      "evidenceSource": "goodsName",
+      "evidenceText": "[종가][종가] 전라도 포기김치 4.2kg + 파김치 1kg",
+      "calculation": {
+        "operation": "SUM",
+        "outputUnit": "kg",
+        "operands": [
+          {
+            "amount": "4.2",
+            "unit": "kg",
+            "evidence": {
+              "source": "goodsName",
+              "text": "전라도 포기김치 4.2kg"
+            }
+          },
+          {
+            "amount": "1",
+            "unit": "kg",
+            "evidence": {
+              "source": "goodsName",
+              "text": "파김치 1kg"
+            }
+          }
+        ],
+        "context": {
+          "source": "goodsName",
+          "text": "[종가][종가] 전라도 포기김치 4.2kg + 파김치 1kg"
+        }
+      }
+    }
+  ],
+  "reason": "두 본품으로 구성된 1세트의 중량은 5.2kg입니다."
+}

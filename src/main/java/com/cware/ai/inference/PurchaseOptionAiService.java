@@ -1,6 +1,7 @@
 package com.cware.ai.inference;
 
 import com.cware.ai.dto.InferenceRequest;
+import com.cware.ai.dto.Calculation;
 import com.cware.ai.exception.InferenceException;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -72,12 +73,26 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
 
     /** 매 요청의 허용 이름을 JSON Schema enum에도 주입하며 서버 검증을 별도로 수행한다. */
     public static Map<String,Object> schema(InferenceRequest request) {
+        var evidence = object(Map.of("source", Map.of("type", "string", "enum",
+                List.of("goodsName", "productNoticeText", "optionName1")), "text", Map.of("type", "string")));
+        var operand = object(Map.of("amount", Map.of("type", "string", "description", "양수 숫자 문자열"),
+                "unit", Map.of("type", "string", "enum", CalculationValidator.supportedUnits()), "evidence", evidence));
+        var calculation = object(Map.of("operation", Map.of("type", "string", "enum",
+                Arrays.stream(Calculation.Operation.values()).map(Enum::name).toList()),
+                "outputUnit", Map.of("type", "string", "enum", CalculationValidator.supportedUnits()),
+                "operands", Map.of("type", "array", "items", operand),
+                "context", Map.of("anyOf", List.of(evidence, Map.of("type", "null")))));
         Map<String,Object> entry = object(Map.of(
                 "optionId", Map.of("type", "string", "enum", request.options().stream()
                         .map(option -> option.optionId()).toList()),
                 "targetPurchaseOptionName", Map.of("type", "string", "enum", request.allowedPurchaseOptions()),
                 "value", Map.of("type", "string"),
-                "confidence", Map.of("type", "number")));
+                "confidence", Map.of("type", "number"),
+                "evidenceSource", Map.of("type", List.of("string", "null"), "enum",
+                        Arrays.asList("goodsName", "productNoticeText", null)),
+                "evidenceText", Map.of("type", List.of("string", "null"), "description",
+                        "실제 원문 근거 요약. 일반 옵션명 추출은 null."),
+                "calculation", Map.of("anyOf", List.of(calculation, Map.of("type", "null")))));
         return object(Map.of(
                 "certain", Map.of("type", "boolean"),
                 "confidence", Map.of("type", "number"),

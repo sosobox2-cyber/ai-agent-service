@@ -32,6 +32,19 @@ class AiAdapterTest {
         respond(new ObjectMapper().writeValueAsString(Fixtures.proposal()),"stop");
         assertThat(ai.infer(Fixtures.request())).isEqualTo(Fixtures.proposal());
     }
+    @Test void parsesNestedCalculationAndRejectsUnsupportedOperation() throws Exception {
+        var calculation = new com.cware.ai.dto.Calculation(com.cware.ai.dto.Calculation.Operation.DIRECT, "ml",
+                List.of(new com.cware.ai.dto.Calculation.Operand("50", "ml",
+                        new com.cware.ai.dto.Calculation.Evidence("goodsName", "50ml"))), null);
+        var proposal = new MappingProposal(true, .90, List.of(new MappingProposal.Entry("1", "개당 용량", "50ml", .90,
+                "goodsName", "50ml", calculation)), "용량을 추출했습니다.");
+        String json = new ObjectMapper().writeValueAsString(proposal);
+        respond(json, "stop");
+        assertThat(ai.infer(Fixtures.request())).isEqualTo(proposal);
+        respond(json.replace("DIRECT", "RUN_CODE"), "stop");
+        assertThatThrownBy(() -> ai.infer(Fixtures.request())).isInstanceOfSatisfying(InferenceException.class,
+                e -> assertThat(e.code()).isEqualTo("AI_INVALID_JSON"));
+    }
     @Test void sendsNoticeAsProductDataWithContextRules() throws Exception {
         respond(new ObjectMapper().writeValueAsString(Fixtures.proposal()), "stop");
         String notice = "제품 소재: 면 100%\n색상: 남색\n치수: 100, 150, 200";
@@ -71,5 +84,8 @@ class AiAdapterTest {
         assertThat(tree.at("/properties/mappings/items/properties/optionId/enum").toString())
                 .isEqualTo("[\"1\",\"2\",\"3\"]");
         assertThat(tree.path("additionalProperties").asBoolean()).isFalse();
+        assertThat(tree.at("/properties/mappings/items/properties/calculation/anyOf/0/properties/operation/enum").toString())
+                .contains("DIRECT", "CONVERT", "SUM", "PACK_COUNT", "PACK_CONTENT");
+        assertThat(tree.at("/properties/mappings/items/properties/calculation/anyOf/0/additionalProperties").asBoolean()).isFalse();
     }
 }

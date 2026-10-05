@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.*;
 class ResultValidatorTest {
     private final ResultValidator validator = new ResultValidator();
 
-    @Test void extractsMultipleRequiredValuesFromOneOriginalName() {
+    @Test void extractsMultipleAllowedValuesFromOneOriginalName() {
         var request = Fixtures.request();
         var proposal = Fixtures.proposal();
         assertThat(validator.validateProposal(request, proposal)).isEmpty();
@@ -22,22 +22,22 @@ class ResultValidatorTest {
         assertThat(items.get(2).purchaseOptions()).containsEntry("사이즈", "200");
     }
 
-    @Test void rejectsInventedAndChangedValues() {
+    @Test void trustsAiValuesButRejectsChangesDuringAssembly() {
         var request = Fixtures.request();
         var entries = new ArrayList<>(Fixtures.proposal().mappings());
         entries.set(1, new MappingProposal.Entry("1", "색상", "파랑", .99));
-        assertThat(validator.validateProposal(request, new MappingProposal(true, .99, entries, "사유")))
-                .anyMatch(error -> error.contains("원본 옵션명에 없는 값"));
+        assertThat(validator.validateProposal(request, new MappingProposal(true, .99, entries, "사유"))).isEmpty();
         var items = new ArrayList<>(validator.assemble(request, Fixtures.proposal()));
         items.set(0, new PurchaseOptionItem("1", Map.of("핏", "배기핏", "색상", "남색", "사이즈", "101")));
         assertThat(validator.validateItems(request, Fixtures.proposal(), items)).isNotEmpty();
     }
 
-    @Test void rejectsMissingRequiredAndDuplicateTarget() {
+    @Test void acceptsSubsetOfAllowedNamesAndRejectsDuplicateTarget() {
         var request = Fixtures.ambiguous();
-        var missing = new MappingProposal(true, .99,
+        var subset = new MappingProposal(true, .99,
                 List.of(new MappingProposal.Entry("1", "색상", "남색", .99)), "사유");
-        assertThat(validator.validateProposal(request, missing)).anyMatch(error -> error.contains("필수"));
+        assertThat(validator.validateProposal(request, subset)).isEmpty();
+        assertThat(validator.validateItems(request, subset, validator.assemble(request, subset))).isEmpty();
         var duplicate = new MappingProposal(true, .99, List.of(
                 new MappingProposal.Entry("1", "색상", "남색", .99),
                 new MappingProposal.Entry("1", "색상", "100", .99),
@@ -45,12 +45,26 @@ class ResultValidatorTest {
         assertThat(validator.validateProposal(request, duplicate)).anyMatch(error -> error.contains("중복"));
     }
 
-    @Test void rejectsSameWholeStringCopiedIntoMultipleTargets() {
+    @Test void rejectsItemWithNoMappings() {
+        assertThat(validator.validateProposal(Fixtures.ambiguous(),
+                new MappingProposal(true, .99, List.of(), "추출 결과 없음")))
+                .anyMatch(error -> error.contains("매핑이 누락"));
+    }
+
+    @Test void rejectsUnknownIdsAndDisallowedTargets() {
+        for (var entry : List.of(new MappingProposal.Entry("unknown", "색상", "남색", .99),
+                new MappingProposal.Entry("1", "허용되지 않은 항목", "남색", .99))) {
+            assertThat(validator.validateProposal(Fixtures.ambiguous(),
+                    new MappingProposal(true, .99, List.of(entry), "사유"))).isNotEmpty();
+        }
+    }
+
+    @Test void allowsAiToUseSameValueForDifferentTargets() {
         var request = Fixtures.ambiguous();
         var proposal = new MappingProposal(true, .99, List.of(
                 new MappingProposal.Entry("1", "색상", "남색 100", .99),
                 new MappingProposal.Entry("1", "사이즈", "남색 100", .99)), "사유");
-        assertThat(validator.validateProposal(request, proposal)).anyMatch(error -> error.contains("중복 사용"));
+        assertThat(validator.validateProposal(request, proposal)).isEmpty();
     }
 
     @ParameterizedTest @ValueSource(doubles={-0.1, 1.1, Double.NaN, Double.POSITIVE_INFINITY})

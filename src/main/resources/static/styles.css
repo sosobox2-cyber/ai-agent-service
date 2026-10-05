@@ -69,6 +69,10 @@ th { padding: 0 7px 10px; text-align: left; color: #6e7d90; font-size: 12px; fon
 .result-table td { word-break: break-word; }
 .result-details h3, .json-grid h3 { margin: 18px 0 10px; font-size: 14px; }
 .validation-errors { padding-left: 20px; color: #b23f49; font-size: 13px; }
+.assessment { margin-bottom: 16px; padding: 14px 18px; background: #f7f9fc; border: 1px solid #e1e8f1; border-radius: 10px; }
+.assessment h3 { margin-top: 0; }
+.assessment p { margin: 10px 0; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.assessment small { color: #657386; font-weight: 400; }
 .json-details { margin-top: 16px; border-top: 1px solid #e8eef5; padding-top: 16px; }
 summary { width: fit-content; color: #2864ce; font-size: 13px; font-weight: 700; cursor: pointer; }
 .json-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }

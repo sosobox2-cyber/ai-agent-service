@@ -17,8 +17,8 @@ spring:
           max-tokens: 4096
 app:
   inference:
-    confidence-threshold: 0.95
-    prompt-version: coupang-option-v5
+    confidence-threshold: 0.80
+    prompt-version: coupang-option-v12
     connect-timeout: 5s
     read-timeout: 30s
 logging:

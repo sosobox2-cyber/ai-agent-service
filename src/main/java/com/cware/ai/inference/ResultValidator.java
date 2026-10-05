@@ -19,7 +19,6 @@ public class ResultValidator {
         for (SourceOption option : request.options()) sources.put(option.optionId(), option);
         Set<String> seen = new HashSet<>();
         Map<String, Set<String>> targets = new HashMap<>();
-        Map<String, Set<String>> values = new HashMap<>();
         for (MappingProposal.Entry entry : proposal.mappings()) {
             if (entry == null || entry.optionId() == null || entry.targetPurchaseOptionName() == null
                     || entry.value() == null || entry.value().isBlank()) {
@@ -28,22 +27,18 @@ public class ResultValidator {
             }
             SourceOption source = sources.get(entry.optionId());
             if (source == null) errors.add("원본에 없는 단품 ID를 반환했습니다.");
-            else if (!source.optionName1().contains(entry.value()))
-                errors.add("원본 옵션명에 없는 값을 반환했습니다.");
+            // 값의 의미, 원문 근거 및 계산의 타당성은 AI가 판단한다.
             if (!request.allowedPurchaseOptions().contains(entry.targetPurchaseOptionName()))
                 errors.add("허용되지 않은 구매옵션명이 반환되었습니다.");
             if (!seen.add(entry.optionId() + "\u0000" + entry.targetPurchaseOptionName()))
                 errors.add("같은 단품의 구매옵션명이 중복 매핑되었습니다.");
             targets.computeIfAbsent(entry.optionId(), ignored -> new HashSet<>()).add(entry.targetPurchaseOptionName());
-            if (!values.computeIfAbsent(entry.optionId(), ignored -> new HashSet<>()).add(entry.value()))
-                errors.add("같은 추출 값을 여러 구매옵션명에 중복 사용했습니다.");
             if (!validConfidence(entry.confidence()))
                 errors.add("매핑 confidence는 0~1의 유한한 수여야 합니다.");
         }
         for (SourceOption option : request.options()) {
             Set<String> itemTargets = targets.getOrDefault(option.optionId(), Set.of());
             if (itemTargets.isEmpty()) errors.add("단품의 구매옵션 매핑이 누락되었습니다.");
-            if (!itemTargets.containsAll(request.effectiveRequiredOptions())) errors.add("필수 구매옵션이 누락되었습니다.");
         }
         return errors.stream().distinct().toList();
     }
@@ -76,8 +71,6 @@ public class ResultValidator {
                 errors.add("원본 값이 누락·변경되었거나 새로운 옵션 조합이 생성되었습니다.");
             if (!request.allowedPurchaseOptions().containsAll(item.purchaseOptions().keySet()))
                 errors.add("허용되지 않은 구매옵션명입니다.");
-            if (!item.purchaseOptions().keySet().containsAll(request.effectiveRequiredOptions()))
-                errors.add("필수 구매옵션이 누락되었습니다.");
             if (!combinations.add(item.purchaseOptions())) errors.add("서로 다른 단품이 동일한 구매옵션 조합입니다.");
         }
         if (!ids.equals(expected.keySet())) errors.add("원본 단품 ID가 누락되거나 추가되었습니다.");

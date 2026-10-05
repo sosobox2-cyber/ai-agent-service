@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('rule', 'ai', 'uncertain')]
+    [ValidateSet('rule', 'ai', 'uncertain', 'quantity', 'capacity', 'weight', 'set')]
     [string]$Example = 'rule',
     [string]$BaseUrl = 'http://127.0.0.1:8081',
     [switch]$TestMode

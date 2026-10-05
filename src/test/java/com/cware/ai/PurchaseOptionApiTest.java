@@ -42,6 +42,62 @@ class PurchaseOptionApiTest {
         }
         verifyNoInteractions(ai);
     }
+    @Test void singleAllowedNameWorksInAiAndTestModes() throws Exception {
+        ObjectNode body = mapper.valueToTree(Fixtures.ambiguous());
+        body.putArray("allowedPurchaseOptions").add("색상");
+        when(ai.infer(any())).thenReturn(new MappingProposal(true, .9, java.util.List.of(
+                new MappingProposal.Entry("1", "색상", "남색", .9)), "색상을 추출했습니다."));
+        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(body)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.items[0].purchaseOptions.색상").value("남색"));
+        mvc.perform(post(URL).param("testMode", "true").contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(body)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.errorCode").value("TEST_MODE"))
+                .andExpect(jsonPath("$.validationErrors").isEmpty())
+                .andExpect(jsonPath("$.items[0].purchaseOptions.색상").value("남색"));
+        verify(ai, times(1)).infer(any());
+    }
+    @Test void emptyAllowedNamesStillFailBeforeAiInBothModes() throws Exception {
+        ObjectNode body = mapper.valueToTree(Fixtures.ambiguous());
+        body.putArray("allowedPurchaseOptions");
+        for (String mode : new String[]{"false", "true"}) {
+            mvc.perform(post(URL).param("testMode", mode).contentType(MediaType.APPLICATION_JSON)
+                            .content(mapper.writeValueAsString(body)))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errorCode").value("INVALID_REQUEST"));
+        }
+        verifyNoInteractions(ai);
+    }
+    @Test void rejectedProposalExposesAiDataSeparatelyFromServerReason() throws Exception {
+        when(ai.infer(any())).thenReturn(new MappingProposal(true, .90, java.util.List.of(
+                new MappingProposal.Entry("1", "색상", "남색", .79)), "원본에서 남색을 추출했습니다."));
+        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(Fixtures.ambiguous())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.optionMappings").isEmpty()).andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.aiAssessment.certain").value(true))
+                .andExpect(jsonPath("$.aiAssessment.confidence").value(.90))
+                .andExpect(jsonPath("$.aiAssessment.reason").value("원본에서 남색을 추출했습니다."))
+                .andExpect(jsonPath("$.aiAssessment.mappings[0].value").value("남색"))
+                .andExpect(jsonPath("$.aiAssessment.mappings[0].confidence").value(.79))
+                .andExpect(jsonPath("$.serverAssessment.decisionCode").value("LOW_CONFIDENCE"))
+                .andExpect(jsonPath("$.serverAssessment.confidenceThreshold").value(.80))
+                .andExpect(jsonPath("$.serverAssessment.reason").value(org.hamcrest.Matchers.containsString("0.79")));
+    }
+    @Test void structuredProposalPreservesAiValueInItemsAndMappings() throws Exception {
+        var request = mapper.readValue(Files.readString(Path.of("examples/capacity-request.json")), com.cware.ai.dto.InferenceRequest.class);
+        var calculation = new com.cware.ai.dto.Calculation(com.cware.ai.dto.Calculation.Operation.DIRECT, "ml",
+                java.util.List.of(new com.cware.ai.dto.Calculation.Operand("50", "ml",
+                        new com.cware.ai.dto.Calculation.Evidence("goodsName", "50 ml"))), null);
+        when(ai.infer(any())).thenReturn(new MappingProposal(true, .90, java.util.List.of(
+                new MappingProposal.Entry("1", "개당 용량", "50.0 ML", .90, "goodsName", "50 ml", calculation)), "개당 50ml입니다."));
+        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(request)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.items[0].purchaseOptions['개당 용량']").value("50.0 ML"))
+                .andExpect(jsonPath("$.aiAssessment.mappings[0].value").value("50.0 ML"))
+                .andExpect(jsonPath("$.optionMappings[0].value").value("50.0 ML"))
+                .andExpect(jsonPath("$.optionMappings[0].calculation.operation").value("DIRECT"))
+                .andExpect(jsonPath("$.serverAssessment.decisionCode").value("ACCEPTED"));
+    }
     @Test void acceptsNoticeAndKeepsItsTextIntact() throws Exception {
         when(ai.infer(any())).thenReturn(Fixtures.proposal());
         String notice = "  제품 소재: 면 100%\n색상: 남색\n치수: 100, 150, 200  ";

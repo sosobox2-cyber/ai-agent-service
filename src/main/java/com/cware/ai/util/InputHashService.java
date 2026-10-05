@@ -15,7 +15,7 @@ public class InputHashService {
     public String hash(InferenceRequest r) {
         // ID도 포함하여 다른 상품/단품에 캐시 결과가 잘못 재사용되는 것을 방지한다.
         Map<String,Object> canonical = new TreeMap<>();
-        canonical.put("hashVersion", "input-v3");
+        canonical.put("hashVersion", "input-v4");
         canonical.put("goodsId", r.goodsId());
         canonical.put("goodsName", r.goodsName());
         canonical.put("brand", r.brand());
@@ -24,7 +24,6 @@ public class InputHashService {
         canonical.put("coupangCategoryId", r.coupangCategoryId());
         canonical.put("coupangCategoryName", r.coupangCategoryName());
         canonical.put("allowedPurchaseOptions", r.allowedPurchaseOptions().stream().sorted().toList());
-        canonical.put("requiredPurchaseOptions", r.effectiveRequiredOptions().stream().sorted().toList());
         List<Map<String,Object>> options = new ArrayList<>();
         for (SourceOption o : r.options().stream().sorted(Comparator.comparing(SourceOption::optionId)).toList()) {
             Map<String,Object> row = new TreeMap<>();

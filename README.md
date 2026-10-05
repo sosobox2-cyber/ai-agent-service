@@ -83,21 +83,17 @@ Vercel은 로컬 `.env`나 `compose.yaml`을 실행 환경 설정으로 사용�
 
 ## API
 
-`POST /api/v1/coupang/purchase-options/infer`로 다음 JSON을 보냅니다. `allowedPurchaseOptions`는 카테고리에서 허용하는 구매옵션명이고, `requiredPurchaseOptions`는 그중 각 단품에 반드시 추출해야 하는 이름입니다. 두 목록에 같은 이름이 들어가는 것은 정상이며 필수 옵션을 여러 개 지정할 수 있습니다.
+`POST /api/v1/coupang/purchase-options/infer`로 다음 JSON을 보냅니다. `allowedPurchaseOptions`는 카테고리에서 허용하는 구매옵션명 목록입니다. AI는 이 목록에서 원본에 근거해 추출할 수 있는 항목만 선택하며, 모든 이름을 채울 필요는 없습니다.
 
 ```json
 {
   "goodsId": "68535109",
-  "goodsName": "[아이그너](방송에서만 이가격) 아이그너 레터링 자카드 니트탑",
+  "goodsName": "[아이그너]아이그너 레터링 자카드 니트탑",
   "brand": "아이그너",
   "categoryName": "스포츠/레저>스포츠패션/슈즈/아웃도어>스포츠의류(여성)긴팔",
   "coupangCategoryId": "1007572",
-  "coupangCategoryName": "스포츠 의류>긴팔>여성 긴팔>",
+  "coupangCategoryName": "스포츠 의류>긴팔>여성 긴팔",
   "allowedPurchaseOptions": [
-    "패션의류/잡화 사이즈",
-    "색상"
-  ],
-  "requiredPurchaseOptions": [
     "패션의류/잡화 사이즈",
     "색상"
   ],
@@ -123,11 +119,27 @@ Vercel은 로컬 `.env`나 `compose.yaml`을 실행 환경 설정으로 사용�
 }
 ```
 
-응답의 `optionMappings`는 단품 ID, 원본 이름, 구매옵션명, 추출한 값을 각각 보여줍니다. `items`는 단품별 결과입니다. 위 예제의 첫 단품은 `{"optionId":"1","purchaseOptions":{"패션의류/잡화 사이즈":"90","색상":"블랙"}}`처럼 매핑할 수 있습니다. 추출한 값은 원본 옵션명에 실제로 포함된 문자열이어야 합니다. 필수 옵션을 빠뜨리거나 단품들의 최종 구매옵션 조합이 중복되면 검토가 필요한 결과로 처리합니다.
+응답의 `optionMappings`는 단품 ID, 원본 이름, 구매옵션명, 추출한 값을 각각 보여줍니다. `items`는 단품별 결과입니다. 위 예제의 첫 단품은 `{"optionId":"1","purchaseOptions":{"패션의류/잡화 사이즈":"90","색상":"블랙"}}`처럼 매핑할 수 있습니다. 값의 의미와 수량·근거의 타당성은 AI가 판단하며 서버는 응답 형식과 단품 구조만 검사합니다. 단품의 매핑이 없거나 단품들의 최종 구매옵션 조합이 중복되면 검토가 필요한 결과로 처리합니다.
 
-`productNoticeText`는 선택 입력이며 최대 20,000자입니다. SK스토아의 정보고시 항목명과 값을 공백이나 줄바꿈으로 이어 붙이면 됩니다. 웹 테스트 화면의 **SK스토아 상품정보고시** 입력란에 그대로 붙여 넣을 수 있으며, 쿠팡 정보고시 항목 목록은 필요하지 않습니다. 정보고시를 생략한 기존 요청도 사용할 수 있습니다. 정보고시에만 있는 값으로 단품 옵션을 채우지 않으며, 충돌하거나 모호한 경우 검토가 필요한 결과로 처리합니다. 테스트 모드는 정보고시를 요청에 포함하지만 기존 기본 패턴만 모의 추출하므로, 정보고시를 활용한 판단은 테스트 모드를 끈 실제 AI 추론에서 확인하세요.
+`productNoticeText`는 선택 입력이며 최대 20,000자입니다. SK스토아의 정보고시 항목명과 값을 공백이나 줄바꿈으로 이어 붙이면 됩니다. 웹 테스트 화면의 **SK스토아 상품정보고시** 입력란에 그대로 붙여 넣을 수 있으며, 쿠팡 정보고시 항목 목록은 필요하지 않습니다. 정보고시를 생략한 기존 요청도 사용할 수 있습니다. 일반 색상·사이즈는 정보고시에만 있는 값으로 단품 옵션을 채우지 않으며, 충돌하거나 모호한 경우 검토가 필요한 결과로 처리합니다. 테스트 모드는 기본 옵션 패턴과 단일상품의 명시된 수량 패턴만 모의 추출합니다. 실제 AI의 의미 판단은 테스트 모드를 끈 상태에서 확인하세요.
 
 키 없이 API를 시험할 때는 `POST /api/v1/coupang/purchase-options/infer?testMode=true`를 사용하세요. 실제 AI 추론은 `OPENAI_API_KEY`가 필요합니다. 응답이 HTTP 200이어도 `success=false`이면 검토가 필요하며, 자동 적용 후보는 `success`와 `autoApplyCandidate`가 모두 `true`인 경우뿐입니다. 이 서비스는 상품이나 DB를 직접 수정하지 않습니다.
+
+### 단일상품의 수량 판단
+
+수량·개당 수량·개당 용량·개당 중량은 AI가 판단하고, `calculation`에 연산 종류·단위·근거·구성을 설명합니다. `DIRECT`, `CONVERT`, `SUM`, `PACK_COUNT`, `PACK_CONTENT`는 판단 설명용입니다. 서버는 원문 문구·숫자·단위를 대조하거나 계산을 다시 수행하지 않으며, AI의 값·근거·계산 구조를 그대로 반환합니다.
+
+서버는 AI의 `certain=true`, 전체·개별 매핑 최저 신뢰도 0.80 이상, 응답 형식, 원본 단품 ID, 허용 옵션명, 매핑 누락·중복 및 최종 단품 조합 중복을 확인합니다. 값의 원문 포함 여부, 근거 출처·숫자·단위 일치, 사은품 여부와 계산 결과는 승인 조건으로 검사하지 않습니다. `aiAssessment`와 승인된 `optionMappings`에 AI가 제출한 값과 근거를 보존하며, 출처나 단위를 보정하지 않습니다. 따라서 서버 승인은 AI의 수량 판단이 수학적으로 검증되었다는 의미가 아닙니다.
+
+`calculation=null`인 이전 매핑도 같은 기본 구조 검사를 거칩니다. 테스트 모드는 제한된 패턴으로 모의 추출하며 실제 AI의 의미 판단을 대신하지 않습니다.
+
+[리르 패치 예제](examples/quantity-request.json)는 상품명의 `9박스`와 정보고시의 `1박스: 5매, 총 50패치`에서 `수량=9개`, `개당 수량=50개입`을 반환합니다. 테스트 화면의 **리르 패치 수량 예제**로 모의 결과를 확인할 수 있습니다. 모의 추출은 명시된 패턴만 처리하며 실제 AI의 정확도를 보장하지 않습니다.
+
+[선크림 예제](examples/capacity-request.json)는 상품명·정보고시의 `50ml 7개`, `선크림 50ml`에서 `수량=7개`, `개당 용량=50ml`를 반환합니다. 테스트 화면의 **선크림 용량 예제** 버튼으로 확인할 수 있습니다. 전체 구성의 350ml로 계산하거나 SPF50을 용량으로 사용하지 않습니다.
+
+[김치 세트 예제](examples/weight-request.json)는 `전라도 포기김치 4.2kg + 파김치 1kg`을 `수량=1세트`, `개당 중량=5.2kg`으로 판단합니다. 단품 하나가 `단일상품`이며 상품명에 각 본품의 중량이 `+`로 명확하게 연결된 경우에만 g/kg 환산과 합산을 허용합니다. 사은품·선택 구성·별도 개수·곱셈이 섞인 경우는 제외합니다. AI가 구성과 합계를 판단하며 서버는 제안된 값을 그대로 반환합니다. 테스트 화면의 **김치 세트 중량 예제** 버튼으로 확인할 수 있습니다.
+
+[칫솔 세트 예제](examples/set-request.json)는 정보고시의 `10개 세트`를 근거로 `수량=1세트`, `개당 수량=10매입`을 반환합니다. 이 예제의 내용물 수량 표기는 `N매입`이며, 공통 연산에는 `개입`과 `매입`을 모두 지원합니다. 두 값을 원하면 허용 옵션명에 `개당 수량`과 `수량`을 모두 넣어야 합니다. `수량`만 허용하면 `1세트`만 반환합니다. AI는 정보고시의 세트 문구 또는 색상 5종에 각 2개씩이라는 구성으로 총 10개를 판단할 수 있습니다. 서버는 근거 문구와 숫자의 직접 일치를 요구하지 않습니다. 테스트 화면의 **칫솔 세트 수량 예제** 버튼으로 확인할 수 있습니다.
 
 ## 예제
 
@@ -139,7 +151,12 @@ Vercel은 로컬 `.env`나 `compose.yaml`을 실행 환경 설정으로 사용�
 .\examples\call.ps1 -TestMode
 .\examples\call.ps1 -Example ai
 .\examples\call.ps1 -Example uncertain -TestMode
+.\examples\call.ps1 -Example quantity -TestMode
+.\examples\call.ps1 -Example capacity -TestMode
+.\examples\call.ps1 -Example weight -TestMode
 ```
+
+테스트 페이지 결과에는 **서버 판정**과 **AI 판단 · 서버 승인 전 제안**을 따로 표시합니다. API의 `serverAssessment`는 서버의 반려 이유·신뢰도 기준을, `aiAssessment`는 AI의 확실 판정·설명·제안 값·근거를 제공합니다. 반려된 AI 제안은 검토용이며 자동 적용 결과(`items`, `optionMappings`)에는 포함하지 않습니다.
 
 ## 설정과 검증
 
@@ -149,7 +166,9 @@ Vercel은 로컬 `.env`나 `compose.yaml`을 실행 환경 설정으로 사용�
 | `OPENAI_MODEL` | `gpt-4.1-mini` |
 | `PORT` | `8081` |
 | `SERVER_ADDRESS` | `127.0.0.1` |
-| `app.inference.confidence-threshold` | `0.95` |
-| `app.inference.prompt-version` | `coupang-option-v5` |
+| `app.inference.confidence-threshold` | `0.80` |
+| `app.inference.prompt-version` | `coupang-option-v12` |
+
+신뢰도 기준은 **0.80 이상(0.80 포함)**입니다. AI 전체 신뢰도와 모든 개별 매핑 신뢰도의 최솟값이 기준 이상이고, `certain=true`이며 서버의 응답 형식·단품 검증을 통과하면 `success=true`, `autoApplyCandidate=true`로 반환합니다. 전체 신뢰도가 0.80이어도 개별 매핑이 0.80 미만이거나 다른 검증에 실패하면 반려됩니다. 반려 원인은 `serverAssessment.decisionCode`와 `validationErrors`에서 확인할 수 있습니다.
 
 Java 17과 Maven이 설정된 환경에서 `mvn test`로 요청 검증, 모의 추출, AI 응답 검증 및 API 테스트를 실행할 수 있습니다.

@@ -9,7 +9,6 @@
     "색상",
     "사이즈"
   ],
-  "requiredPurchaseOptions": ["색상", "사이즈"],
   "options": [
     {
       "optionId": "1",

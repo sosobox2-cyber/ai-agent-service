@@ -2,6 +2,7 @@ package com.cware.ai.exception;
 
 import com.cware.ai.config.InferenceProperties;
 import com.cware.ai.dto.InferenceResponse;
+import com.cware.ai.dto.ServerAssessment;
 import org.springframework.http.*;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -38,7 +39,7 @@ public class GlobalExceptionHandler {
     }
     private InferenceResponse error(String code,String reason,List<String> errors) {
         return new InferenceResponse(null,false,false,0,List.of(),List.of(),reason,errors,code,
-                null,properties.promptVersion(),"NONE");
+                null,properties.promptVersion(),"NONE").withAssessments(null,
+                    new ServerAssessment(code, reason, properties.confidenceThreshold()));
     }
 }
-

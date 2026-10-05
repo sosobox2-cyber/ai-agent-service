@@ -33,7 +33,7 @@
           <label>쿠팡 카테고리명 <span class="required">*</span><input name="coupangCategoryName" required maxlength="500" placeholder="예: 스포츠 의류 > 긴팔 > 여성 긴팔"></label>
         </div>
         <div class="fields">
-          <label>SK스토아 상품정보고시<textarea name="productNoticeText" rows="12" maxlength="20000" placeholder="예: 색상: 블랙&#10;치수: S(90) / M(95) / L(100) / XL(105)&#10;제조국: 베트남"></textarea><small>선택 입력 · 항목명과 값을 긴 텍스트로 이어 붙이거나 줄바꿈해 입력하세요. 최대 20,000자이며 실제 AI 추론의 참고 자료로 사용합니다.</small></label>
+          <label>SK스토아 상품정보고시<textarea name="productNoticeText" rows="9" maxlength="20000" placeholder="예: 색상: 블랙&#10;치수: S(90) / M(95) / L(100) / XL(105)&#10;제조국: 베트남"></textarea><small>선택 입력 · 항목명과 값을 긴 텍스트로 이어 붙이거나 줄바꿈해 입력하세요. 최대 20,000자이며 실제 AI 추론의 참고 자료로 사용합니다.</small></label>
         </div>
       </section>
 
@@ -42,9 +42,8 @@
           <div><span class="step">02</span><h2 id="allowed-heading">쿠팡 구매옵션명</h2></div>
           <p>실제 쿠팡 카테고리에서 허용한 이름을 입력하세요.</p>
         </div>
-        <div class="fields two-columns">
-          <label>허용 옵션명 <span class="required">*</span><textarea name="allowedPurchaseOptions" required rows="3" placeholder="패션의류/잡화 사이즈, 색상"></textarea><small>쉼표 또는 줄바꿈으로 구분 · 2~20개</small></label>
-          <label>필수 옵션명<textarea name="requiredPurchaseOptions" rows="3" placeholder="선택 입력"></textarea><small>비워두면 필수 옵션이 없습니다. 지정한다면 허용 옵션명 중에서 선택하세요.</small></label>
+        <div class="fields">
+          <label>허용 옵션명 <span class="required">*</span><textarea name="allowedPurchaseOptions" required rows="3" placeholder="패션의류/잡화 사이즈, 색상"></textarea><small>쉼표 또는 줄바꿈으로 구분 · 1~20개</small></label>
         </div>
       </section>
 
@@ -67,9 +66,13 @@
         <div class="presets">
           <span>예제 불러오기</span>
           <button type="button" class="button quiet" data-example="sample">아이그너 니트탑 예제</button>
+          <button type="button" class="button quiet" data-example="quantity">리르 패치 수량 예제</button>
+          <button type="button" class="button quiet" data-example="capacity">선크림 용량 예제</button>
+          <button type="button" class="button quiet" data-example="weight">김치 세트 중량 예제</button>
+          <button type="button" class="button quiet" data-example="set">칫솔 세트 수량 예제</button>
         </div>
         <div class="submit-area">
-          <label class="checkbox test-mode"><input type="checkbox" id="test-mode" checked> 테스트 모드 <small>기본 색상·사이즈·핏만 모의 추출 · 자동 적용 불가</small></label>
+          <label class="checkbox test-mode"><input type="checkbox" id="test-mode" checked> 테스트 모드 <small>기본 색상·사이즈·핏·단일상품 수량·용량 모의 추출 · 자동 적용 불가</small></label>
           <button type="submit" class="button primary" id="submit-button">매핑 결과 확인 <span aria-hidden="true">→</span></button>
         </div>
       </div>

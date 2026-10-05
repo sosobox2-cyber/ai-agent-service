@@ -20,9 +20,13 @@ public final class MockOptionInferenceService {
                 String value = extract(option.optionName1(), target);
                 if (value != null)
                     entries.add(new MappingProposal.Entry(option.optionId(), target, value, 0.0));
+                else {
+                    MappingProposal.Entry quantity = QuantityContext.mockEntry(request, target);
+                    if (quantity != null) entries.add(quantity);
+                }
             }
         }
-        return new MappingProposal(true, 0.0, List.copyOf(entries),
+        return new MappingProposal(true, 0.0, entries.stream().map(MockCalculation::attach).toList(),
                 "테스트 모드의 제한적인 모의 추출 결과입니다. 실제 AI 판단이 아닙니다.");
     }
 

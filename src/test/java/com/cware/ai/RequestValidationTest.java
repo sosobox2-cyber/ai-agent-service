@@ -10,9 +10,9 @@ import static org.assertj.core.api.Assertions.*;
 class RequestValidationTest {
     private final RequestValidator validator = new RequestValidator();
 
-    @Test void allowedAndRequiredNamesMayBeIdenticalLists() {
+    @Test void acceptsAllowedOptionNames() {
         validator.validate(Fixtures.request());
-        assertThat(Fixtures.request().effectiveRequiredOptions()).containsExactly("핏", "색상", "사이즈");
+        assertThat(Fixtures.request().allowedPurchaseOptions()).containsExactly("핏", "색상", "사이즈");
     }
 
     @Test void rejectsDuplicateIdsAndBlankNames() {
@@ -23,11 +23,11 @@ class RequestValidationTest {
                 List.of(new SourceOption("1", " "))))).hasMessageContaining("입력");
     }
 
-    @Test void requiredNamesMustBeAllowed() {
+    @Test void rejectsDuplicateAllowedNames() {
         var base = Fixtures.request();
         var request = new InferenceRequest(base.goodsId(), base.goodsName(), base.brand(), base.categoryName(),
-                base.coupangCategoryId(), base.coupangCategoryName(), base.allowedPurchaseOptions(),
-                List.of("색상", "없는 이름"), base.options(), base.productNoticeText());
+                base.coupangCategoryId(), base.coupangCategoryName(), List.of("색상", "색상"),
+                base.options(), base.productNoticeText());
         assertThatThrownBy(() -> validator.validate(request)).hasMessageContaining("입력");
     }
 

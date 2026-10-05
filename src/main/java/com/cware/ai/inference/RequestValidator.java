@@ -8,14 +8,10 @@ import java.util.*;
 public class RequestValidator {
     public void validate(InferenceRequest r) {
         List<String> errors=new ArrayList<>();
-        if (r.allowedPurchaseOptions().size() < 2)
-            errors.add("allowedPurchaseOptions에는 허용 구매옵션명을 두 개 이상 입력해야 합니다.");
+        if (r.allowedPurchaseOptions().isEmpty())
+            errors.add("allowedPurchaseOptions에는 허용 구매옵션명을 한 개 이상 입력해야 합니다.");
         if (new HashSet<>(r.allowedPurchaseOptions()).size()!=r.allowedPurchaseOptions().size())
             errors.add("allowedPurchaseOptions에 중복 이름이 있습니다.");
-        if (!r.allowedPurchaseOptions().containsAll(r.effectiveRequiredOptions()))
-            errors.add("requiredPurchaseOptions는 허용 목록의 부분집합이어야 합니다.");
-        if (new HashSet<>(r.effectiveRequiredOptions()).size()!=r.effectiveRequiredOptions().size())
-            errors.add("requiredPurchaseOptions에 중복 이름이 있습니다.");
         Set<String> ids=new HashSet<>();
         for (SourceOption o:r.options()) {
             if (!ids.add(o.optionId())) errors.add("optionId는 중복될 수 없습니다.");
