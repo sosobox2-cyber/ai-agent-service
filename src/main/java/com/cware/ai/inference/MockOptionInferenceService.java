@@ -17,6 +17,13 @@ public final class MockOptionInferenceService {
         List<MappingProposal.Entry> entries = new ArrayList<>();
         for (SourceOption option : request.options()) {
             for (String target : request.allowedPurchaseOptions()) {
+                var configured = request.purchaseOptionUnits().stream()
+                        .filter(u -> u.purchaseOptionName().equals(target)).findFirst();
+                if (configured.isPresent()) {
+                    MappingProposal.Entry entry = UnitSelection.mockEntry(request, option, configured.get());
+                    if (entry != null) entries.add(entry);
+                    continue;
+                }
                 String value = extract(option.optionName1(), target);
                 if (value != null)
                     entries.add(new MappingProposal.Entry(option.optionId(), target, value, 0.0));

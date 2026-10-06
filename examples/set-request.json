@@ -10,6 +10,18 @@
     "개당 수량",
     "수량"
   ],
+  "purchaseOptionUnits": [
+    {
+      "purchaseOptionName": "수량",
+      "defaultUnit": "개",
+      "unitOptions": ["개", "박스", "세트"]
+    },
+    {
+      "purchaseOptionName": "개당 수량",
+      "defaultUnit": "개",
+      "unitOptions": ["개입", "롤", "매", "매입", "세트"]
+    }
+  ],
   "options": [
     {
       "optionId": "1",

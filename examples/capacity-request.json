@@ -10,6 +10,18 @@
     "개당 용량",
     "수량"
   ],
+  "purchaseOptionUnits": [
+    {
+      "purchaseOptionName": "수량",
+      "defaultUnit": "개",
+      "unitOptions": ["개", "박스", "세트"]
+    },
+    {
+      "purchaseOptionName": "개당 용량",
+      "defaultUnit": "ml",
+      "unitOptions": ["ml", "L"]
+    }
+  ],
   "options": [
     {
       "optionId": "1",

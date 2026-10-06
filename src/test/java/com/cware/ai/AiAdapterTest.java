@@ -57,6 +57,22 @@ class AiAdapterTest {
         assertThat(captured.getValue().getInstructions().get(0).getText())
                 .contains("원본 옵션명에 없는 값을 정보고시에서 가져와 채우지 않는다");
     }
+    @Test void sendsCallerUnitSettingsAndDefaultRulesToModel() throws Exception {
+        var mapper = new ObjectMapper();
+        var request = mapper.readValue(java.nio.file.Files.readString(java.nio.file.Path.of("src/test/resources/unit-request.json")),
+                com.cware.ai.dto.InferenceRequest.class);
+        respond(mapper.writeValueAsString(Fixtures.proposal()), "stop");
+        ai.infer(request);
+        var captured = ArgumentCaptor.forClass(Prompt.class);
+        verify(model).call(captured.capture());
+        String input = captured.getValue().getInstructions().get(1).getText();
+        var settings = mapper.readTree(input.substring(input.indexOf('{'))).at("/product/purchaseOptionUnits/0");
+        assertThat(settings.path("purchaseOptionName").asText()).isEqualTo("수량");
+        assertThat(settings.path("defaultUnit").asText()).isEqualTo("개");
+        assertThat(settings.path("unitOptions").toString()).isEqualTo("[\"개\",\"박스\",\"세트\"]");
+        assertThat(captured.getValue().getInstructions().get(0).getText())
+                .contains("설정된 옵션에는 아래 단위 규칙을 기존 출력 단위 규칙과 예시보다 우선 적용한다", "certain=false");
+    }
     @ParameterizedTest @ValueSource(strings={
         "not json","null","{} {}",
         "{\"certain\":true,\"confidence\":0.99,\"mappings\":[],\"reason\":\"ok\",\"items\":[]}",

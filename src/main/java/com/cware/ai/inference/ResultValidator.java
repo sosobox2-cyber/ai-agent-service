@@ -26,6 +26,15 @@ public class ResultValidator {
                 continue;
             }
             SourceOption source = sources.get(entry.optionId());
+            request.purchaseOptionUnits().stream()
+                    .filter(u -> u.purchaseOptionName().equals(entry.targetPurchaseOptionName()))
+                    .findFirst().ifPresent(u -> {
+                        String selected = UnitSelection.selectedUnit(entry.value(), u);
+                        if (selected == null)
+                            errors.add("단위가 설정된 구매옵션 값은 숫자와 허용된 단위를 조합해야 합니다.");
+                        else if (entry.calculation() != null && !selected.equals(entry.calculation().outputUnit()))
+                            errors.add("구매옵션 값의 단위와 calculation.outputUnit이 일치하지 않습니다.");
+                    });
             if (source == null) errors.add("원본에 없는 단품 ID를 반환했습니다.");
             // 값의 의미, 원문 근거 및 계산의 타당성은 AI가 판단한다.
             if (!request.allowedPurchaseOptions().contains(entry.targetPurchaseOptionName()))

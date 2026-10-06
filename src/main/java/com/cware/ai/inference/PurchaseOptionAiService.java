@@ -73,13 +73,18 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
 
     /** 매 요청의 허용 이름을 JSON Schema enum에도 주입하며 서버 검증을 별도로 수행한다. */
     public static Map<String,Object> schema(InferenceRequest request) {
+        var units = new LinkedHashSet<>(CalculationValidator.supportedUnits());
+        request.purchaseOptionUnits().forEach(u -> {
+            units.addAll(u.unitOptions());
+            units.add(u.defaultUnit());
+        });
         var evidence = object(Map.of("source", Map.of("type", "string", "enum",
                 List.of("goodsName", "productNoticeText", "optionName1")), "text", Map.of("type", "string")));
         var operand = object(Map.of("amount", Map.of("type", "string", "description", "양수 숫자 문자열"),
-                "unit", Map.of("type", "string", "enum", CalculationValidator.supportedUnits()), "evidence", evidence));
+                "unit", Map.of("type", "string", "description", "실제 원문 단위. 선택지 밖의 단위도 원문 그대로 보존한다."), "evidence", evidence));
         var calculation = object(Map.of("operation", Map.of("type", "string", "enum",
                 Arrays.stream(Calculation.Operation.values()).map(Enum::name).toList()),
-                "outputUnit", Map.of("type", "string", "enum", CalculationValidator.supportedUnits()),
+                "outputUnit", Map.of("type", "string", "enum", List.copyOf(units)),
                 "operands", Map.of("type", "array", "items", operand),
                 "context", Map.of("anyOf", List.of(evidence, Map.of("type", "null")))));
         Map<String,Object> entry = object(Map.of(

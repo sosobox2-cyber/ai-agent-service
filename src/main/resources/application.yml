@@ -18,7 +18,7 @@ spring:
 app:
   inference:
     confidence-threshold: 0.80
-    prompt-version: coupang-option-v12
+    prompt-version: coupang-option-v14
     connect-timeout: 5s
     read-timeout: 30s
 logging:

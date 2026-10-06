@@ -25,6 +25,111 @@ class PurchaseOptionApiTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper mapper;
     @MockitoBean PurchaseOptionAiService ai;
+    @Test void patchWithSavedUnitsReturnsPackCountAndContentsInTestMode() throws Exception {
+        mvc.perform(post(URL).param("testMode", "true").contentType(MediaType.APPLICATION_JSON)
+                        .content(Files.readString(Path.of("examples/quantity-request.json"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.errorCode").value("TEST_MODE"))
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.autoApplyCandidate").value(false))
+                .andExpect(jsonPath("$.validationErrors").isEmpty())
+                .andExpect(jsonPath("$.items[0].purchaseOptions.수량").value("9개"))
+                .andExpect(jsonPath("$.items[0].purchaseOptions['개당 수량']").value("50개입"))
+                .andExpect(jsonPath("$.optionMappings[0].calculation.operation").value("PACK_CONTENT"))
+                .andExpect(jsonPath("$.optionMappings[0].calculation.outputUnit").value("개입"))
+                .andExpect(jsonPath("$.optionMappings[0].calculation.operands[0].amount").value("50"))
+                .andExpect(jsonPath("$.optionMappings[1].calculation.operation").value("DIRECT"))
+                .andExpect(jsonPath("$.optionMappings[1].calculation.outputUnit").value("개"))
+                .andExpect(jsonPath("$.optionMappings[1].calculation.operands[0].amount").value("9"))
+                .andExpect(jsonPath("$.optionMappings[1].calculation.operands[0].unit").value("박스"));
+        verifyNoInteractions(ai);
+    }
+    @Test void sunscreenWithSavedUnitsReturnsCountAndPerItemCapacityInTestMode() throws Exception {
+        mvc.perform(post(URL).param("testMode", "true").contentType(MediaType.APPLICATION_JSON)
+                        .content(Files.readString(Path.of("examples/capacity-request.json"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.errorCode").value("TEST_MODE"))
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.autoApplyCandidate").value(false))
+                .andExpect(jsonPath("$.validationErrors").isEmpty())
+                .andExpect(jsonPath("$.items[0].purchaseOptions.수량").value("7개"))
+                .andExpect(jsonPath("$.items[0].purchaseOptions['개당 용량']").value("50ml"))
+                .andExpect(jsonPath("$.optionMappings[0].calculation.operation").value("DIRECT"))
+                .andExpect(jsonPath("$.optionMappings[0].calculation.outputUnit").value("ml"))
+                .andExpect(jsonPath("$.optionMappings[0].calculation.operands[0].amount").value("50"))
+                .andExpect(jsonPath("$.optionMappings[0].calculation.context").doesNotExist())
+                .andExpect(jsonPath("$.optionMappings[1].calculation.operation").value("DIRECT"))
+                .andExpect(jsonPath("$.optionMappings[1].calculation.outputUnit").value("개"))
+                .andExpect(jsonPath("$.optionMappings[1].calculation.operands[0].amount").value("7"));
+        verifyNoInteractions(ai);
+    }
+    @Test void kimchiWithSavedUnitsReturnsCombinedWeightInTestMode() throws Exception {
+        mvc.perform(post(URL).param("testMode", "true").contentType(MediaType.APPLICATION_JSON)
+                        .content(Files.readString(Path.of("examples/weight-request.json"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.errorCode").value("TEST_MODE"))
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.autoApplyCandidate").value(false))
+                .andExpect(jsonPath("$.validationErrors").isEmpty())
+                .andExpect(jsonPath("$.items[0].purchaseOptions.수량").value("1세트"))
+                .andExpect(jsonPath("$.items[0].purchaseOptions['개당 중량']").value("5.2kg"))
+                .andExpect(jsonPath("$.optionMappings[0].calculation.operation").value("SUM"))
+                .andExpect(jsonPath("$.optionMappings[0].calculation.outputUnit").value("kg"))
+                .andExpect(jsonPath("$.optionMappings[0].calculation.operands[0].amount").value("4.2"))
+                .andExpect(jsonPath("$.optionMappings[0].calculation.operands[1].amount").value("1"))
+                .andExpect(jsonPath("$.optionMappings[1].calculation.operation").value("PACK_COUNT"));
+        verifyNoInteractions(ai);
+    }
+    @Test void toothbrushWithSavedUnitsReturnsSetAndContentsInTestMode() throws Exception {
+        mvc.perform(post(URL).param("testMode", "true").contentType(MediaType.APPLICATION_JSON)
+                        .content(Files.readString(Path.of("examples/set-request.json"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.errorCode").value("TEST_MODE"))
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.autoApplyCandidate").value(false))
+                .andExpect(jsonPath("$.validationErrors").isEmpty())
+                .andExpect(jsonPath("$.items[0].purchaseOptions.수량").value("1세트"))
+                .andExpect(jsonPath("$.items[0].purchaseOptions['개당 수량']").value("10매입"))
+                .andExpect(jsonPath("$.optionMappings[0].calculation.operation").value("PACK_CONTENT"))
+                .andExpect(jsonPath("$.optionMappings[0].calculation.outputUnit").value("매입"))
+                .andExpect(jsonPath("$.optionMappings[1].calculation.operation").value("PACK_COUNT"))
+                .andExpect(jsonPath("$.optionMappings[1].calculation.outputUnit").value("세트"));
+        verifyNoInteractions(ai);
+    }
+    @Test void callerSuppliedUnitsReachAiAndTestMode() throws Exception {
+        String body = Files.readString(Path.of("src/test/resources/unit-request.json"));
+        when(ai.infer(any())).thenReturn(new MappingProposal(true, .9, java.util.List.of(
+                new MappingProposal.Entry("1", "수량", "6박스", .9),
+                new MappingProposal.Entry("2", "수량", "6세트", .9),
+                new MappingProposal.Entry("3", "수량", "6개", .9)), "원문 단위와 기본단위를 적용했습니다."));
+        for (String mode : new String[]{"false", "true"}) {
+            mvc.perform(post(URL).param("testMode", mode).contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.validationErrors").isEmpty())
+                    .andExpect(jsonPath("$.items[0].purchaseOptions.수량").value("6박스"))
+                    .andExpect(jsonPath("$.items[1].purchaseOptions.수량").value("6세트"))
+                    .andExpect(jsonPath("$.items[2].purchaseOptions.수량").value("6개"));
+        }
+        verify(ai).infer(argThat(r -> r.purchaseOptionUnits().size() == 1
+                && r.purchaseOptionUnits().get(0).defaultUnit().equals("개")
+                && r.purchaseOptionUnits().get(0).unitOptions().equals(java.util.List.of("개", "박스", "세트"))));
+    }
+
+    @Test void invalidUnitSettingsFailBeforeAi() throws Exception {
+        ObjectNode body = (ObjectNode) mapper.readTree(Files.readString(Path.of("src/test/resources/unit-request.json")));
+        ((ObjectNode) body.withArray("purchaseOptionUnits").get(0)).put("defaultUnit", " ");
+        for (String mode : new String[]{"false", "true"})
+            mvc.perform(post(URL).param("testMode", mode).contentType(MediaType.APPLICATION_JSON).content(body.toString()))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errorCode").value("INVALID_REQUEST"));
+        verifyNoInteractions(ai);
+    }
+    @Test void defaultOutsideChoicesWorksInAiAndTestModes() throws Exception {
+        ObjectNode body = (ObjectNode) mapper.readTree(Files.readString(Path.of("src/test/resources/unit-request.json")));
+        ((ObjectNode) body.withArray("purchaseOptionUnits").get(0)).putArray("unitOptions").add("박스").add("세트");
+        when(ai.infer(any())).thenReturn(new MappingProposal(true, .9, java.util.List.of(
+                new MappingProposal.Entry("1", "수량", "6박스", .9),
+                new MappingProposal.Entry("2", "수량", "6세트", .9),
+                new MappingProposal.Entry("3", "수량", "6개", .9)), "기본단위를 적용했습니다."));
+        for (String mode : new String[]{"false", "true"})
+            mvc.perform(post(URL).param("testMode", mode).contentType(MediaType.APPLICATION_JSON).content(body.toString()))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.validationErrors").isEmpty())
+                    .andExpect(jsonPath("$.items[2].purchaseOptions.수량").value("6개"));
+    }
     @Test void extractedValuesRunThroughFullContext() throws Exception {
         when(ai.infer(any())).thenReturn(Fixtures.proposal());
         mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(Fixtures.request())))
@@ -84,7 +189,10 @@ class PurchaseOptionApiTest {
                 .andExpect(jsonPath("$.serverAssessment.reason").value(org.hamcrest.Matchers.containsString("0.79")));
     }
     @Test void structuredProposalPreservesAiValueInItemsAndMappings() throws Exception {
-        var request = mapper.readValue(Files.readString(Path.of("examples/capacity-request.json")), com.cware.ai.dto.InferenceRequest.class);
+        ObjectNode input = (ObjectNode) mapper.readTree(Files.readString(Path.of("examples/capacity-request.json")));
+        // 단위 설정이 없는 기존 요청은 AI의 원래 값 표기를 그대로 보존한다.
+        input.remove("purchaseOptionUnits");
+        var request = mapper.treeToValue(input, com.cware.ai.dto.InferenceRequest.class);
         var calculation = new com.cware.ai.dto.Calculation(com.cware.ai.dto.Calculation.Operation.DIRECT, "ml",
                 java.util.List.of(new com.cware.ai.dto.Calculation.Operand("50", "ml",
                         new com.cware.ai.dto.Calculation.Evidence("goodsName", "50 ml"))), null);
