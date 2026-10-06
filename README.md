@@ -6,6 +6,8 @@ SK스토아 상품정보고시는 `productNoticeText`에 하나의 긴 텍스트
 
 프로젝트 소개와 화면 사용 방법은 [비개발자용 안내](docs/project-overview.md), 기술 사양과 처리 흐름은 [기술 담당자용 문서](docs/project-flow.md)를 참고하세요.
 
+실제 AI 추론은 입력된 모든 단품을 각각 처리합니다. AI가 확실하다고 판단했으나 일부 `optionId`의 매핑을 누락하면, 누락된 ID와 이전 응답을 전달하여 전체 결과를 한 번만 재요청합니다. 재요청 결과도 기존 서버 검증과 신뢰도 기준을 통과해야 적용되며, 다시 누락되면 검증 실패로 반환합니다. AI가 불확실하다고 판단한 결과와 API 호출 오류는 이 보정 재요청의 대상이 아닙니다. 누락 보정 시 AI 호출 비용과 응답 시간이 추가될 수 있습니다. 프롬프트 버전은 `coupang-option-v15`입니다.
+
 ## 커밋 메시지 규칙
 
 앞으로 커밋 메시지의 제목과 본문은 한글로 작성합니다. 변경 내용을 간결하고 구체적으로 설명하며, 코드 식별자·파일명·기술 용어는 필요한 경우 원문을 유지합니다.
@@ -219,7 +221,7 @@ Vercel은 로컬 `.env`나 `compose.yaml`을 실행 환경 설정으로 사용�
 | `PORT` | `8081` |
 | `SERVER_ADDRESS` | `127.0.0.1` |
 | `app.inference.confidence-threshold` | `0.80` |
-| `app.inference.prompt-version` | `coupang-option-v14` |
+| `app.inference.prompt-version` | `coupang-option-v15` |
 
 신뢰도 기준은 **0.80 이상(0.80 포함)**입니다. AI 전체 신뢰도와 모든 개별 매핑 신뢰도의 최솟값이 기준 이상이고, `certain=true`이며 서버의 응답 형식·단품 검증을 통과하면 `success=true`, `autoApplyCandidate=true`로 반환합니다. 전체 신뢰도가 0.80이어도 개별 매핑이 0.80 미만이거나 다른 검증에 실패하면 반려됩니다. 반려 원인은 `serverAssessment.decisionCode`와 `validationErrors`에서 확인할 수 있습니다.
 

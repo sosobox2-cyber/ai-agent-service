@@ -45,17 +45,20 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
             ResponseFormat format = ResponseFormat.builder().type(ResponseFormat.Type.JSON_SCHEMA)
                     .jsonSchema(ResponseFormat.JsonSchema.builder().name("purchase_option_mapping")
                             .strict(true).schema(schema(request)).build()).build();
-            ChatResponse response = model.call(new Prompt(List.of(new SystemMessage(systemPrompt), new UserMessage(input)),
-                    OpenAiChatOptions.builder().responseFormat(format).build()));
-            if (response == null || response.getResult() == null || response.getResult().getOutput() == null)
-                throw parseFailure();
-            String finish = response.getResult().getMetadata().getFinishReason();
-            if (!"stop".equalsIgnoreCase(finish))
-                throw new InferenceException("AI_INCOMPLETE_RESPONSE", HttpStatus.BAD_GATEWAY, "AI 응답이 정상적으로 완료되지 않았습니다.");
-            String json = response.getResult().getOutput().getText();
-            if (json == null || json.isBlank() || json.length() > 65536) throw parseFailure();
-            MappingProposal proposal = mapper.readValue(json, MappingProposal.class);
-            if (proposal == null) throw parseFailure();
+            List<Message> messages = new ArrayList<>(List.of(new SystemMessage(systemPrompt), new UserMessage(input)));
+            MappingProposal proposal = call(messages, format);
+            List<String> missing = missingOptionIds(request, proposal);
+            if (Boolean.TRUE.equals(proposal.certain()) && !missing.isEmpty()) {
+                messages.add(new AssistantMessage(mapper.writeValueAsString(proposal)));
+                messages.add(new UserMessage(
+                        "직전 응답에서 다음 optionId의 구매옵션 매핑이 누락되었습니다: "
+                        + mapper.writeValueAsString(missing)
+                        + ". product.options 전체를 다시 검토하고 기존 단품을 포함한 전체 mappings를 반환하세요. "
+                        + "누락된 단품만 반환하거나 값을 임의로 복사하지 마세요. "
+                        + "단품별로 근거가 있는 허용 구매옵션을 추출하고, 판단할 수 없는 단품이 있으면 "
+                        + "certain=false로 반환하며 reason에 해당 ID와 이유를 설명하세요."));
+                proposal = call(messages, format);
+            }
             return proposal;
         } catch (InferenceException e) {
             throw e;
@@ -69,6 +72,32 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
             }
             throw new InferenceException("AI_UPSTREAM_ERROR", HttpStatus.BAD_GATEWAY, "AI 서비스 호출에 실패했습니다.");
         }
+    }
+
+    private MappingProposal call(List<Message> messages, ResponseFormat format) throws JsonProcessingException {
+        ChatResponse response = model.call(new Prompt(List.copyOf(messages),
+                OpenAiChatOptions.builder().responseFormat(format).build()));
+        if (response == null || response.getResult() == null || response.getResult().getOutput() == null)
+            throw parseFailure();
+        String finish = response.getResult().getMetadata().getFinishReason();
+        if (!"stop".equalsIgnoreCase(finish))
+            throw new InferenceException("AI_INCOMPLETE_RESPONSE", HttpStatus.BAD_GATEWAY, "AI 응답이 정상적으로 완료되지 않았습니다.");
+        String json = response.getResult().getOutput().getText();
+        if (json == null || json.isBlank() || json.length() > 65536) throw parseFailure();
+        MappingProposal proposal = mapper.readValue(json, MappingProposal.class);
+        if (proposal == null) throw parseFailure();
+        return proposal;
+    }
+
+    private static List<String> missingOptionIds(InferenceRequest request, MappingProposal proposal) {
+        Set<String> returned = new HashSet<>();
+        if (proposal.mappings() != null) {
+            for (MappingProposal.Entry entry : proposal.mappings()) {
+                if (entry != null) returned.add(entry.optionId());
+            }
+        }
+        return request.options().stream().map(option -> option.optionId())
+                .filter(id -> !returned.contains(id)).toList();
     }
 
     /** 매 요청의 허용 이름을 JSON Schema enum에도 주입하며 서버 검증을 별도로 수행한다. */

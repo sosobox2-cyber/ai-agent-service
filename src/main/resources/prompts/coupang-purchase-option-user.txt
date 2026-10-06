@@ -1,3 +1,4 @@
 다음 JSON의 product.options를 분석하여 허용된 쿠팡 구매옵션 값과 판단 구조를 반환하라.
+product.options 전체를 순회하고 단품별로 판단하라. certain=true일 때 입력의 모든 optionId가 mappings에 최소 한 번 포함되는지 확인하라. 일부 단품만 판단 가능하면 certain=false로 반환하고 누락된 단품 ID와 검토 이유를 설명하라.
 일반 옵션은 원본 문자열에서 추출하고, 수량·용량·중량은 calculation의 공통 연산과 숫자·단위·원문 근거로 표현하라.
 데이터:

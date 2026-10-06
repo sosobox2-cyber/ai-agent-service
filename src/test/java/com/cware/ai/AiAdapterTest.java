@@ -31,6 +31,76 @@ class AiAdapterTest {
     @Test void parsesStructuredMapping() throws Exception {
         respond(new ObjectMapper().writeValueAsString(Fixtures.proposal()),"stop");
         assertThat(ai.infer(Fixtures.request())).isEqualTo(Fixtures.proposal());
+        verify(model).call(any(Prompt.class));
+    }
+    ChatResponse response(MappingProposal proposal) throws Exception {
+        return new ChatResponse(List.of(new Generation(
+                new AssistantMessage(new ObjectMapper().writeValueAsString(proposal)),
+                ChatGenerationMetadata.builder().finishReason("stop").build())));
+    }
+    MappingProposal partial(boolean certain) {
+        return new MappingProposal(certain, .95, Fixtures.proposal().mappings().subList(0, 3), "첫 단품 판단");
+    }
+    com.cware.ai.service.PurchaseOptionInferenceService service() {
+        return new com.cware.ai.service.PurchaseOptionInferenceService(new RequestValidator(), ai,
+                new ResultValidator(), new com.cware.ai.util.InputHashService(new ObjectMapper()), Fixtures.properties());
+    }
+    @Test void retriesMissingIdsWithPreviousResponseAndAcceptsFullReplacement() throws Exception {
+        when(model.call(any(Prompt.class))).thenReturn(response(partial(true)), response(Fixtures.proposal()));
+        var result = service().infer(Fixtures.request());
+        assertThat(result.success()).isTrue();
+        assertThat(result.items()).hasSize(3);
+        assertThat(result.optionMappings()).hasSize(9);
+        var prompts = ArgumentCaptor.forClass(Prompt.class);
+        verify(model, times(2)).call(prompts.capture());
+        var first = prompts.getAllValues().get(0).getInstructions();
+        var correction = prompts.getAllValues().get(1).getInstructions();
+        assertThat(first).hasSize(2);
+        assertThat(correction).hasSize(4);
+        assertThat(correction.get(2).getText()).isEqualTo(new ObjectMapper().writeValueAsString(partial(true)));
+        assertThat(correction.get(3).getText()).contains("[\"2\",\"3\"]", "전체 mappings", "certain=false");
+    }
+    @Test void repeatedOmissionFailsValidationAfterExactlyOneCorrection() throws Exception {
+        when(model.call(any(Prompt.class))).thenReturn(response(partial(true)));
+        var result = service().infer(Fixtures.request());
+        assertThat(result.errorCode()).isEqualTo("RESULT_VALIDATION_FAILED");
+        assertThat(result.validationErrors()).contains("단품의 구매옵션 매핑이 누락되었습니다.");
+        assertThat(result.items()).isEmpty();
+        assertThat(result.autoApplyCandidate()).isFalse();
+        verify(model, times(2)).call(any(Prompt.class));
+    }
+    @Test void uncertainPartialResponseIsNotRetried() throws Exception {
+        when(model.call(any(Prompt.class))).thenReturn(response(partial(false)));
+        var result = service().infer(Fixtures.request());
+        assertThat(result.errorCode()).isEqualTo("REVIEW_REQUIRED");
+        assertThat(result.items()).isEmpty();
+        verify(model).call(any(Prompt.class));
+    }
+    @Test void correctionStillChecksAllowedNamesAndConfidence() throws Exception {
+        var entries = new java.util.ArrayList<>(Fixtures.proposal().mappings());
+        entries.set(0, new MappingProposal.Entry("1", "허용되지 않은 옵션", "값", .99));
+        var invalid = new MappingProposal(true, .99, entries, "보정 결과");
+        when(model.call(any(Prompt.class))).thenReturn(response(partial(true)), response(invalid));
+        var result = service().infer(Fixtures.request());
+        assertThat(result.errorCode()).isEqualTo("RESULT_VALIDATION_FAILED");
+        assertThat(result.items()).isEmpty();
+        verify(model, times(2)).call(any(Prompt.class));
+
+        reset(model);
+        var low = new MappingProposal(true, .5, Fixtures.proposal().mappings(), "신뢰도 낮음");
+        when(model.call(any(Prompt.class))).thenReturn(response(partial(true)), response(low));
+        result = service().infer(Fixtures.request());
+        assertThat(result.errorCode()).isEqualTo("REVIEW_REQUIRED");
+        assertThat(result.items()).isEmpty();
+        verify(model, times(2)).call(any(Prompt.class));
+    }
+    @Test void uncertainCorrectionIsNotApplied() throws Exception {
+        when(model.call(any(Prompt.class))).thenReturn(response(partial(true)), response(partial(false)));
+        var result = service().infer(Fixtures.request());
+        assertThat(result.errorCode()).isEqualTo("REVIEW_REQUIRED");
+        assertThat(result.aiAssessment().certain()).isFalse();
+        assertThat(result.items()).isEmpty();
+        verify(model, times(2)).call(any(Prompt.class));
     }
     @Test void parsesNestedCalculationAndRejectsUnsupportedOperation() throws Exception {
         var calculation = new com.cware.ai.dto.Calculation(com.cware.ai.dto.Calculation.Operation.DIRECT, "ml",
