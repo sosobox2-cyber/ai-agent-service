@@ -5,6 +5,7 @@ import com.cware.ai.inference.*;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -13,6 +14,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -25,6 +27,9 @@ class PurchaseOptionApiTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper mapper;
     @MockitoBean PurchaseOptionAiService ai;
+    @BeforeEach void delegateUsageOverloadToExistingMockProposals() {
+        when(ai.infer(any(), any())).thenAnswer(invocation -> ai.infer(invocation.getArgument(0)));
+    }
     @Test void patchWithSavedUnitsReturnsPackCountAndContentsInTestMode() throws Exception {
         mvc.perform(post(URL).param("testMode", "true").contentType(MediaType.APPLICATION_JSON)
                         .content(Files.readString(Path.of("examples/quantity-request.json"))))
@@ -250,6 +255,41 @@ class PurchaseOptionApiTest {
         }
         verifyNoInteractions(ai);
     }
+    @Test void tvExamplePreservesScreenUnitsWithoutUnitSettingsInTestMode() throws Exception {
+        String body = java.nio.file.Files.readString(java.nio.file.Path.of("examples/tv-request.json"));
+        assertThat(mapper.readTree(body).has("purchaseOptionUnits")).isFalse();
+        mvc.perform(post(URL).param("testMode", "true").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.errorCode").value("TEST_MODE"))
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.autoApplyCandidate").value(false))
+                .andExpect(jsonPath("$.validationErrors").isEmpty())
+                .andExpect(jsonPath("$.items[0].purchaseOptions['화면크기(cm)']").value("109cm"))
+                .andExpect(jsonPath("$.items[0].purchaseOptions['화면크기(in)']").value("43인치"))
+                .andExpect(jsonPath("$.items[0].purchaseOptions['화면크기 (cm/(인치))']").value("109cm(43인치)"))
+                .andExpect(jsonPath("$.items[0].purchaseOptions['설치지원방식']").doesNotExist())
+                .andExpect(jsonPath("$.items[0].purchaseOptions['스탠드/벽걸이 구분']").doesNotExist());
+        verifyNoInteractions(ai);
+    }
+
+    @Test void returnsUsageAsAdditionalMetadataWithoutChangingInferenceResult() throws Exception {
+        doAnswer(invocation -> {
+            java.util.function.Consumer<com.cware.ai.dto.AiCallUsage> usage = invocation.getArgument(1);
+            usage.accept(new com.cware.ai.dto.AiCallUsage("gpt-4.1-mini", PurchaseOptionPromptMode.LIGHT,
+                    1, 1000, 800, 200, 1200, new java.math.BigDecimal("0.00048")));
+            return Fixtures.ambiguousProposal();
+        }).when(ai).infer(any(), any());
+        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(Fixtures.ambiguous())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.items[0].purchaseOptions.색상").value("남색"))
+                .andExpect(jsonPath("$.aiUsage.length()").value(1))
+                .andExpect(jsonPath("$.aiUsage[0].mode").value("LIGHT"))
+                .andExpect(jsonPath("$.aiUsage[0].input_tokens").value(1000))
+                .andExpect(jsonPath("$.aiUsage[0].cached_tokens").value(800))
+                .andExpect(jsonPath("$.aiUsage[0].output_tokens").value(200))
+                .andExpect(jsonPath("$.aiUsage[0].total_tokens").value(1200));
+    }
+
     @Test void oldOptionValueFieldsAreRejected() throws Exception {
         ObjectNode body = mapper.valueToTree(Fixtures.request());
         ((ObjectNode) body.path("options").get(0)).put("optionValue1", "100");

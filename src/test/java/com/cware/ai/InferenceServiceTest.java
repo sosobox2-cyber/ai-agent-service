@@ -7,6 +7,7 @@ import com.cware.ai.service.PurchaseOptionInferenceService;
 import com.cware.ai.util.InputHashService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import java.util.*;
@@ -19,6 +20,10 @@ class InferenceServiceTest {
     final OptionInferenceGateway ai = mock(OptionInferenceGateway.class);
     final PurchaseOptionInferenceService service = new PurchaseOptionInferenceService(new RequestValidator(),
             ai, new ResultValidator(), new InputHashService(new ObjectMapper()), Fixtures.properties());
+
+    @BeforeEach void delegateUsageOverloadToExistingMockProposals() {
+        when(ai.infer(any(), any())).thenAnswer(invocation -> ai.infer(invocation.getArgument(0)));
+    }
 
     @Test void acceptsAiColorCountReasoningAndReturnsUnmodifiedValueAndEvidence() throws Exception {
         var request = new ObjectMapper().readValue(Files.readString(Path.of("examples/set-request.json")), InferenceRequest.class);

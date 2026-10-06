@@ -38,6 +38,22 @@ class PurchaseOptionUnitTest {
                 new Calculation(Calculation.Operation.DIRECT, "개", List.of(), null)))).isNotEmpty();
     }
 
+    @Test void mixedRequestOnlyRestrictsUnitsForConfiguredTarget() {
+        var r = new InferenceRequest("mixed", "TV 109cm", null, "가전", "112143", "TV",
+                List.of("수량", "화면크기(cm)"), List.of(new SourceOption("1", "단품")), null, List.of(units));
+        var screen = new MappingProposal.Entry("1", "화면크기(cm)", "109cm", .95, "goodsName", "109cm",
+                new Calculation(Calculation.Operation.DIRECT, "cm", List.of(
+                        new Calculation.Operand("109", "cm", new Calculation.Evidence("goodsName", "109cm"))), null));
+        var validator = new ResultValidator();
+        var valid = new MappingProposal(true, .95, List.of(screen,
+                new MappingProposal.Entry("1", "수량", "1개", .95)), "화면크기와 수량 추출");
+        assertThat(validator.validateProposal(r, valid)).isEmpty();
+        var invalid = new MappingProposal(true, .95, List.of(screen,
+                new MappingProposal.Entry("1", "수량", "1대", .95)), "화면크기와 수량 추출");
+        assertThat(validator.validateProposal(r, invalid))
+                .containsExactly("단위가 설정된 구매옵션 값은 숫자와 허용된 단위를 조합해야 합니다.");
+    }
+
     private MappingProposal proposal(String value, Calculation calculation) {
         return new MappingProposal(true, .9, List.of(new MappingProposal.Entry("1", "수량", value, .9,
                 null, null, calculation)), "단위를 선택했습니다.");
@@ -73,7 +89,8 @@ class PurchaseOptionUnitTest {
             assertThat(MockOptionInferenceService.infer(request(List.of(setting), source)).mappings().get(0).value()).isEqualTo("6개");
         assertThat(MockOptionInferenceService.infer(request(List.of(setting), "6박스")).mappings().get(0).value()).isEqualTo("6박스");
         var schema = new ObjectMapper().valueToTree(PurchaseOptionAiService.schema(r));
-        assertThat(schema.at("/properties/mappings/items/properties/calculation/anyOf/0/properties/outputUnit/enum").toString()).contains("개");
+        assertThat(schema.at("/properties/mappings/items/properties/calculation/anyOf/0/properties/outputUnit/type").asText()).isEqualTo("string");
+        assertThat(schema.at("/properties/mappings/items/properties/calculation/anyOf/0/properties/outputUnit").has("enum")).isFalse();
     }
 
     @Test void unitChangesAffectHashButOrderingDoesNot() {
@@ -92,8 +109,9 @@ class PurchaseOptionUnitTest {
         var mapper = new ObjectMapper();
         var schema = mapper.valueToTree(PurchaseOptionAiService.schema(request(List.of(
                 new PurchaseOptionUnit("수량", "묶음", List.of("묶음"))), "6")));
-        assertThat(schema.at("/properties/mappings/items/properties/calculation/anyOf/0/properties/outputUnit/enum").toString())
-                .contains("묶음");
+        assertThat(schema.at("/properties/mappings/items/properties/calculation/anyOf/0/properties/outputUnit/type").asText())
+                .isEqualTo("string");
+        assertThat(schema.at("/properties/mappings/items/properties/calculation/anyOf/0/properties/outputUnit").has("enum")).isFalse();
         assertThat(schema.at("/properties/mappings/items/properties/calculation/anyOf/0/properties/operands/items/properties/unit/type").asText())
                 .isEqualTo("string");
     }

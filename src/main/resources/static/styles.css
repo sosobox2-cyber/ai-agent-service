@@ -102,6 +102,9 @@ th { padding: 0 7px 10px; text-align: left; color: #6e7d90; font-size: 12px; fon
 .final-result .result-table td:first-child { color: #657386; font-size: 14px; font-weight: 400; }
 .final-result-empty { margin: 0; color: #657386; font-size: 14px; line-height: 1.6; }
 .diagnostic-details { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e8eef5; }
+.usage-details { margin-top: 18px; padding: 16px; border: 1px solid #dce6f2; border-radius: 10px; background: #f7faff; }
+.usage-details > summary { margin-bottom: 12px; }
+.usage-note { margin: 12px 0 0; color: #657386; font-size: 12px; line-height: 1.7; }
 .diagnostic-details > summary { margin-bottom: 18px; }
 @media (max-width: 600px) { .final-result { padding: 16px 12px; } .final-result-heading h3 { font-size: 17px; } .final-result .result-table td { padding: 12px; font-size: 16px; } }
 .validation-errors { padding-left: 20px; color: #b23f49; font-size: 13px; }

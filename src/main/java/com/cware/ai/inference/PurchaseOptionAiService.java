@@ -2,6 +2,8 @@ package com.cware.ai.inference;
 
 import com.cware.ai.dto.InferenceRequest;
 import com.cware.ai.dto.Calculation;
+import com.cware.ai.dto.AiCallUsage;
+import java.util.function.Consumer;
 import com.cware.ai.exception.InferenceException;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -14,6 +16,7 @@ import org.springframework.ai.openai.api.ResponseFormat;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import java.io.IOException;
 import java.net.SocketTimeoutException;
 import java.net.http.HttpTimeoutException;
@@ -24,29 +27,44 @@ import java.util.*;
 public class PurchaseOptionAiService implements OptionInferenceGateway {
     private final ChatModel model;
     private final ObjectMapper mapper;
-    private final String systemPrompt;
+    private final PurchaseOptionPromptProvider prompts;
+    private final AiUsageLogger usageLogger;
     private final String userPrompt;
 
     public PurchaseOptionAiService(ChatModel model, ObjectMapper mapper) throws IOException {
+        this(model, mapper, new PurchaseOptionPromptProvider("AUTO"), new AiUsageLogger(false));
+    }
+
+    @Autowired
+    public PurchaseOptionAiService(ChatModel model, ObjectMapper mapper,
+            PurchaseOptionPromptProvider prompts, AiUsageLogger usageLogger) throws IOException {
         this.model = model;
+        this.prompts = prompts;
+        this.usageLogger = usageLogger;
         this.mapper = mapper.copy().enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                 .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
                 .disable(DeserializationFeature.ACCEPT_FLOAT_AS_INT)
                 .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
         this.mapper.setConfig(this.mapper.getDeserializationConfig().without(MapperFeature.ALLOW_COERCION_OF_SCALARS));
-        systemPrompt = new ClassPathResource("prompts/coupang-purchase-option-system.txt").getContentAsString(StandardCharsets.UTF_8);
         userPrompt = new ClassPathResource("prompts/coupang-purchase-option-user.txt").getContentAsString(StandardCharsets.UTF_8);
     }
 
     @Override
     public MappingProposal infer(InferenceRequest request) {
+        return infer(request, ignored -> {});
+    }
+
+    @Override
+    public MappingProposal infer(InferenceRequest request, Consumer<AiCallUsage> usage) {
         try {
             String input = userPrompt + "\n" + mapper.writeValueAsString(Map.of("product", request));
             ResponseFormat format = ResponseFormat.builder().type(ResponseFormat.Type.JSON_SCHEMA)
                     .jsonSchema(ResponseFormat.JsonSchema.builder().name("purchase_option_mapping")
                             .strict(true).schema(schema(request)).build()).build();
-            List<Message> messages = new ArrayList<>(List.of(new SystemMessage(systemPrompt), new UserMessage(input)));
-            MappingProposal proposal = call(messages, format);
+            PurchaseOptionPromptMode mode = prompts.select(request);
+            String callId = UUID.randomUUID().toString();
+            List<Message> messages = new ArrayList<>(List.of(new SystemMessage(prompts.system(mode)), new UserMessage(input)));
+            MappingProposal proposal = call(messages, format, callId, mode, 1, usage);
             List<String> missing = missingOptionIds(request, proposal);
             if (Boolean.TRUE.equals(proposal.certain()) && !missing.isEmpty()) {
                 messages.add(new AssistantMessage(mapper.writeValueAsString(proposal)));
@@ -57,7 +75,7 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
                         + "누락된 단품만 반환하거나 값을 임의로 복사하지 마세요. "
                         + "단품별로 근거가 있는 허용 구매옵션을 추출하고, 판단할 수 없는 단품이 있으면 "
                         + "certain=false로 반환하며 reason에 해당 ID와 이유를 설명하세요."));
-                proposal = call(messages, format);
+                proposal = call(messages, format, callId, mode, 2, usage);
             }
             return proposal;
         } catch (InferenceException e) {
@@ -74,9 +92,12 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
         }
     }
 
-    private MappingProposal call(List<Message> messages, ResponseFormat format) throws JsonProcessingException {
+    private MappingProposal call(List<Message> messages, ResponseFormat format, String callId,
+            PurchaseOptionPromptMode mode, int attempt, Consumer<AiCallUsage> usage) throws JsonProcessingException {
         ChatResponse response = model.call(new Prompt(List.copyOf(messages),
                 OpenAiChatOptions.builder().responseFormat(format).build()));
+        usageLogger.record(callId, mode, attempt, response);
+        usage.accept(AiUsageLogger.measure(mode, attempt, response));
         if (response == null || response.getResult() == null || response.getResult().getOutput() == null)
             throw parseFailure();
         String finish = response.getResult().getMetadata().getFinishReason();
@@ -102,18 +123,15 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
 
     /** 매 요청의 허용 이름을 JSON Schema enum에도 주입하며 서버 검증을 별도로 수행한다. */
     public static Map<String,Object> schema(InferenceRequest request) {
-        var units = new LinkedHashSet<>(CalculationValidator.supportedUnits());
-        request.purchaseOptionUnits().forEach(u -> {
-            units.addAll(u.unitOptions());
-            units.add(u.defaultUnit());
-        });
         var evidence = object(Map.of("source", Map.of("type", "string", "enum",
                 List.of("goodsName", "productNoticeText", "optionName1")), "text", Map.of("type", "string")));
         var operand = object(Map.of("amount", Map.of("type", "string", "description", "양수 숫자 문자열"),
                 "unit", Map.of("type", "string", "description", "실제 원문 단위. 선택지 밖의 단위도 원문 그대로 보존한다."), "evidence", evidence));
         var calculation = object(Map.of("operation", Map.of("type", "string", "enum",
                 Arrays.stream(Calculation.Operation.values()).map(Enum::name).toList()),
-                "outputUnit", Map.of("type", "string", "enum", List.copyOf(units)),
+                "outputUnit", Map.of("type", "string", "description",
+                        "단위 설정이 없는 구매옵션은 원문과 옵션 의미에 맞는 단위를 그대로 사용한다. "
+                        + "설정된 구매옵션은 해당 unitOptions 또는 defaultUnit을 사용한다."),
                 "operands", Map.of("type", "array", "items", operand),
                 "context", Map.of("anyOf", List.of(evidence, Map.of("type", "null")))));
         Map<String,Object> entry = object(Map.of(

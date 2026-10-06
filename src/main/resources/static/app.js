@@ -121,6 +121,20 @@ const examples = {
   }
 };
 
+examples.tv = {
+  "goodsId": "50945478",
+  "goodsName": "[플럭스][5년무상AS]플럭스 109cm(43인치) 이동형 QLED TV (셀프설치)",
+  "categoryName": "가전/디지털>영상/주방/생활/계절가전>영상가전LED TV",
+  "coupangCategoryId": "112143",
+  "coupangCategoryName": "가전/디지털>TV/영상가전>TV>",
+  "brand": "플럭스",
+  "productNoticeText": "004:제조자,수입품의 경우 수입자를 함께 표기:상품상세내용참조,005:제조국:상품상세내용참조,008:품질보증기준:소비자분쟁해결 기준에 따름,009:A/S 책임자와 전화번호:주식회사미래가디언 031-812-3020,011:크기:957 X 206 X 604,019:품명 및 모델명:TV, PLX-43UHWH,020:KC 인증정보 (「전기용품 및 생활용품 안전관리법」에 따른 안전인증ㆍ안전확인ㆍ공급자적합성확인대상제품 및 「전파법」에 따른 적합인증ㆍ적합등록 대상 기자재에 한함):상품상세내용참조,022:동일모델의 출시년월:202503,023:화면사양 (화면크기, 해상도, 화면비율 등):QLED UHD(4K : 3840*2160), DOLBY ATMOS, .,029:정격전압, 소비전력:220V, 75W,144:에너지소비효율등급 (「에너지이용 합리화법」에 따른 에너지소비효율등급 표시대상 기자재에 한함):1등급,178:추가설치비용:0",
+  "allowedPurchaseOptions": [
+    "화면크기(in)", "화면크기(cm)", "설치지원방식", "스탠드/벽걸이 구분", "모델명/품번", "화면크기 (cm/(인치))"
+  ],
+  "options": [{ "optionId": "1", "optionName1": "단품" }]
+};
+
 examples.quantity.purchaseOptionUnits = [
   { purchaseOptionName: '수량', defaultUnit: '개', unitOptions: ['개'] },
   { purchaseOptionName: '개당 수량', defaultUnit: '개', unitOptions: ['개입', '롤', '매', '매입', '세트'] }
@@ -305,6 +319,38 @@ function calculationText(calculation) {
     + (context?.text ? ` · ${source}: ${context.text}` : '');
 }
 
+function summarizeAiUsage(calls) {
+  const summary = {};
+  for (const field of ['input_tokens', 'cached_tokens', 'output_tokens', 'total_tokens', 'estimated_cost_usd']) {
+    summary[field] = calls.length && calls.every(call => Number.isFinite(call?.[field]) && call[field] >= 0)
+      ? calls.reduce((total, call) => total + call[field], 0) : null;
+  }
+  return summary;
+}
+
+function aiUsagePanel(response) {
+  const calls = Array.isArray(response?.aiUsage) ? response.aiUsage : [];
+  const details = element('details', '', 'usage-details');
+  const modes = [...new Set(calls.map(call => call.mode))].join(' / ');
+  details.append(element('summary', `AI 호출·토큰 사용량${calls.length ? ` · ${modes} · ${calls.length}회` : ''}`));
+  if (!calls.length) {
+    details.append(element('p', response?.inferenceSource === 'TEST'
+      ? '테스트 모드는 실제 AI를 호출하지 않으므로 토큰 사용량과 비용이 없습니다.'
+      : '이 응답에는 AI 호출 사용량 정보가 없습니다.', 'usage-note'));
+    return details;
+  }
+  const number = value => Number.isFinite(value) && value >= 0 ? value.toLocaleString('ko-KR') : '확인 불가';
+  const cost = value => Number.isFinite(value) && value >= 0 ? `$${value.toFixed(8)}` : '확인 불가';
+  const values = call => [number(call.input_tokens), number(call.cached_tokens), number(call.output_tokens),
+    number(call.total_tokens), cost(call.estimated_cost_usd)];
+  const usageRows = calls.map(call => [call.attempt === 1 ? '최초 호출' : `보정 재요청 (${call.attempt}차)`,
+    call.mode, call.model, ...values(call)]);
+  usageRows.push(['요청 전체 합계', '—', '—', ...values(summarizeAiUsage(calls))]);
+  details.append(table(['호출', '모드', '모델', '입력 토큰', '캐시 입력', '출력 토큰', '총 토큰', '예상 비용 (USD)'], usageRows),
+    element('p', '캐시 입력은 입력 토큰에 포함됩니다. 합계에는 보정 재요청도 포함됩니다. 예상 비용은 지원 모델의 단가로 계산하며, 제공되지 않은 수치는 확인 불가로 표시합니다.', 'usage-note'));
+  return details;
+}
+
 function showResult(request, response, httpStatus) {
   resultPanel.hidden = false;
   resultDetails.replaceChildren();
@@ -329,6 +375,7 @@ function showResult(request, response, httpStatus) {
     finalResult.append(element('p', '확정된 단품 결과가 없습니다. 아래 확인할 항목과 판단 상세를 확인하세요.', 'final-result-empty'));
   }
   resultDetails.append(finalResult);
+  resultDetails.append(aiUsagePanel(response));
   const diagnostics = element('details', '', 'diagnostic-details');
   diagnostics.open = !success && !simulated;
   diagnostics.append(element('summary', 'AI·서버 판단 및 옵션 매핑 상세'));

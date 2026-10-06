@@ -29,8 +29,13 @@ public class PurchaseOptionInferenceService {
         requestValidator.validate(request);
         String hash = hashes.hash(request);
         if (testMode) return simulate(request, hash);
+        List<AiCallUsage> usage = new ArrayList<>();
+        MappingProposal proposal = ai.infer(request, usage::add);
+        return assess(request, hash, proposal).withUsage(usage);
+    }
+
+    private InferenceResponse assess(InferenceRequest request, String hash, MappingProposal proposal) {
         String source = "AI";
-        MappingProposal proposal = ai.infer(request);
         List<String> errors = results.validateProposal(request, proposal);
         double confidence = proposal != null && ResultValidator.validConfidence(proposal.confidence()) ? proposal.confidence() : 0;
         if (proposal != null && proposal.mappings() != null) {

@@ -5,6 +5,16 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 class MockOptionInferenceTest {
+    @Test void multipleScreenSizesAreNotGuessed() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var original = mapper.readValue(java.nio.file.Files.readString(java.nio.file.Path.of("examples/tv-request.json")),
+                com.cware.ai.dto.InferenceRequest.class);
+        var request = new com.cware.ai.dto.InferenceRequest(original.goodsId(),
+                "TV 109cm(43인치) 또는 127cm(50인치)", original.brand(), original.categoryName(),
+                original.coupangCategoryId(), original.coupangCategoryName(), original.allowedPurchaseOptions(),
+                original.options(), original.productNoticeText());
+        assertThat(MockOptionInferenceService.infer(request).mappings()).isEmpty();
+    }
     @Test void extractsSampleColorSizeAndFitWithoutCallingAi() {
         var request = Fixtures.request();
         var proposal = MockOptionInferenceService.infer(request);

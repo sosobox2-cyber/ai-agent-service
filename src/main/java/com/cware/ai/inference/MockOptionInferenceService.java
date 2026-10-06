@@ -30,6 +30,10 @@ public final class MockOptionInferenceService {
                 else {
                     MappingProposal.Entry quantity = QuantityContext.mockEntry(request, target);
                     if (quantity != null) entries.add(quantity);
+                    else {
+                        MappingProposal.Entry screen = ScreenSizeContext.mockEntry(request, option, target);
+                        if (screen != null) entries.add(screen);
+                    }
                 }
             }
         }

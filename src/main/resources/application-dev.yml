@@ -1,0 +1,3 @@
+app:
+  ai:
+    usage-log-enabled: ${AI_USAGE_LOG_ENABLED:true}

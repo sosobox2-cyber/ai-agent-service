@@ -3,6 +3,8 @@ package com.cware.ai;
 import com.cware.ai.config.AiClientConfig;
 import com.cware.ai.exception.InferenceException;
 import com.cware.ai.inference.PurchaseOptionAiService;
+import com.cware.ai.inference.AiUsageLogger;
+import com.cware.ai.inference.PurchaseOptionPromptMode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.openai.*;
@@ -16,6 +18,27 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
 
 class OpenAiTransportTest {
+    @Test void realTransportPreservesNativeCachedTokenUsage() throws Exception {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        var mapper = new ObjectMapper();
+        String body = mapper.writeValueAsString(java.util.Map.of(
+                "id", "test", "object", "chat.completion", "created", 1, "model", "gpt-4.1-mini",
+                "choices", java.util.List.of(java.util.Map.of("index", 0, "finish_reason", "stop", "message",
+                        java.util.Map.of("role", "assistant", "content", mapper.writeValueAsString(Fixtures.proposal())))),
+                "usage", java.util.Map.of("prompt_tokens", 1000, "completion_tokens", 200, "total_tokens", 1200,
+                        "prompt_tokens_details", java.util.Map.of("cached_tokens", 800))));
+        server.expect(requestTo("https://api.openai.com/v1/chat/completions"))
+                .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+        var response = model(builder).call(new org.springframework.ai.chat.prompt.Prompt("test"));
+        var usage = AiUsageLogger.measure(PurchaseOptionPromptMode.LIGHT, 1, response);
+        assertThat(usage.input_tokens()).isEqualTo(1000);
+        assertThat(usage.cached_tokens()).isEqualTo(800);
+        assertThat(usage.output_tokens()).isEqualTo(200);
+        assertThat(usage.total_tokens()).isEqualTo(1200);
+        assertThat(usage.estimated_cost_usd()).isEqualByComparingTo("0.00048");
+        server.verify();
+    }
     @Test void actualSpringAiSerializesStrictSchemaAndParsesResponse() throws Exception {
         RestClient.Builder builder=RestClient.builder();
         MockRestServiceServer server=MockRestServiceServer.bindTo(builder).build();

@@ -33,10 +33,69 @@ class AiAdapterTest {
         assertThat(ai.infer(Fixtures.request())).isEqualTo(Fixtures.proposal());
         verify(model).call(any(Prompt.class));
     }
+    @Test void unconfiguredScreenUnitsAreSentWithoutEnumAndPreservedInFinalResult() throws Exception {
+        var request = new com.cware.ai.dto.InferenceRequest("50945478", "플럭스 109cm(43인치) TV",
+                "플럭스", "가전", "112143", "TV", List.of("화면크기(cm)", "화면크기(in)"),
+                List.of(new com.cware.ai.dto.SourceOption("1", "단품")), null);
+        var entries = new java.util.ArrayList<MappingProposal.Entry>();
+        for (String[] row : List.of(new String[]{"화면크기(cm)", "109", "cm"},
+                new String[]{"화면크기(in)", "43", "인치"})) {
+            var evidence = new com.cware.ai.dto.Calculation.Evidence("goodsName", "109cm(43인치)");
+            entries.add(new MappingProposal.Entry("1", row[0], row[1] + row[2], .95,
+                    evidence.source(), evidence.text(), new com.cware.ai.dto.Calculation(
+                    com.cware.ai.dto.Calculation.Operation.DIRECT, row[2], List.of(
+                    new com.cware.ai.dto.Calculation.Operand(row[1], row[2], evidence)), null)));
+        }
+        var proposal = new MappingProposal(true, .95, entries, "원문 화면크기 추출");
+        when(model.call(any(Prompt.class))).thenReturn(response(proposal));
+        var result = service().infer(request);
+        assertThat(result.success()).isTrue();
+        assertThat(result.items().get(0).purchaseOptions()).containsEntry("화면크기(cm)", "109cm")
+                .containsEntry("화면크기(in)", "43인치");
+        assertThat(result.optionMappings().get(1).calculation().outputUnit()).isEqualTo("인치");
+        var prompt = ArgumentCaptor.forClass(Prompt.class);
+        verify(model).call(prompt.capture());
+        assertThat(prompt.getValue().getInstructions().get(0).getText())
+                .contains("임의의 기본단위를 적용하지 않고", "109cm", "43인치");
+        var unitSchema = new ObjectMapper().valueToTree(PurchaseOptionAiService.schema(request))
+                .at("/properties/mappings/items/properties/calculation/anyOf/0/properties/outputUnit");
+        assertThat(unitSchema.path("type").asText()).isEqualTo("string");
+        assertThat(unitSchema.has("enum")).isFalse();
+    }
     ChatResponse response(MappingProposal proposal) throws Exception {
         return new ChatResponse(List.of(new Generation(
                 new AssistantMessage(new ObjectMapper().writeValueAsString(proposal)),
                 ChatGenerationMetadata.builder().finishReason("stop").build())));
+    }
+    ChatResponse responseWithUsage(MappingProposal proposal) throws Exception {
+        var nativeUsage = new org.springframework.ai.openai.api.OpenAiApi.Usage(200, 1000, 1200,
+                new org.springframework.ai.openai.api.OpenAiApi.Usage.PromptTokensDetails(0, 800), null);
+        return new ChatResponse(response(proposal).getResults(),
+                org.springframework.ai.chat.metadata.ChatResponseMetadata.builder().model("gpt-4.1-mini")
+                        .usage(new org.springframework.ai.chat.metadata.DefaultUsage(1000, 200, 1200, nativeUsage)).build());
+    }
+    @Test void exposesBothAttemptsWithoutConsoleLoggingAndDoesNotLeakAcrossRequests() throws Exception {
+        when(model.call(any(Prompt.class))).thenReturn(responseWithUsage(partial(true)),
+                responseWithUsage(Fixtures.proposal()), responseWithUsage(Fixtures.proposal()));
+        var service = service();
+        var first = service.infer(Fixtures.request());
+        assertThat(first.success()).isTrue();
+        assertThat(first.aiUsage()).hasSize(2);
+        assertThat(first.aiUsage()).extracting(com.cware.ai.dto.AiCallUsage::attempt).containsExactly(1, 2);
+        assertThat(first.aiUsage().get(0).input_tokens()).isEqualTo(1000);
+        assertThat(first.aiUsage().get(1).cached_tokens()).isEqualTo(800);
+        assertThat(first.aiUsage().get(1).estimated_cost_usd()).isEqualByComparingTo("0.00048");
+        var second = service.infer(Fixtures.request());
+        assertThat(second.aiUsage()).hasSize(1);
+        assertThat(second.aiUsage().get(0).attempt()).isEqualTo(1);
+        assertThat(first.aiUsage()).hasSize(2);
+    }
+    @Test void validationFailureStillReturnsPaidCallUsage() throws Exception {
+        when(model.call(any(Prompt.class))).thenReturn(responseWithUsage(partial(true)));
+        var result = service().infer(Fixtures.request());
+        assertThat(result.errorCode()).isEqualTo("RESULT_VALIDATION_FAILED");
+        assertThat(result.aiUsage()).hasSize(2);
+        assertThat(result.items()).isEmpty();
     }
     MappingProposal partial(boolean certain) {
         return new MappingProposal(certain, .95, Fixtures.proposal().mappings().subList(0, 3), "첫 단품 판단");

@@ -18,9 +18,12 @@ spring:
 app:
   inference:
     confidence-threshold: 0.80
-    prompt-version: coupang-option-v15
+    prompt-version: coupang-option-v18
     connect-timeout: 5s
     read-timeout: 30s
+  ai:
+    prompt-mode: ${AI_PROMPT_MODE:AUTO}
+    usage-log-enabled: ${AI_USAGE_LOG_ENABLED:false}
 logging:
   level:
     org.springframework.ai: ERROR
