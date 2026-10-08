@@ -40,6 +40,14 @@
 | `productCompositionText` | string | 아니오 | 상품 기술서의 구성 원문, 최대 20,000자. 생략 또는 null 가능. 예: 본품 선크림 50ml 7개 + 사은품 파우치 1개 |
 | `purchaseOptionUnits` | object[] | 아니오 | 구매옵션명별 단위 설정, 최대 20개. 생략 또는 null이면 빈 목록으로 처리 |
 
+### productCompositionText 사용 규칙
+
+상품 기술서의 구성 항목을 원문 문자열로 전달합니다. 상품정보고시(`productNoticeText`)와 별도 필드이며 생략, null 또는 빈 문자열로 전달할 수 있습니다. 최대 20,000자를 초과하면 HTTP 400의 `INVALID_REQUEST`로 반환합니다. 기존 요청에는 이 필드를 추가하지 않아도 됩니다.
+
+AI는 상품명·정보고시와 함께 읽고 본품과 사은품, 판매 묶음 수와 포장 안의 내용물 수를 구분합니다. 상품 공통 구성은 단일 단품 요청의 수량·용량·중량 판단에 사용하며, 여러 단품의 개별 옵션이나 원본 옵션명에 없는 일반 색상·사이즈·핏을 채우는 용도로 사용하지 않습니다. 사은품·증정품은 본품 계산에서 제외하도록 지시합니다. 자료 간 수량·구성이 충돌하면 임의로 어느 자료를 우선하지 않고 AI가 `certain=false`로 검토 사유를 설명하도록 지시합니다. 실제 AI 최종 결과가 불확실하면 `REVIEW_REQUIRED`로 반환합니다. 서버가 원문 간 충돌이나 계산의 정확성을 직접 검증한다는 뜻은 아닙니다.
+
+구성 내용만 전달해도 모든 구매옵션을 반환하는 것은 아닙니다. 필요한 수량·용량·중량 항목을 `allowedPurchaseOptions`에 포함하세요. 구성 내용은 `inputHash`에 포함되므로 값이 달라지면 해시도 달라집니다. 테스트 모드는 일부 명시된 수량·용량 패턴만 처리하며 복잡한 구성의 의미 판단을 검증하지 않습니다.
+
 ### options 항목
 
 | 필드 | 타입 | 필수 | 설명 |
@@ -82,16 +90,17 @@
 }
 ```
 
-### 수량·용량과 단위 설정
+### 기술서 구성에 따른 수량·용량과 단위 설정
 
 ```json
 {
   "goodsId": "sample-sunscreen",
-  "goodsName": "선크림 50ml 7개",
+  "goodsName": "선크림 구성 상품",
   "categoryName": "뷰티>선크림",
   "coupangCategoryId": "sample-category",
   "coupangCategoryName": "뷰티>선케어",
   "productNoticeText": "용량: 50ml",
+  "productCompositionText": "본품 선크림 50ml 7개 + 사은품 파우치 1개",
   "allowedPurchaseOptions": ["수량", "개당 용량"],
   "purchaseOptionUnits": [
     {"purchaseOptionName": "수량", "defaultUnit": "개", "unitOptions": ["개", "박스", "세트"]},
@@ -102,6 +111,8 @@
 ```
 
 예제의 카테고리 값은 호출 구조 설명용입니다. 실제 연동에서는 상품에 해당하는 카테고리 값을 전달하세요.
+
+이 예제는 기술서 구성에서 본품 `수량=7개`, `개당 용량=50ml`를 판단하는 요청입니다. 사은품 파우치를 더해 `8개`로 반환하거나 총용량 `350ml`를 개당 용량으로 사용하는 결과는 기대값과 다릅니다. 실제 AI 응답의 값과 근거를 확인하세요.
 
 ## 4. 호출 코드
 
@@ -199,7 +210,31 @@ async function inferPurchaseOptions(product, testMode = true) {
 | `operands` | object[] | 피연산자 목록. 각 항목은 문자열 `amount`, 문자열 `unit`, 객체 `evidence` |
 | `context` | object 또는 null | 구성 판단을 설명하는 근거 |
 
-`evidence`와 `context`는 `source`와 `text` 문자열을 갖습니다. `DIRECT`는 직접 추출, `CONVERT`는 단위 변환, `SUM`은 합산, `PACK_COUNT`는 묶음 수량, `PACK_CONTENT`는 묶음 내부 수량을 나타냅니다. 응답은 AI의 판단을 담고 있으며 수학적 정확성을 보증하는 필드는 아닙니다.
+`evidence`와 `context`는 `source`와 `text` 문자열을 갖습니다. `source`는 실제 근거 출처인 `goodsName`, `productNoticeText`, `productCompositionText`, `optionName1` 중 하나입니다. `DIRECT`는 직접 추출, `CONVERT`는 단위 변환, `SUM`은 합산, `PACK_COUNT`는 묶음 수량, `PACK_CONTENT`는 묶음 내부 수량을 나타냅니다. 응답은 AI의 판단을 담고 있으며 수학적 정확성을 보증하는 필드는 아닙니다.
+
+기술서 구성을 근거로 판단한 매핑에서는 `evidenceSource=productCompositionText`가 반환될 수 있습니다. 위 선크림 요청의 수량 매핑에 대한 설명용 발췌 예시는 다음과 같습니다. 실제 AI는 상품명·정보고시 등 다른 근거를 선택할 수도 있습니다.
+
+```json
+{
+  "optionId": "1",
+  "sourceOptionName": "단일상품",
+  "targetPurchaseOptionName": "수량",
+  "value": "7개",
+  "confidence": 0.95,
+  "evidenceSource": "productCompositionText",
+  "evidenceText": "본품 선크림 50ml 7개",
+  "calculation": {
+    "operation": "DIRECT",
+    "outputUnit": "개",
+    "operands": [{
+      "amount": "7",
+      "unit": "개",
+      "evidence": {"source": "productCompositionText", "text": "본품 선크림 50ml 7개"}
+    }],
+    "context": null
+  }
+}
+```
 
 ## 6. 성공 응답 예제
 
