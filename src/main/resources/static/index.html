@@ -18,6 +18,7 @@
       </div>
       <div class="header-actions">
         <a class="button quiet" href="/user-guide.html" target="_blank" rel="noopener">사용설명서</a>
+        <a class="button quiet" href="/api-reference.html" target="_blank" rel="noopener">API 명세서</a>
       </div>
     </header>
 
@@ -37,6 +38,10 @@
         </div>
         <div class="fields">
           <label>SK스토아 상품정보고시<textarea name="productNoticeText" rows="9" maxlength="20000" placeholder="예: 색상: 블랙&#10;치수: S(90) / M(95) / L(100) / XL(105)&#10;제조국: 베트남"></textarea><small>선택 입력 · 항목명과 값을 긴 텍스트로 이어 붙이거나 줄바꿈해 입력하세요. 최대 20,000자이며 실제 AI 추론의 참고 자료로 사용합니다.</small></label>
+          <details class="composition-details">
+            <summary>상품 기술서 · 구성 (선택)</summary>
+            <label>구성 내용<textarea name="productCompositionText" rows="4" maxlength="20000" placeholder="예: 본품 선크림 50ml 7개 + 사은품 파우치 1개&#10;또는 칫솔 10개 세트 (5색상 각 2개)"></textarea><small>기술서의 구성 항목을 입력하세요. 본품과 사은품, 한 세트의 내용물과 판매 세트 수를 구분해 적으면 수량·용량·중량 판단에 도움이 됩니다. 최대 20,000자. 접어도 입력한 내용은 유지되며 요청에 포함됩니다.</small></label>
+          </details>
         </div>
       </section>
 

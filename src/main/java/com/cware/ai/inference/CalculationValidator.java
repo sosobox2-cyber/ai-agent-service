@@ -75,7 +75,7 @@ public final class CalculationValidator {
     }
     private static Calculation.Evidence resolve(InferenceRequest request, String optionId, Calculation.Evidence evidence) {
         if (evidence == null || evidence.text() == null || evidence.text().isBlank() || evidence.text().length() > 500
-                || !List.of("goodsName", "productNoticeText", "optionName1").contains(evidence.source() == null ? "" : evidence.source()))
+                || !List.of("goodsName", "productNoticeText", "productCompositionText", "optionName1").contains(evidence.source() == null ? "" : evidence.source()))
             throw new IllegalArgumentException("원문 근거의 출처 또는 문구가 누락·잘못되었습니다.");
         String optionText = request.options().stream().filter(o -> o.optionId().equals(optionId))
                 .map(SourceOption::optionName1).findFirst().orElse("");
@@ -84,6 +84,7 @@ public final class CalculationValidator {
         if (QuantityContext.eligible(request)) {
             sources.put("goodsName", request.goodsName());
             sources.put("productNoticeText", request.productNoticeText());
+            sources.put("productCompositionText", request.productCompositionText());
         }
         List<String> order = new ArrayList<>(sources.keySet());
         if (order.remove(evidence.source())) order.add(0, evidence.source());

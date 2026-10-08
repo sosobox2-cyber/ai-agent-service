@@ -106,12 +106,14 @@ function renderGuide(markdown, root, toc) {
 
 async function loadGuide() {
   const root = document.querySelector('#guide-content');
+  const source = root.dataset.source || '/user-guide.md';
+  const label = root.dataset.label || '사용설명서';
   try {
-    const response = await fetch('/user-guide.md');
+    const response = await fetch(source);
     if (!response.ok) throw new Error('guide unavailable');
     renderGuide(await response.text(), root, document.querySelector('#guide-toc'));
   } catch {
-    root.replaceChildren(guideNode('p', '사용설명서를 불러오지 못했습니다. 새로고침하거나 위의 MD 다운로드로 원본을 확인하세요.'));
+    root.replaceChildren(guideNode('p', `${label}를 불러오지 못했습니다. 새로고침 후 다시 확인하세요.`));
   }
 }
 

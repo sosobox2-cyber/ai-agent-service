@@ -9,13 +9,75 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import com.cware.ai.dto.AiCallUsage;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
+import java.io.IOException;
+import java.time.Instant;
+import java.util.*;
 
 /** 요청·응답 본문, API 키, 헤더 없이 usage 수치만 기록한다. */
 @Component
 public final class AiUsageLogger {
     private static final Logger LOG = LoggerFactory.getLogger(AiUsageLogger.class);
     private final boolean enabled;
-    public AiUsageLogger(@Value("${app.ai.usage-log-enabled:false}") boolean enabled) { this.enabled = enabled; }
+    private final Path jsonlPath;
+    private final ObjectMapper json = new ObjectMapper();
+    public AiUsageLogger(boolean enabled) { this(enabled, null); }
+    public AiUsageLogger(boolean enabled, Path jsonlPath) { this.enabled = enabled; this.jsonlPath = jsonlPath; }
+
+    @Autowired
+    public AiUsageLogger(@Value("${app.ai.usage-log-enabled:false}") boolean enabled,
+            @Value("${app.ai.usage-jsonl-enabled:true}") boolean jsonlEnabled,
+            @Value("${app.ai.usage-jsonl-path:logs/ai-usage.jsonl}") String jsonlPath) {
+        this(enabled, jsonlEnabled ? Path.of(jsonlPath) : null);
+    }
+
+    public void recordInference(String inferenceId, String goodsId, PurchaseOptionPromptMode initial,
+            PurchaseOptionPromptMode mode, int retryCount, List<AiRetryReason> retryReasons,
+            AiInferenceValidationResult validation, String status, ChatResponse response, MappingProposal proposal) {
+        record(inferenceId, mode, retryCount + 1, response);
+        if (jsonlPath == null) return;
+        var usage = measure(mode, retryCount + 1, response);
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("timestamp", Instant.now().toString());
+        row.put("inferenceId", inferenceId);
+        row.put("goodsId", goodsId);
+        row.put("promptMode", mode);
+        row.put("initialPromptMode", initial);
+        // For a discarded LIGHT call the final mode is known to be FULL.
+        row.put("finalPromptMode", "VALIDATION_ERROR".equals(status) ? PurchaseOptionPromptMode.FULL : mode);
+        row.put("retryCount", retryCount);
+        row.put("retryReason", retryReasons.isEmpty() ? null : retryReasons.get(0));
+        row.put("retryReasons", retryReasons);
+        row.put("status", status);
+        row.put("validationPassed", validation == null ? null : validation.valid());
+        row.put("validationErrors", validation == null ? List.of() : validation.errors());
+        row.put("certain", proposal == null ? null : proposal.certain());
+        row.put("confidence", proposal == null ? null : proposal.confidence());
+        row.put("minimumMappingConfidence", proposal == null || proposal.mappings() == null ? null :
+                proposal.mappings().stream().filter(Objects::nonNull).map(MappingProposal.Entry::confidence)
+                        .filter(ResultValidator::validConfidence).min(Double::compare).orElse(null));
+        row.put("model", usage.model());
+        row.put("input_tokens", usage.input_tokens());
+        row.put("cached_tokens", usage.cached_tokens());
+        row.put("output_tokens", usage.output_tokens());
+        row.put("total_tokens", usage.total_tokens());
+        row.put("estimated_cost_usd", usage.estimated_cost_usd());
+        append(row);
+    }
+
+    private synchronized void append(Map<String, Object> row) {
+        try {
+            Path absolute = jsonlPath.toAbsolutePath();
+            Files.createDirectories(absolute.getParent());
+            Files.writeString(absolute, json.writeValueAsString(row) + "\n", StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException | RuntimeException e) {
+            LOG.warn("AI usage JSONL write failed ({})", e.getClass().getSimpleName());
+        }
+    }
 
     public void record(String callId, PurchaseOptionPromptMode mode, int attempt, ChatResponse response) {
         if (!enabled) return;

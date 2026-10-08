@@ -3,6 +3,7 @@ package com.cware.ai.inference;
 import com.cware.ai.dto.InferenceRequest;
 import com.cware.ai.dto.Calculation;
 import com.cware.ai.dto.AiCallUsage;
+import com.cware.ai.config.AiRetryProperties;
 import java.util.function.Consumer;
 import com.cware.ai.exception.InferenceException;
 import com.fasterxml.jackson.core.JsonParser;
@@ -30,15 +31,26 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
     private final PurchaseOptionPromptProvider prompts;
     private final AiUsageLogger usageLogger;
     private final String userPrompt;
+    private final AiRetryProperties retry;
+    private final AiInferenceValidator validator;
 
     public PurchaseOptionAiService(ChatModel model, ObjectMapper mapper) throws IOException {
         this(model, mapper, new PurchaseOptionPromptProvider("AUTO"), new AiUsageLogger(false));
     }
 
-    @Autowired
     public PurchaseOptionAiService(ChatModel model, ObjectMapper mapper,
             PurchaseOptionPromptProvider prompts, AiUsageLogger usageLogger) throws IOException {
+        this(model, mapper, prompts, usageLogger, AiRetryProperties.defaults(),
+                new AiInferenceValidator(new ResultValidator(), AiRetryProperties.defaults()));
+    }
+
+    @Autowired
+    public PurchaseOptionAiService(ChatModel model, ObjectMapper mapper,
+            PurchaseOptionPromptProvider prompts, AiUsageLogger usageLogger,
+            AiRetryProperties retry, AiInferenceValidator validator) throws IOException {
         this.model = model;
+        this.retry = retry;
+        this.validator = validator;
         this.prompts = prompts;
         this.usageLogger = usageLogger;
         this.mapper = mapper.copy().enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
@@ -61,23 +73,17 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
             ResponseFormat format = ResponseFormat.builder().type(ResponseFormat.Type.JSON_SCHEMA)
                     .jsonSchema(ResponseFormat.JsonSchema.builder().name("purchase_option_mapping")
                             .strict(true).schema(schema(request)).build()).build();
-            PurchaseOptionPromptMode mode = prompts.select(request);
-            String callId = UUID.randomUUID().toString();
-            List<Message> messages = new ArrayList<>(List.of(new SystemMessage(prompts.system(mode)), new UserMessage(input)));
-            MappingProposal proposal = call(messages, format, callId, mode, 1, usage);
-            List<String> missing = missingOptionIds(request, proposal);
-            if (Boolean.TRUE.equals(proposal.certain()) && !missing.isEmpty()) {
-                messages.add(new AssistantMessage(mapper.writeValueAsString(proposal)));
-                messages.add(new UserMessage(
-                        "직전 응답에서 다음 optionId의 구매옵션 매핑이 누락되었습니다: "
-                        + mapper.writeValueAsString(missing)
-                        + ". product.options 전체를 다시 검토하고 기존 단품을 포함한 전체 mappings를 반환하세요. "
-                        + "누락된 단품만 반환하거나 값을 임의로 복사하지 마세요. "
-                        + "단품별로 근거가 있는 허용 구매옵션을 추출하고, 판단할 수 없는 단품이 있으면 "
-                        + "certain=false로 반환하며 reason에 해당 ID와 이유를 설명하세요."));
-                proposal = call(messages, format, callId, mode, 2, usage);
+            PurchaseOptionPromptMode initial = prompts.select(request);
+            String inferenceId = UUID.randomUUID().toString();
+            Attempt first = attempt(request, input, format, inferenceId, initial, initial, 0, List.of(), usage);
+            if (first.validation().valid()) return first.proposal();
+            // One explicit branch: no recursion, loops, or selector invocation on failover.
+            if (initial == PurchaseOptionPromptMode.LIGHT && retry.enabled() && retry.maxRetries() == 1) {
+                Attempt full = attempt(request, input, format, inferenceId, initial,
+                        PurchaseOptionPromptMode.FULL, 1, first.validation().reasons(), usage);
+                return full.validation().valid() ? full.proposal() : review(full);
             }
-            return proposal;
+            return review(first);
         } catch (InferenceException e) {
             throw e;
         } catch (JsonProcessingException e) {
@@ -92,17 +98,45 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
         }
     }
 
-    private MappingProposal call(List<Message> messages, ResponseFormat format, String callId,
-            PurchaseOptionPromptMode mode, int attempt, Consumer<AiCallUsage> usage) throws JsonProcessingException {
-        ChatResponse response = model.call(new Prompt(List.copyOf(messages),
-                OpenAiChatOptions.builder().responseFormat(format).build()));
-        usageLogger.record(callId, mode, attempt, response);
-        usage.accept(AiUsageLogger.measure(mode, attempt, response));
+    private Attempt attempt(InferenceRequest request, String input, ResponseFormat format,
+            String inferenceId, PurchaseOptionPromptMode initial, PurchaseOptionPromptMode mode,
+            int retryCount, List<AiRetryReason> retryReasons, Consumer<AiCallUsage> usage) {
+        ChatResponse response;
+        try {
+            response = model.call(new Prompt(List.of(new SystemMessage(prompts.system(mode)), new UserMessage(input)),
+                    OpenAiChatOptions.builder().responseFormat(format).build()));
+        } catch (RuntimeException e) {
+            usageLogger.recordInference(inferenceId, request.goodsId(), initial, mode, retryCount,
+                    retryReasons, null, "API_ERROR", null, null);
+            throw e; // Transport errors never trigger prompt failover.
+        }
+        MappingProposal proposal = null;
+        AiInferenceValidationResult validation;
+        try {
+            proposal = parse(response);
+            validation = validator.validate(request, proposal);
+        } catch (JsonProcessingException | InferenceException e) {
+            validation = new AiInferenceValidationResult(List.of(
+                    new AiInferenceValidationResult.ValidationError(AiRetryReason.INVALID_RESPONSE,
+                            "AI 응답 형식이 잘못되었거나 응답이 완료되지 않았습니다.")));
+        }
+        boolean willRetry = !validation.valid() && mode == PurchaseOptionPromptMode.LIGHT
+                && retry.enabled() && retry.maxRetries() == 1;
+        String status = willRetry ? "VALIDATION_ERROR" : validation.valid() && validator.meetsApplicationConfidence(proposal)
+                ? "SUCCESS" : "REVIEW_REQUIRED";
+        usageLogger.recordInference(inferenceId, request.goodsId(), initial, mode, retryCount,
+                retryCount == 0 ? validation.reasons() : retryReasons, validation, status, response, proposal);
+        usage.accept(AiUsageLogger.measure(mode, retryCount + 1, response).withInference(inferenceId,
+                initial, willRetry ? PurchaseOptionPromptMode.FULL : mode, retryCount,
+                retryCount == 0 ? validation.reasons() : retryReasons, status));
+        return new Attempt(proposal, validation);
+    }
+
+    private MappingProposal parse(ChatResponse response) throws JsonProcessingException {
         if (response == null || response.getResult() == null || response.getResult().getOutput() == null)
             throw parseFailure();
         String finish = response.getResult().getMetadata().getFinishReason();
-        if (!"stop".equalsIgnoreCase(finish))
-            throw new InferenceException("AI_INCOMPLETE_RESPONSE", HttpStatus.BAD_GATEWAY, "AI 응답이 정상적으로 완료되지 않았습니다.");
+        if (!"stop".equalsIgnoreCase(finish)) throw parseFailure();
         String json = response.getResult().getOutput().getText();
         if (json == null || json.isBlank() || json.length() > 65536) throw parseFailure();
         MappingProposal proposal = mapper.readValue(json, MappingProposal.class);
@@ -110,21 +144,24 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
         return proposal;
     }
 
-    private static List<String> missingOptionIds(InferenceRequest request, MappingProposal proposal) {
-        Set<String> returned = new HashSet<>();
-        if (proposal.mappings() != null) {
-            for (MappingProposal.Entry entry : proposal.mappings()) {
-                if (entry != null) returned.add(entry.optionId());
-            }
-        }
-        return request.options().stream().map(option -> option.optionId())
-                .filter(id -> !returned.contains(id)).toList();
+    private static MappingProposal review(Attempt attempt) {
+        MappingProposal proposal = attempt.proposal();
+        String reason = "REVIEW_REQUIRED: " + attempt.validation().reasons() + "; "
+                + String.join("; ", attempt.validation().errors().stream()
+                        .map(AiInferenceValidationResult.ValidationError::message).toList());
+        if (proposal != null && proposal.reason() != null) reason += "; AI: " + proposal.reason();
+        if (reason.length() > 2000) reason = reason.substring(0, 2000);
+        return new MappingProposal(false,
+                proposal != null && ResultValidator.validConfidence(proposal.confidence()) ? proposal.confidence() : 0.0,
+                proposal == null ? List.of() : proposal.mappings(), reason);
     }
+
+    private record Attempt(MappingProposal proposal, AiInferenceValidationResult validation) {}
 
     /** 매 요청의 허용 이름을 JSON Schema enum에도 주입하며 서버 검증을 별도로 수행한다. */
     public static Map<String,Object> schema(InferenceRequest request) {
         var evidence = object(Map.of("source", Map.of("type", "string", "enum",
-                List.of("goodsName", "productNoticeText", "optionName1")), "text", Map.of("type", "string")));
+                List.of("goodsName", "productNoticeText", "productCompositionText", "optionName1")), "text", Map.of("type", "string")));
         var operand = object(Map.of("amount", Map.of("type", "string", "description", "양수 숫자 문자열"),
                 "unit", Map.of("type", "string", "description", "실제 원문 단위. 선택지 밖의 단위도 원문 그대로 보존한다."), "evidence", evidence));
         var calculation = object(Map.of("operation", Map.of("type", "string", "enum",
@@ -141,7 +178,7 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
                 "value", Map.of("type", "string"),
                 "confidence", Map.of("type", "number"),
                 "evidenceSource", Map.of("type", List.of("string", "null"), "enum",
-                        Arrays.asList("goodsName", "productNoticeText", null)),
+                        Arrays.asList("goodsName", "productNoticeText", "productCompositionText", null)),
                 "evidenceText", Map.of("type", List.of("string", "null"), "description",
                         "실제 원문 근거 요약. 일반 옵션명 추출은 null."),
                 "calculation", Map.of("anyOf", List.of(calculation, Map.of("type", "null")))));

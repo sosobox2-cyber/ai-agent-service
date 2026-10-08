@@ -24,6 +24,15 @@ app:
   ai:
     prompt-mode: ${AI_PROMPT_MODE:AUTO}
     usage-log-enabled: ${AI_USAGE_LOG_ENABLED:false}
+    usage-jsonl-enabled: ${AI_USAGE_JSONL_ENABLED:true}
+    usage-jsonl-path: ${AI_USAGE_JSONL_PATH:logs/ai-usage.jsonl}
+purchase-option:
+  ai:
+    retry:
+      enabled: true
+      max-retries: 1
+      confidence-threshold-enabled: false
+      confidence-threshold: 0.7
 logging:
   level:
     org.springframework.ai: ERROR

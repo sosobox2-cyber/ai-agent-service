@@ -88,12 +88,14 @@ class AiAdapterTest {
         var second = service.infer(Fixtures.request());
         assertThat(second.aiUsage()).hasSize(1);
         assertThat(second.aiUsage().get(0).attempt()).isEqualTo(1);
+        assertThat(first.aiUsage().get(0).inferenceId()).isEqualTo(first.aiUsage().get(1).inferenceId());
+        assertThat(second.aiUsage().get(0).inferenceId()).isNotEqualTo(first.aiUsage().get(0).inferenceId());
         assertThat(first.aiUsage()).hasSize(2);
     }
     @Test void validationFailureStillReturnsPaidCallUsage() throws Exception {
         when(model.call(any(Prompt.class))).thenReturn(responseWithUsage(partial(true)));
         var result = service().infer(Fixtures.request());
-        assertThat(result.errorCode()).isEqualTo("RESULT_VALIDATION_FAILED");
+        assertThat(result.errorCode()).isEqualTo("REVIEW_REQUIRED");
         assertThat(result.aiUsage()).hasSize(2);
         assertThat(result.items()).isEmpty();
     }
@@ -104,7 +106,7 @@ class AiAdapterTest {
         return new com.cware.ai.service.PurchaseOptionInferenceService(new RequestValidator(), ai,
                 new ResultValidator(), new com.cware.ai.util.InputHashService(new ObjectMapper()), Fixtures.properties());
     }
-    @Test void retriesMissingIdsWithPreviousResponseAndAcceptsFullReplacement() throws Exception {
+    @Test void failsOverMissingIdsToFullWithSameInputAndAcceptsReplacement() throws Exception {
         when(model.call(any(Prompt.class))).thenReturn(response(partial(true)), response(Fixtures.proposal()));
         var result = service().infer(Fixtures.request());
         assertThat(result.success()).isTrue();
@@ -115,25 +117,25 @@ class AiAdapterTest {
         var first = prompts.getAllValues().get(0).getInstructions();
         var correction = prompts.getAllValues().get(1).getInstructions();
         assertThat(first).hasSize(2);
-        assertThat(correction).hasSize(4);
-        assertThat(correction.get(2).getText()).isEqualTo(new ObjectMapper().writeValueAsString(partial(true)));
-        assertThat(correction.get(3).getText()).contains("[\"2\",\"3\"]", "전체 mappings", "certain=false");
+        assertThat(correction).hasSize(2);
+        assertThat(correction.get(0).getText()).isEqualTo(new PurchaseOptionPromptProvider("AUTO").system(PurchaseOptionPromptMode.FULL));
+        assertThat(correction.get(1).getText()).isEqualTo(first.get(1).getText());
     }
     @Test void repeatedOmissionFailsValidationAfterExactlyOneCorrection() throws Exception {
         when(model.call(any(Prompt.class))).thenReturn(response(partial(true)));
         var result = service().infer(Fixtures.request());
-        assertThat(result.errorCode()).isEqualTo("RESULT_VALIDATION_FAILED");
+        assertThat(result.errorCode()).isEqualTo("REVIEW_REQUIRED");
         assertThat(result.validationErrors()).contains("단품의 구매옵션 매핑이 누락되었습니다.");
         assertThat(result.items()).isEmpty();
         assertThat(result.autoApplyCandidate()).isFalse();
         verify(model, times(2)).call(any(Prompt.class));
     }
-    @Test void uncertainPartialResponseIsNotRetried() throws Exception {
+    @Test void uncertainLightResponseFailsOverOnce() throws Exception {
         when(model.call(any(Prompt.class))).thenReturn(response(partial(false)));
         var result = service().infer(Fixtures.request());
         assertThat(result.errorCode()).isEqualTo("REVIEW_REQUIRED");
         assertThat(result.items()).isEmpty();
-        verify(model).call(any(Prompt.class));
+        verify(model, times(2)).call(any(Prompt.class));
     }
     @Test void correctionStillChecksAllowedNamesAndConfidence() throws Exception {
         var entries = new java.util.ArrayList<>(Fixtures.proposal().mappings());
@@ -141,7 +143,7 @@ class AiAdapterTest {
         var invalid = new MappingProposal(true, .99, entries, "보정 결과");
         when(model.call(any(Prompt.class))).thenReturn(response(partial(true)), response(invalid));
         var result = service().infer(Fixtures.request());
-        assertThat(result.errorCode()).isEqualTo("RESULT_VALIDATION_FAILED");
+        assertThat(result.errorCode()).isEqualTo("REVIEW_REQUIRED");
         assertThat(result.items()).isEmpty();
         verify(model, times(2)).call(any(Prompt.class));
 
@@ -168,11 +170,12 @@ class AiAdapterTest {
         var proposal = new MappingProposal(true, .90, List.of(new MappingProposal.Entry("1", "개당 용량", "50ml", .90,
                 "goodsName", "50ml", calculation)), "용량을 추출했습니다.");
         String json = new ObjectMapper().writeValueAsString(proposal);
+        var request = new com.cware.ai.dto.InferenceRequest("1", "50ml", "브랜드", "화장품", "1", "화장품",
+                List.of("개당 용량"), List.of(new com.cware.ai.dto.SourceOption("1", "50ml")), null);
         respond(json, "stop");
-        assertThat(ai.infer(Fixtures.request())).isEqualTo(proposal);
+        assertThat(ai.infer(request)).isEqualTo(proposal);
         respond(json.replace("DIRECT", "RUN_CODE"), "stop");
-        assertThatThrownBy(() -> ai.infer(Fixtures.request())).isInstanceOfSatisfying(InferenceException.class,
-                e -> assertThat(e.code()).isEqualTo("AI_INVALID_JSON"));
+        assertThat(ai.infer(request).reason()).contains("INVALID_RESPONSE");
     }
     @Test void sendsNoticeAsProductDataWithContextRules() throws Exception {
         respond(new ObjectMapper().writeValueAsString(Fixtures.proposal()), "stop");
@@ -209,13 +212,13 @@ class AiAdapterTest {
         "{\"certain\":\"true\",\"confidence\":\"0.99\",\"mappings\":[],\"reason\":\"ok\"}"})
     void rejectsMalformedOrExtendedJson(String json) {
         respond(json,"stop");
-        assertThatThrownBy(() -> ai.infer(Fixtures.request())).isInstanceOfSatisfying(InferenceException.class,
-                e -> assertThat(e.code()).isEqualTo("AI_INVALID_JSON"));
+        assertThat(ai.infer(Fixtures.request()).reason()).contains("REVIEW_REQUIRED", "INVALID_RESPONSE");
+        verify(model, times(2)).call(any(Prompt.class));
     }
     @Test void rejectsTruncatedOutput() {
         respond("{}","length");
-        assertThatThrownBy(() -> ai.infer(Fixtures.request())).isInstanceOfSatisfying(InferenceException.class,
-                e -> assertThat(e.code()).isEqualTo("AI_INCOMPLETE_RESPONSE"));
+        assertThat(ai.infer(Fixtures.request()).reason()).contains("REVIEW_REQUIRED", "INVALID_RESPONSE");
+        verify(model, times(2)).call(any(Prompt.class));
     }
     @Test void timeoutIsSanitized() {
         when(model.call(any(Prompt.class))).thenThrow(new ResourceAccessException("private upstream text",new SocketTimeoutException()));

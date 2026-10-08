@@ -20,7 +20,8 @@ public class ResultValidator {
         Set<String> seen = new HashSet<>();
         Map<String, Set<String>> targets = new HashMap<>();
         for (MappingProposal.Entry entry : proposal.mappings()) {
-            if (entry == null || entry.optionId() == null || entry.targetPurchaseOptionName() == null
+            if (entry == null || entry.optionId() == null || entry.optionId().isBlank()
+                    || entry.targetPurchaseOptionName() == null || entry.targetPurchaseOptionName().isBlank()
                     || entry.value() == null || entry.value().isBlank()) {
                 errors.add("단품 ID, 구매옵션명 또는 추출 값이 누락되었습니다.");
                 continue;

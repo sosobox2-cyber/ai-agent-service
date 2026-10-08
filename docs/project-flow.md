@@ -121,7 +121,7 @@ SK스토아 상품정보고시는 `productNoticeText`라는 긴 텍스트로 입
 |---|---|
 | 서버 포트 / 주소 | `PORT=8081`, `SERVER_ADDRESS=127.0.0.1` 기본값 |
 | API 인증 키 | 실제 추론에 `OPENAI_API_KEY` 필요, 키 없이 서버 시작·테스트 모드 가능 |
-| AI 호출 | 요청당 한 번의 동기 호출, 자동 재시도 없음 |
+| AI 호출 | 정상 LIGHT·최초 FULL은 1회, LIGHT 검증 실패 시 FULL로 최대 1회 추가 동기 호출. API 장애 재시도 없음 |
 | AI 출력 설정 | `temperature=0`, `max-tokens=4096` |
 | 연결 / 응답 읽기 시간 제한 | 연결 `5s`, 읽기 `30s`; 전체 작업 시간 보장값은 아님 |
 | AI 응답 형식 | 엄격한 JSON Schema, 요청의 단품 ID·허용 옵션명으로 `enum` 제한 |
@@ -158,6 +158,11 @@ Java 파일의 기준 경로는 `src/main/java/com/cware/ai/`입니다.
 | [inference/PurchaseOptionAiService.java](../src/main/java/com/cware/ai/inference/PurchaseOptionAiService.java) | `infer()`, `schema()` | 프롬프트 구성, AI 호출, 응답 JSON 해석 |
 | [inference/MockOptionInferenceService.java](../src/main/java/com/cware/ai/inference/MockOptionInferenceService.java) | `infer()`, `extract()` | 테스트 모드에서 규칙으로 모의 추출 |
 | [inference/ResultValidator.java](../src/main/java/com/cware/ai/inference/ResultValidator.java) | `validateProposal()`, `assemble()`, `validateItems()` | 제안 검증, 단품 결과 조립, 최종 검증 |
+| [inference/AiInferenceValidator.java](../src/main/java/com/cware/ai/inference/AiInferenceValidator.java) | `validate()`, `meetsApplicationConfidence()` | 코드별 검증 결과 및 별도 최종 승인 신뢰도 확인 |
+| [inference/AiInferenceValidationResult.java](../src/main/java/com/cware/ai/inference/AiInferenceValidationResult.java) | `valid()`, `reasons()` | ValidationError(code, message) 목록 |
+| [inference/AiRetryReason.java](../src/main/java/com/cware/ai/inference/AiRetryReason.java) | enum | 검증·재추론 사유 코드 |
+| [config/AiRetryProperties.java](../src/main/java/com/cware/ai/config/AiRetryProperties.java) | 생성자 및 record 접근자 | 재추론 활성화, 최대 0~1회, 선택적 confidence 기준 |
+| [inference/AiUsageLogger.java](../src/main/java/com/cware/ai/inference/AiUsageLogger.java) | `recordInference()`, `measure()` | 호출별 JSONL·콘솔 usage 기록 |
 | [exception/GlobalExceptionHandler.java](../src/main/java/com/cware/ai/exception/GlobalExceptionHandler.java) | `handle()`, `invalid()`, `malformed()` 등 | 예외를 HTTP 상태와 JSON 응답으로 변환 |
 | [static/app.js](../src/main/resources/static/app.js) | `makeRequest()`, `validateRequest()`, `showResult()` | 웹 화면의 입력 수집과 결과 표시 |
 
@@ -198,9 +203,9 @@ API 키가 없어도 대체 `ChatModel`이 등록되므로 서버를 시작하�
 | `factory.setConnectTimeout()` | `5s` | 연결 대기 시간 제한 |
 | `factory.setReadTimeout()` | `30s` | 응답 읽기 대기 시간 제한 |
 | `responseErrorHandler(new SafeErrorHandler())` | 사용자 정의 처리기 | 외부 HTTP 오류를 프로젝트 오류로 변환 |
-| `RetryTemplate.builder().maxAttempts(1)` | 1회 시도 | 자동 재시도 없음 |
+| `RetryTemplate.builder().maxAttempts(1)` | 1회 시도 | API 장애에 대한 클라이언트 자동 재시도 없음. 서버 Validation Failover는 별도 |
 | `confidence-threshold` | `0.80` | 실제 AI 결과의 성공 판단 기준 |
-| `prompt-version` | `coupang-option-v12` | 응답에 포함할 프롬프트 버전 표식 |
+| `prompt-version` | `coupang-option-v18` | 응답에 포함할 프롬프트 버전 표식 |
 
 ## 4. 웹 요청 처리 순서
 
@@ -244,39 +249,60 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["PurchaseOptionAiService.java<br/>infer(request)"] --> B["프롬프트와 상품 JSON 구성<br/>schema(request)로 응답 형식 지정"]
-    B --> C["model.call(new Prompt(...))<br/>OpenAI 호출"]
-    C --> D["응답 완료 여부와 본문 확인<br/>mapper.readValue()<br/>JSON → MappingProposal"]
-    D --> E["PurchaseOptionInferenceService.java<br/>infer()로 복귀"]
-    E --> F["ResultValidator.java<br/>validateProposal()"]
-    F --> G["전체 및 개별 매핑의<br/>confidence 중 최솟값 계산"]
-    G --> H{"certain=false이며<br/>신뢰도 형식과 사유가 유효한가?"}
-    H -->|예| R["failure()<br/>REVIEW_REQUIRED"]
-    H -->|아니요| I{"제안 검증 오류가 있는가?"}
-    I -->|예| V["failure()<br/>RESULT_VALIDATION_FAILED"]
-    I -->|아니요| J{"certain=true이며<br/>신뢰도 기준 이상인가?"}
-    J -->|아니요| R
-    J -->|예| K["ResultValidator.java<br/>assemble()"]
-    K --> L["ResultValidator.java<br/>validateItems()"]
-    L --> M{"최종 검증 통과?"}
-    M -->|아니요| V
-    M -->|예| N["PurchaseOptionInferenceService.java<br/>optionMappings()"]
-    N --> O["InferenceResponse<br/>success=true<br/>autoApplyCandidate=true"]
+    A["PurchaseOptionAiService.infer()<br/>동일 상품 JSON·Schema 구성"] --> B["PromptSelector로 최초 모드 선택<br/>inferenceId 생성"]
+    B --> C["최초 LIGHT 또는 FULL 호출"]
+    C -->|API 오류| X["API_ERROR 로그<br/>기존 오류 코드·HTTP 상태 반환"]
+    C -->|응답 수신| D["파싱 및 AiInferenceValidator 검증<br/>실제 usage 기록"]
+    D --> E{"검증 통과?"}
+    E -->|예| K["최종 제안을 assess()에 전달"]
+    E -->|아니요| F{"최초 LIGHT이고<br/>enabled=true, max-retries=1?"}
+    F -->|아니요| R["certain=false로 변환<br/>검토 사유 추가"]
+    F -->|예| G["FULL을 명시하여 1회 호출<br/>같은 상품·User Prompt·Schema"]
+    G -->|API 오류| X
+    G -->|응답 수신| H["같은 Validator로 재검증<br/>같은 inferenceId로 usage 기록"]
+    H --> I{"FULL 검증 통과?"}
+    I -->|아니요| R
+    I -->|예| K
+    R --> K
+    K --> L{"certain=true 및 최종 신뢰도 기준 이상<br/>서비스 재검증 통과?"}
+    L -->|아니요| V["REVIEW_REQUIRED<br/>success=false, 적용 목록 비움"]
+    L -->|예| O["SUCCESS<br/>success=true, autoApplyCandidate=true"]
 ```
 
 ### AI에 보내는 정보
 
 - [coupang-purchase-option-system.txt](../src/main/resources/prompts/coupang-purchase-option-system.txt): 원본에 없는 값을 생성하지 않는 등의 분석 규칙입니다.
+- [coupang-purchase-option-system-light.txt](../src/main/resources/prompts/coupang-purchase-option-system-light.txt): 일반 색상·사이즈·핏 추출을 위한 짧은 규칙입니다. 최초 선택 모드에 따라 System 메시지 한 개를 사용하며 Failover에서는 FULL 파일을 사용합니다.
 - [coupang-purchase-option-user.txt](../src/main/resources/prompts/coupang-purchase-option-user.txt): 작업 안내입니다. 뒤에 상품 JSON을 붙입니다.
 - `schema(request)`: 응답 필드와 타입을 지정합니다. 단품 ID와 구매옵션명은 요청에서 허용한 값만 선택하도록 `enum`으로 제한합니다.
 
-AI의 응답은 `MappingProposal` 객체로 변환합니다. 응답이 비어 있거나 JSON 형식이 잘못되면 `AI_INVALID_JSON`, 종료 사유가 `stop`이 아니면 `AI_INCOMPLETE_RESPONSE`로 처리합니다.
+AI의 응답은 `MappingProposal` 객체로 변환합니다. 응답이 비어 있거나 JSON 형식이 잘못되거나 종료 사유가 `stop`이 아니면 `INVALID_RESPONSE` 검증 실패로 처리합니다. LIGHT일 때만 FULL을 한 번 호출하며 최종 실패는 `REVIEW_REQUIRED`로 반환합니다. timeout·429·5xx 등의 API 오류는 기존 예외 처리 경로를 유지합니다.
+
+### LIGHT → FULL 전환과 호출별 기록
+
+`AiInferenceValidator.validate()`는 단순 boolean 대신 오류 코드와 메시지를 담은 결과 객체를 반환합니다. `certain=false`, 입력 optionId 누락·미등록, 허용 이름 위반, 동일 매핑 중복, 필수 값의 null·blank를 검사하고 기존 `ResultValidator`의 제안·단위·최종 조합 검증을 재사용합니다. 사유 코드는 `CERTAIN_FALSE`, `MISSING_OPTION_MAPPING`, `UNKNOWN_OPTION_ID`, `INVALID_PURCHASE_OPTION`, `DUPLICATE_MAPPING`, `EMPTY_VALUE`, `INVALID_RESPONSE`입니다.
+
+PromptSelector는 최초 호출에서 한 번 사용합니다. 실패한 LIGHT만 FULL을 직접 지정하여 같은 User Prompt·상품 JSON·JSON Schema로 새 호출을 수행합니다. 이전 AI 응답과 보정 지시는 붙이지 않습니다. 반복문·재귀가 없고 설정의 `max-retries`도 0~1로 제한합니다. 처음부터 FULL인 요청에는 재추론을 적용하지 않습니다.
+
+```yaml
+purchase-option:
+  ai:
+    retry:
+      enabled: true
+      max-retries: 1
+      confidence-threshold-enabled: false
+      confidence-threshold: 0.7
+```
+
+각 호출의 실제 usage는 같은 UUID `inferenceId`로 연결하여 기본 경로 `logs/ai-usage.jsonl`에 기록합니다. 최초 `retryCount=0`, 재추론 `retryCount=1`이며 `initialPromptMode`, `promptMode`, `finalPromptMode`, `retryReason`, `retryReasons`, `status`, `validationPassed`, 검증 오류와 confidence도 포함합니다. 콘솔 설정과 독립적으로 파일 기록을 수행합니다. FULL에서 API 장애가 발생해도 앞선 LIGHT usage는 보존됩니다. 상세 설정과 집계 스크립트는 [AI Failover 문서](ai-inference-failover.md)를 참고하세요.
 
 ### 신뢰도와 실패 판단
 
 최종 `confidence`는 전체 신뢰도와 유효한 개별 매핑 신뢰도 중 최솟값입니다. 예를 들어 전체가 `0.99`, 개별 매핑 중 하나가 `0.90`이면 최종값은 `0.90`입니다. 기본 기준 `0.80` 이상이므로 `certain=true`이고 모든 검증을 통과하면 성공합니다. 개별 매핑 하나라도 `0.80` 미만이면 검토 대상으로 반환합니다. 신뢰도는 AI의 추정값이며 검증된 정답 확률을 의미하지 않습니다.
 
-`certain=false`이고 전체 신뢰도 형식과 사유가 유효하면, 제안 검증 오류가 있어도 `REVIEW_REQUIRED`를 우선 반환하고 해당 오류를 `validationErrors`에 담습니다. 그 밖의 제안 검증 오류는 `RESULT_VALIDATION_FAILED`로 반환합니다.
+재추론 기준과 최종 승인 기준은 구분합니다. 기본 `confidence-threshold-enabled=false`에서는 낮은 confidence만으로 FULL을 호출하지 않습니다. 구조가 정상인 LIGHT의 confidence가 0.50이면 추가 호출 없이 최종 `REVIEW_REQUIRED`로 반환합니다. 선택적 재추론 기준을 활성화하면 전체·개별 매핑의 최저 confidence가 설정값보다 낮을 때 `LOW_CONFIDENCE` 사유로 전환합니다.
+
+최종 검증 실패 시 `PurchaseOptionAiService`가 `certain=false`와 최대 2,000자의 검토 사유를 담은 제안으로 변환합니다. `assess()`는 이 제안을 `REVIEW_REQUIRED`로 반환하며, 기존 구조 검증 오류는 `validationErrors`에도 담습니다. `RESULT_VALIDATION_FAILED`는 테스트 모드 등 기존 검증 경로에서 사용합니다.
 
 `failure()`는 `success=false`, `autoApplyCandidate=false`로 응답하고 `optionMappings`, `items`를 빈 목록으로 만듭니다.
 
@@ -284,7 +310,7 @@ AI의 응답은 `MappingProposal` 객체로 변환합니다. 응답이 비어 �
 
 세트 예제는 PACK_COUNT와 PACK_CONTENT로 판매 묶음 수와 내용물 개수를 구분합니다. [칫솔 요청 예제](../examples/set-request.json)는 두 허용 이름을 모두 포함하며, 수량만 허용하면 개당 수량을 반환하지 않습니다. 기존 NamedSetContext는 이전 형식 호환과 모의 추출 패턴에만 사용합니다.
 
-응답의 `aiAssessment`에는 AI가 반환한 `certain`, 전체 `confidence`, `reason`, 제안 `mappings`(값·개별 신뢰도·근거·calculation)가 들어갑니다. 반려된 제안도 이 필드에 보존하며 서버가 승인한 결과와 구분합니다. 서버가 거부한 값은 `optionMappings`와 `items`에 넣지 않습니다. 테스트 모드, 통신 실패, AI 응답 파싱 실패처럼 확인 가능한 AI 제안이 없으면 `aiAssessment=null`입니다. 이 필드는 파싱된 최종 AI 응답이며 내부 사고 과정이나 HTTP 원문을 의미하지 않습니다.
+응답의 `aiAssessment`에는 최종 제안의 `certain`, 전체 `confidence`, `reason`, `mappings`(값·개별 신뢰도·근거·calculation)가 들어갑니다. 검증 실패 시 서버가 `certain=false`로 바꾸고 `reason`에 검토 사유를 추가하므로 AI 원문과 항상 같지는 않습니다. 반려된 제안 매핑도 검토용으로 보존하며 서버가 거부한 값은 `optionMappings`와 `items`에 넣지 않습니다. 최종 응답을 파싱할 수 없으면 빈 매핑 목록·confidence=0·검토 사유를 반환합니다. 테스트 모드와 통신 예외 응답에서는 `aiAssessment=null`입니다. 원래 AI의 certain·confidence와 검증 오류는 호출별 JSONL에서 확인할 수 있습니다.
 
 `serverAssessment`는 서버의 `decisionCode`, 판정 `reason`, 실제 `confidenceThreshold`를 제공합니다. `ACCEPTED`는 승인, `LOW_CONFIDENCE`는 전체·개별 매핑 중 최저 신뢰도 미달, `AI_UNCERTAIN`은 AI의 `certain=false`, `RESULT_VALIDATION_FAILED`는 서버 검증 실패, `TEST_MODE`는 모의 결과입니다. 요청·통신 오류는 해당 오류 코드를 사용합니다. 자세한 검증 오류는 기존 `validationErrors`에 있습니다. 여러 조건이 실패할 수 있으므로 AI 불확실 판정과 검증 오류를 함께 확인해야 합니다.
 
@@ -412,7 +438,7 @@ simulate()
 flowchart TD
     A["OpenAI HTTP 오류 응답"] --> B["AiClientConfig.SafeErrorHandler<br/>hasError() → handleError()"]
     B --> C["InferenceException"]
-    D["PurchaseOptionAiService.infer()<br/>시간 초과 또는 응답 해석 오류"] --> C
+    D["PurchaseOptionAiService.infer()<br/>시간 초과 또는 통신 실패"] --> C
     E["RequestValidator.validate()<br/>잘못된 입력"] --> C
     C --> F["GlobalExceptionHandler.java<br/>handle() → error()"]
     F --> G["HTTP 상태 + InferenceResponse JSON"]
@@ -424,13 +450,12 @@ flowchart TD
 | OpenAI HTTP 429 | `AI_RATE_LIMIT` | 429 |
 | OpenAI HTTP 408·504 또는 감지된 시간 초과 | `AI_TIMEOUT` | 504 |
 | 그 밖의 외부 호출 실패 | `AI_UPSTREAM_ERROR` | 502 |
-| AI 응답 JSON 해석 실패 | `AI_INVALID_JSON` | 502 |
-| AI 응답이 정상 완료되지 않음 | `AI_INCOMPLETE_RESPONSE` | 502 |
+| AI 응답 JSON 해석 실패·응답 미완료 | 최종 실패 시 `REVIEW_REQUIRED`, 사유 `INVALID_RESPONSE` | 200 |
 | 요청 조건 위반 | `INVALID_REQUEST` | 400 |
 | 잘못된 요청 JSON | `INVALID_JSON` | 400 |
 | 예상하지 못한 예외 | `INTERNAL_ERROR` | 500 |
-| 결과 검증 실패 | `RESULT_VALIDATION_FAILED` | 200 |
-| 불확실하거나 신뢰도 기준 미달 | `REVIEW_REQUIRED` | 200 |
+| 테스트 모드 등의 결과 검증 실패 | `RESULT_VALIDATION_FAILED` | 200 |
+| 실제 AI 최종 검증 실패·불확실·신뢰도 기준 미달 | `REVIEW_REQUIRED` | 200 |
 
 결과 검증 실패와 검토 필요는 서비스가 정상적으로 반환한 판단 결과입니다. 따라서 HTTP 200이어도 `success=false`일 수 있습니다. 호출자는 HTTP 상태와 함께 응답의 `success`, `autoApplyCandidate`, `errorCode`를 확인해야 합니다.
 

@@ -22,8 +22,12 @@ public final class NamedSetContext {
     private static SetInfo find(InferenceRequest request) {
         if (!QuantityContext.eligible(request)) return null;
         SetInfo found = null;
-        for (String source : new String[]{"goodsName", "productNoticeText"}) {
-            String text = mainText(source.equals("goodsName") ? request.goodsName() : request.productNoticeText());
+        for (String source : new String[]{"goodsName", "productNoticeText", "productCompositionText"}) {
+            String text = mainText(switch (source) {
+                case "goodsName" -> request.goodsName();
+                case "productCompositionText" -> request.productCompositionText();
+                default -> request.productNoticeText();
+            });
             var sets = SET_COUNT.matcher(text);
             while (sets.find()) if (!sets.group(1).equals("1")) return null;
             var content = CONTENT.matcher(text);
@@ -47,6 +51,7 @@ public final class NamedSetContext {
         String source = switch (entry.evidenceSource() == null ? "" : entry.evidenceSource()) {
             case "goodsName" -> mainText(request.goodsName());
             case "productNoticeText" -> mainText(request.productNoticeText());
+            case "productCompositionText" -> mainText(request.productCompositionText());
             default -> "";
         };
         if (!source.contains(entry.evidenceText())) return false;

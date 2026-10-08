@@ -15,6 +15,8 @@ h1 { margin: 11px 0 9px; font-size: clamp(28px, 3.2vw, 42px); letter-spacing: -.
 .step { display: inline-grid; place-items: center; width: 29px; height: 29px; border-radius: 9px; background: #edf3ff; color: #2864ce; font-size: 12px; font-weight: 800; }
 .fields { display: grid; gap: 20px; }
 .fields + .fields { margin-top: 20px; }
+.composition-details { padding: 16px; border: 1px solid #dce6f2; border-radius: 10px; background: #f7faff; }
+.composition-details[open] > summary { margin-bottom: 16px; }
 .unit-settings { margin-top: 24px; padding-top: 20px; border-top: 1px solid #e8eef5; }
 .unit-settings h3 { margin: 0; font-size: 14px; }
 .unit-settings h3 span { margin-left: 8px; color: #8995a5; font-size: 12px; font-weight: 400; }

@@ -15,11 +15,12 @@ public class InputHashService {
     public String hash(InferenceRequest r) {
         // ID도 포함하여 다른 상품/단품에 캐시 결과가 잘못 재사용되는 것을 방지한다.
         Map<String,Object> canonical = new TreeMap<>();
-        canonical.put("hashVersion", "input-v5");
+        canonical.put("hashVersion", "input-v6");
         canonical.put("goodsId", r.goodsId());
         canonical.put("goodsName", r.goodsName());
         canonical.put("brand", r.brand());
         canonical.put("productNoticeText", r.productNoticeText());
+        canonical.put("productCompositionText", r.productCompositionText());
         canonical.put("categoryName", r.categoryName());
         canonical.put("coupangCategoryId", r.coupangCategoryId());
         canonical.put("coupangCategoryName", r.coupangCategoryName());

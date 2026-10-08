@@ -219,7 +219,7 @@ function resizeNoticeInput() {
 }
 
 function loadExample(example) {
-  for (const field of ['goodsId', 'goodsName', 'brand', 'categoryName', 'coupangCategoryId', 'coupangCategoryName', 'productNoticeText']) {
+  for (const field of ['goodsId', 'goodsName', 'brand', 'categoryName', 'coupangCategoryId', 'coupangCategoryName', 'productNoticeText', 'productCompositionText']) {
     form.elements[field].value = example[field] ?? '';
   }
   form.elements.allowedPurchaseOptions.value = example.allowedPurchaseOptions.join(', ');
@@ -245,6 +245,8 @@ function makeRequest() {
   if (brand) request.brand = brand;
   const productNoticeText = form.elements.productNoticeText.value;
   if (productNoticeText.trim()) request.productNoticeText = productNoticeText;
+  const productCompositionText = form.elements.productCompositionText.value;
+  if (productCompositionText.trim()) request.productCompositionText = productCompositionText;
   request.allowedPurchaseOptions = splitNames(form.elements.allowedPurchaseOptions.value);
   const units = [...unitRows.querySelectorAll('tr')].map(row => {
     const values = {};
@@ -314,7 +316,7 @@ function calculationText(calculation) {
   const names = { DIRECT: '직접 추출', CONVERT: '단위 환산', SUM: '합산', PACK_COUNT: '판매 묶음 수', PACK_CONTENT: '묶음 내 수량' };
   const operands = (calculation.operands || []).map(operand => operand ? `${operand.amount}${operand.unit}` : '누락').join(' + ');
   const context = calculation.context;
-  const source = { goodsName: '상품명', productNoticeText: '정보고시', optionName1: '원본 옵션명' }[context?.source] || context?.source;
+  const source = { goodsName: '상품명', productNoticeText: '정보고시', productCompositionText: '기술서 구성', optionName1: '원본 옵션명' }[context?.source] || context?.source;
   return `${names[calculation.operation] || calculation.operation} · ${operands || '구성 1묶음'} → ${calculation.outputUnit}`
     + (context?.text ? ` · ${source}: ${context.text}` : '');
 }
@@ -411,7 +413,7 @@ function showResult(request, response, httpStatus) {
     if (ai.mappings?.length) {
       section.append(table(['단품 ID', '구매옵션명', 'AI 제안 값', '개별 신뢰도', 'AI가 제출한 근거', '판단 구조'], ai.mappings.map(mapping => {
         if (!mapping) return ['—', '—', '누락된 제안', '—', '—', '—'];
-        const source = { goodsName: '상품명', productNoticeText: '정보고시' }[mapping.evidenceSource] || mapping.evidenceSource || '원본 옵션명';
+        const source = { goodsName: '상품명', productNoticeText: '정보고시', productCompositionText: '기술서 구성' }[mapping.evidenceSource] || mapping.evidenceSource || '원본 옵션명';
         return [mapping.optionId, mapping.targetPurchaseOptionName, mapping.value,
           typeof mapping.confidence === 'number' ? mapping.confidence.toFixed(2) : '—',
           mapping.evidenceText ? `${source}: ${mapping.evidenceText}` : source, calculationText(mapping.calculation)];
@@ -437,7 +439,7 @@ function showResult(request, response, httpStatus) {
     diagnostics.append(table(headers, response.optionMappings.map(mapping => [
       mapping.optionId, mapping.sourceOptionName || '(이름 없음)', mapping.targetPurchaseOptionName, mapping.value,
       simulated ? '—' : `${(mapping.confidence * 100).toFixed(1)}%`,
-      ...(hasEvidence ? [mapping.evidenceText ? `${{ goodsName: '상품명', productNoticeText: '정보고시', optionName1: '원본 옵션명' }[mapping.evidenceSource] || mapping.evidenceSource}: ${mapping.evidenceText}` : '원본 옵션명'] : []),
+      ...(hasEvidence ? [mapping.evidenceText ? `${{ goodsName: '상품명', productNoticeText: '정보고시', productCompositionText: '기술서 구성', optionName1: '원본 옵션명' }[mapping.evidenceSource] || mapping.evidenceSource}: ${mapping.evidenceText}` : '원본 옵션명'] : []),
       ...(hasCalculation ? [calculationText(mapping.calculation)] : [])
     ])));
   }

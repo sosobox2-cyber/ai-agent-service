@@ -1,0 +1,31 @@
+param([string]$Path = 'logs/ai-usage.jsonl')
+$ErrorActionPreference = 'Stop'
+$rows = @(Get-Content -LiteralPath $Path -Encoding UTF8 | Where-Object { $_.Trim() } | ForEach-Object { $_ | ConvertFrom-Json })
+$requests = @($rows | Group-Object inferenceId)
+$initial = @($requests | ForEach-Object { $_.Group | Sort-Object retryCount | Select-Object -First 1 })
+$final = @($requests | ForEach-Object { $_.Group | Sort-Object retryCount | Select-Object -Last 1 })
+$light = @($initial | Where-Object { $_.initialPromptMode -eq 'LIGHT' })
+$retries = @($rows | Where-Object { $_.retryCount -eq 1 })
+$lightSuccess = @($light | Where-Object { $_.status -eq 'SUCCESS' })
+$knownExtra = @($retries | Where-Object { $null -ne $_.estimated_cost_usd })
+[decimal]$extraCost = 0
+foreach ($row in $knownExtra) { $extraCost += [decimal]$row.estimated_cost_usd }
+[decimal]$totalCost = 0
+foreach ($row in $rows) { if ($null -ne $row.estimated_cost_usd) { $totalCost += [decimal]$row.estimated_cost_usd } }
+[pscustomobject]@{
+    totalProducts = $requests.Count
+    lightStarts = $light.Count
+    fullStarts = @($initial | Where-Object { $_.initialPromptMode -eq 'FULL' }).Count
+    lightSuccess = $lightSuccess.Count
+    lightToFull = $retries.Count
+    lightSuccessRatePercent = $(if ($light.Count) { [math]::Round(100 * $lightSuccess.Count / $light.Count, 2) } else { $null })
+    failoverRatePercent = $(if ($light.Count) { [math]::Round(100 * $retries.Count / $light.Count, 2) } else { $null })
+    fullRetrySuccess = @($retries | Where-Object { $_.status -eq 'SUCCESS' }).Count
+    finalReviewRequired = @($final | Where-Object { $_.status -eq 'REVIEW_REQUIRED' }).Count
+    finalApiErrors = @($final | Where-Object { $_.status -eq 'API_ERROR' }).Count
+    incompleteRequests = @($final | Where-Object { $_.status -eq 'VALIDATION_ERROR' }).Count
+    knownExtraEstimatedCostUsd = $extraCost
+    unknownExtraCostCalls = $retries.Count - $knownExtra.Count
+    knownTotalEstimatedCostUsd = $totalCost
+    unknownTotalCostCalls = @($rows | Where-Object { $null -eq $_.estimated_cost_usd }).Count
+} | ConvertTo-Json

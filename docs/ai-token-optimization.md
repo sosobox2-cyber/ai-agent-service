@@ -2,6 +2,8 @@
 
 ## 변경 전 호출 구조
 
+이 절은 토큰 최적화 도입 전의 분석 기록이다. 현재 재추론 동작과 로그는 아래의 LIGHT → FULL 및 JSONL 설명을 따른다.
+
 | 확인 항목 | 분석 결과 |
 |---|---|
 | System Prompt | `PurchaseOptionAiService` 생성자에서 `prompts/coupang-purchase-option-system.txt`를 UTF-8로 읽어 모든 요청에 사용 |
@@ -38,7 +40,7 @@ API에 전송되는 구조는 아래와 같다. JSON Schema는 메시지 본문�
 
 ## 구현과 정확도 보호
 
-기존 FULL 파일을 수정하거나 이동하지 않고 `coupang-purchase-option-system-light.txt`를 별도로 추가했다. `PurchaseOptionPromptSelector`가 모드를 고르고 `PurchaseOptionPromptProvider`가 원문을 제공한다. User Prompt, 상품 JSON, 모델, temperature, 출력 한도, JSON Schema, 보정 재요청과 서버 검증은 유지한다.
+기존 FULL 파일을 수정하거나 이동하지 않고 `coupang-purchase-option-system-light.txt`를 별도로 추가했다. `PurchaseOptionPromptSelector`가 최초 모드를 고르고 `PurchaseOptionPromptProvider`가 원문을 제공한다. User Prompt, 상품 JSON, 모델, temperature, 출력 한도, JSON Schema와 기존 서버 검증은 유지한다. 이전 누락 보정 대화는 LIGHT → FULL 1회 Failover로 교체했다.
 
 LIGHT는 모든 허용 이름이 `색상`, `컬러`, `COLOR`, `사이즈`, `SIZE`, `패션의류/잡화 사이즈`, `핏` 중 하나인 요청에만 적용한다. 영문 대소문자는 무시한다. 단위 설정이 있거나 원본 옵션명이 `단품`/`단일상품`이면 FULL을 사용한다. 계산형·알 수 없는 옵션명이 하나라도 섞이면 FULL이다. 부분 일치로 분류하지 않으므로 `화면크기(cm)`, `스타일` 등도 보수적으로 FULL을 사용한다.
 
@@ -58,6 +60,22 @@ LIGHT는 전체 단품 순회, 허용 이름, 원문 문자열 추출, 임의 �
 
 `AI_PROMPT_MODE=AUTO`가 기본이며 `AI_PROMPT_MODE=FULL`로 기존 상세 프롬프트만 사용하도록 즉시 되돌릴 수 있다. 계산 요청까지 LIGHT를 강제하는 설정은 제공하지 않는다. 응답의 프롬프트 버전은 `coupang-option-v18`이다.
 
+## LIGHT → FULL 재추론과 비용 보호
+
+정상 LIGHT는 그대로 사용한다. `certain=false`, 단품 ID 누락·미등록, 허용 구매옵션명 위반, 동일 매핑 중복, 필수 값 null·blank, 응답 형식 및 기존 서버 검증 실패가 있을 때만 FULL을 한 번 호출한다. PromptSelector는 다시 호출하지 않고 같은 상품 데이터·User Prompt·JSON Schema에 FULL System Prompt를 사용한다. FULL 결과도 동일하게 검증하며 최종 실패는 `REVIEW_REQUIRED`로 처리한다.
+
+| 상황 | 최대 AI 호출 수 |
+|---|---:|
+| 정상 LIGHT | 1 |
+| LIGHT 검증 실패 | 2 |
+| 처음부터 FULL | 1 |
+
+재추론은 반복문·재귀 없이 최초 LIGHT 실패 분기에서만 실행한다. `purchase-option.ai.retry.enabled=true`, `max-retries=1`이 기본이며 설정값도 0~1로 제한한다. timeout·429·5xx 등 API 장애는 기존 정책대로 반환하고 FULL로 변경하여 추가 호출하지 않는다.
+
+`confidence-threshold-enabled=false`가 기본이므로 낮은 confidence만으로 재추론하지 않는다. 기존 최종 자동 적용 신뢰도 0.80은 유지한다. 예를 들어 구조가 정상인 LIGHT의 confidence가 0.50이면 1회 호출 후 검토 필요로 반환한다. 선택적 재추론 threshold의 기본값 0.7은 기능을 활성화한 경우에만 사용한다.
+
+LIGHT → FULL의 상품별 비용은 두 호출의 비용 합계다. 추가 호출 비용은 FULL 재추론 행만 합산한다. 재추론은 응답 시간도 늘릴 수 있으므로 LIGHT 성공률과 전환 비율을 함께 관찰한다. 설정·검증 코드의 상세 내용은 [AI Failover 문서](ai-inference-failover.md)에 정리했다.
+
 ## 개발환경 usage 로그
 
 `SPRING_PROFILES_ACTIVE=dev`로 실행하면 usage 로그를 기본 활성화한다. 환경 변수 `AI_USAGE_LOG_ENABLED=true/false`로 별도 제어할 수 있다. 기본 실행에서는 비활성화다.
@@ -66,13 +84,27 @@ LIGHT는 전체 단품 순회, 허용 이름, 원문 문자열 추출, 임의 �
 ai_usage call_id=<무작위 ID> mode=LIGHT attempt=1 model=gpt-4.1-mini input_tokens=1000 cached_tokens=800 output_tokens=200 total_tokens=1200 estimated_cost_usd=0.00048
 ```
 
-위 수치는 설명용이며 실측 결과가 아니다. 동일 `call_id`의 `attempt=2`는 단품 누락 보정 호출이다. 요청 한 건의 사용량과 비용은 모든 차수의 값을 합산해야 한다. 정상 종료가 아닌 응답도 반환된 usage는 파싱 전에 기록한다. 응답을 받지 못한 API 오류는 usage를 알 수 없다.
+위 수치는 설명용이며 실측 결과가 아니다. 동일 `call_id`의 `attempt=2`, `mode=FULL`은 LIGHT 검증 실패 후 FULL 재추론 호출이다. 요청 한 건의 사용량과 비용은 두 호출을 합산해야 한다. 검증·파싱에 실패한 응답도 반환된 usage를 기록한다. 응답을 받지 못한 API 오류는 usage를 알 수 없다.
 
-API 키, Authorization 헤더, 상품/정보고시, 요청·응답 JSON과 전체 메타데이터를 로그에 출력하지 않는다. usage나 cached_tokens가 없으면 `null`로 남기며 0으로 가정하지 않는다. 별도 로그 파일이나 DB 저장은 하지 않는다.
+API 키, Authorization 헤더, 상품/정보고시 본문, 요청·응답 JSON과 전체 메타데이터를 로그에 출력하지 않는다. usage나 cached_tokens가 없으면 `null`로 남기며 0으로 가정하지 않는다. 콘솔 메트릭과 별도로 아래 JSONL 파일에 호출별 분석 정보를 기록한다.
+
+### JSONL 로그와 통계 집계
+
+`logs/ai-usage.jsonl`에 기본적으로 UTF-8 JSONL을 기록한다. 경로는 `AI_USAGE_JSONL_PATH`, 활성화 여부는 `AI_USAGE_JSONL_ENABLED`로 변경한다. `AI_USAGE_LOG_ENABLED`의 콘솔 설정과 독립적이다. 파일 기록 실패는 경고로 알리며 추론 응답에는 영향을 주지 않는다.
+
+각 행에는 `timestamp`, `inferenceId`, `goodsId`, `promptMode`, `initialPromptMode`, `finalPromptMode`, `retryCount`, `retryReason`, `retryReasons`, `status`, `validationPassed`, `validationErrors`, `certain`, `confidence`, `minimumMappingConfidence`와 기존 모델·usage·비용을 기록한다. LIGHT와 FULL은 같은 `inferenceId`로 연결한다. FULL 행은 LIGHT의 전환 사유를 유지하고 FULL 자체의 검증 오류는 `validationErrors`에 남긴다.
+
+상태는 `SUCCESS`, `VALIDATION_ERROR`(LIGHT 실패, FULL 예정), `REVIEW_REQUIRED`, `API_ERROR`로 구분한다. 낮은 신뢰도만으로 최종 검토 필요가 된 결과는 `validationPassed=true`, `status=REVIEW_REQUIRED`로 구분된다. FULL API 장애 시에도 이전 LIGHT의 실제 usage는 남는다. 수신하지 못한 usage·비용은 null이다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\measure-ai-failover.ps1 -Path .\logs\ai-usage.jsonl
+```
+
+스크립트는 inferenceId별 전체 상품 요청, LIGHT/FULL 시작, LIGHT 성공률, 실제 LIGHT → FULL 비율, FULL 재추론 성공, 최종 검토 필요, API 오류, 미완료 요청과 비용을 집계한다. LIGHT → FULL 비율의 분모는 LIGHT 시작 건수이며 분자는 `retryCount=1`인 호출 수다. 추가 비용은 재추론 행, 전체 비용은 양쪽 행을 모두 합산한다. 알 수 없는 비용은 0으로 취급하지 않고 확인 불가 호출 수로 따로 표시한다.
 
 ## 테스트 페이지에서 확인
 
-최종 단품 결과 아래의 **AI 호출·토큰 사용량**을 펼치면 현재 요청의 호출별 모드·모델·입력·캐시·출력·총 토큰·예상 USD 비용을 볼 수 있다. 보정 재요청도 별도 행으로 표시하고 모든 호출을 합산한다. 일부 수치를 API가 제공하지 않으면 해당 합계도 `확인 불가`이며 0으로 취급하지 않는다. 캐시 입력은 이미 입력 토큰에 포함되므로 총 토큰에 다시 더하지 않는다.
+최종 단품 결과 아래의 **AI 호출·토큰 사용량**을 펼치면 현재 요청의 호출별 모드·모델·입력·캐시·출력·총 토큰·예상 USD 비용을 볼 수 있다. FULL 재추론도 별도 행으로 표시하고 두 호출을 합산한다. 일부 수치를 API가 제공하지 않으면 해당 합계도 `확인 불가`이며 0으로 취급하지 않는다. 캐시 입력은 이미 입력 토큰에 포함되므로 총 토큰에 다시 더하지 않는다.
 
 응답 JSON의 `aiUsage`에 현재 요청의 안전한 메트릭만 추가한다. 콘솔 로깅 활성화 여부와 관계없이 표시되며 요청별 지역 목록으로 수집하므로 다른 요청의 사용량은 섞이지 않는다. 기존 추론 필드와 판정은 유지한다. 테스트 모드는 실제 AI 호출이 없어 `aiUsage=[]`이고 화면에 별도로 설명한다. 서버 검증에 실패한 실제 AI 응답도 받은 usage는 유지한다. API 오류 등으로 일반 추론 응답을 받지 못하면 화면에서 사용량을 확인하지 못할 수 있다.
 
@@ -96,7 +128,7 @@ cached_tokens는 전체 입력에 포함된 부분집합이므로 중복 과금�
 
 기본 `mvn verify`는 API 호출 없이 기존 테스트와 라우팅 테스트를 실행하고 `target/prompt-token-comparison.json`에 의류·수량·용량·중량·칫솔·TV 입력의 전후 텍스트 토큰 수를 생성한다. 기존 의존성의 JTokkit `o200k_base` 토크나이저를 사용한다. 메시지 문자열과 직렬화한 스키마 텍스트만 세므로 실제 API framing, 내부 스키마 처리와 숨은 토큰을 포함하지 않는 추정이다. output_tokens, cached_tokens, total_tokens와 최종 비용을 이 추정에서 만들어내지 않는다.
 
-실제 usage와 정확도 비교는 환경에 API 키가 준비된 경우에만 아래 명령으로 실행한다. 키는 명령 인수·코드·파일에 넣지 않는다. 같은 의류 JSON을 FULL, AUTO 순서로 호출한다. 보정까지 포함하면 최대 네 번의 과금 호출이며 테스트 실패 때도 확보한 usage를 기록한다.
+실제 usage와 정확도 비교는 환경에 API 키가 준비된 경우에만 아래 명령으로 실행한다. 키는 명령 인수·코드·파일에 넣지 않는다. 같은 의류 JSON을 FULL, AUTO 순서로 호출한다. FULL 시작 1회와 AUTO의 LIGHT → FULL 최대 2회를 합쳐 최대 세 번의 과금 호출이며 테스트 실패 때도 확보한 usage를 기록한다.
 
 ```powershell
 $env:OPENAI_RUN_COST_COMPARISON = 'true'

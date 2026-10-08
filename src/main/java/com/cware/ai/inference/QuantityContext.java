@@ -40,6 +40,7 @@ public final class QuantityContext {
         String source = switch (entry.evidenceSource()) {
             case "goodsName" -> request.goodsName();
             case "productNoticeText" -> request.productNoticeText();
+            case "productCompositionText" -> request.productCompositionText();
             default -> null;
         };
         if (source == null || !mainProductText(source).contains(entry.evidenceText())) return false;
@@ -69,9 +70,13 @@ public final class QuantityContext {
             return NamedSetContext.mockEntry(request, target);
         var bundle = BundleWeightContext.mockEntry(request, target);
         if (bundle != null) return bundle;
-        String[] sources = {"goodsName", "productNoticeText"};
+        String[] sources = {"goodsName", "productNoticeText", "productCompositionText"};
         for (String sourceName : sources) {
-            String source = sourceName.equals("goodsName") ? request.goodsName() : request.productNoticeText();
+            String source = switch (sourceName) {
+                case "goodsName" -> request.goodsName();
+                case "productCompositionText" -> request.productCompositionText();
+                default -> request.productNoticeText();
+            };
             if (source == null) continue;
             Pattern pattern = switch (target) {
                 case "수량" -> PACK_COUNT;
