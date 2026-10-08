@@ -48,11 +48,11 @@ purchase-option:
 
 ## 호출별 JSONL
 
-기본 경로는 `logs/ai-usage.jsonl`입니다. `AI_USAGE_JSONL_PATH`로 경로를 변경하고 `AI_USAGE_JSONL_ENABLED=false`로 파일 기록을 끌 수 있습니다. 콘솔 메트릭 설정 `AI_USAGE_LOG_ENABLED`와 독립적으로 기록합니다. JSONL은 UTF-8이며 API 키·헤더·상품 본문·AI 응답 본문은 기록하지 않습니다. 검증 코드와 검증 메시지는 기록합니다. 파일 기록 실패는 경고로 알리고 추론 결과에는 영향을 주지 않습니다.
+기본 경로는 `logs/ai-usage.jsonl`입니다. `AI_USAGE_JSONL_PATH`로 경로를 변경하고 `AI_USAGE_JSONL_ENABLED=false`로 파일 기록을 끌 수 있습니다. 콘솔 메트릭 설정 `AI_USAGE_LOG_ENABLED`와 독립적으로 기록합니다. JSONL은 UTF-8이며 API 키·헤더·상품 본문·AI 응답 본문은 기록하지 않습니다. 검증 사유 코드만 기록하며 검증 메시지 원문은 기록하지 않습니다. 파일 기록 실패는 경고로 알리고 추론 결과에는 영향을 주지 않습니다.
 
-각 행은 `timestamp`, `inferenceId`, `goodsId`, `promptMode`, `initialPromptMode`, `finalPromptMode`, `retryCount`, `retryReason`, `retryReasons`, `status`, `validationPassed`, `validationErrors`, `certain`, `confidence`, `minimumMappingConfidence`, `model`, `input_tokens`, `cached_tokens`, `output_tokens`, `total_tokens`, `estimated_cost_usd`를 포함합니다.
+각 행은 `timestamp`, `inferenceId`, `goodsId`, `promptMode`, `initialPromptMode`, `finalPromptMode`, `retryCount`, `retryReason`, `retryReasons`, `status`, `validationPassed`, `certain`, `confidence`, `model`, `inputTokens`, `cachedTokens`, `outputTokens`, `totalTokens`, `elapsedMs`, `mappingCount`, `estimatedCostUsd`를 포함합니다.
 
-`retryReason`은 첫 번째 사유, `retryReasons`는 모든 사유입니다. FULL 행에서는 LIGHT의 전환 사유를 유지하고 FULL 자체의 오류는 `validationErrors`에 기록합니다. `retryCount`는 최초 0, 재호출 1입니다. 두 행 모두 같은 `inferenceId`를 사용합니다. API 오류 행은 `status=API_ERROR`, `validationPassed=null`이며 수신하지 못한 usage·비용은 null로 기록합니다.
+`retryReason`은 첫 번째 사유, `retryReasons`는 모든 사유입니다. FULL 행에서는 LIGHT의 전환 사유를 유지합니다. 현재 JSONL DTO에는 `validationErrors`가 없으므로 FULL 자체의 상세 검증 사유는 이 파일에서 복원할 수 없습니다. 응답의 `reason`, `validationErrors`, `serverAssessment`를 함께 확인하세요. `retryCount`는 최초 0, 재호출 1입니다. 두 행 모두 같은 `inferenceId`를 사용합니다. API 오류 행은 `status=API_ERROR`, `validationPassed=null`이며 수신하지 못한 usage·비용은 null로 기록합니다.
 
 | status | 의미 |
 |---|---|
@@ -79,4 +79,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\measure-ai-failove
 
 최종 검토 필요는 각 inferenceId의 마지막 행이 REVIEW_REQUIRED인 건수입니다. API 오류와 로그가 FULL 전환 예정 행에서 끝난 미완료 요청은 별도로 집계합니다. FULL 재추론 성공은 retryCount=1 및 SUCCESS인 행 수입니다.
 
-추가 비용은 retryCount=1인 행의 estimated_cost_usd 합계이며, 전체 비용에는 LIGHT와 FULL 양쪽 행을 모두 합산합니다. 비용·usage가 null인 행은 무료로 간주하지 않고 확인 불가 건수로 따로 표시합니다. 로그에 기록되는 비용은 기존 모델별 추정치이며 실제 청구서는 별도로 확인합니다.
+추가 비용은 retryCount=1인 행의 estimatedCostUsd 합계이며, 전체 비용에는 LIGHT와 FULL 양쪽 행을 모두 합산합니다. 비용·usage가 null인 행은 무료로 간주하지 않고 확인 불가 건수로 따로 표시합니다. 로그에 기록되는 비용은 기존 모델별 추정치이며 실제 청구서는 별도로 확인합니다.
+
+
+현재 JSONL 필드·Logback Appender·일별 gzip Rolling·보관 정책은 [AI 호출 이력 안내](ai-call-history.md)를 참고하세요.

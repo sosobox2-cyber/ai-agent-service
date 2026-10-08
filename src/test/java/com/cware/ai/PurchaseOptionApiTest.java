@@ -26,6 +26,12 @@ class PurchaseOptionApiTest {
     private static final String URL="/api/v1/coupang/purchase-options/infer";
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper mapper;
+    @Autowired com.cware.ai.config.AiUsagePricing usagePricing;
+    @Test void usagePricesAreBoundFromExternalConfiguration() {
+        assertThat(usagePricing.estimate("gpt-4.1-mini", 1000, 800, 200)).isEqualByComparingTo("0.00048");
+        assertThat(usagePricing.estimate("gpt-4.1-mini-2025-04-14", 1000, 800, 200)).isEqualByComparingTo("0.00048");
+        assertThat(usagePricing.estimate("unconfigured-model", 1000, 0, 200)).isNull();
+    }
     @MockitoBean PurchaseOptionAiService ai;
     @BeforeEach void delegateUsageOverloadToExistingMockProposals() {
         when(ai.infer(any(), any())).thenAnswer(invocation -> ai.infer(invocation.getArgument(0)));
@@ -219,12 +225,24 @@ class PurchaseOptionApiTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true));
         verify(ai).infer(argThat(request -> notice.equals(request.productNoticeText())));
     }
-    @Test void noticeIsOptionalForExistingClients() throws Exception {
-        when(ai.infer(any())).thenReturn(Fixtures.proposal());
-        ObjectNode body = mapper.valueToTree(Fixtures.request());
-        body.remove("productNoticeText");
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(body)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true));
+    @Test void missingNullEmptyAndBlankNoticeFailBeforeAiInBothModes() throws Exception {
+        for (String mode : new String[]{"false", "true"}) {
+            for (String notice : new String[]{null, "", " \t\r\n "}) {
+                ObjectNode body = mapper.valueToTree(Fixtures.request());
+                body.put("productNoticeText", notice);
+                mvc.perform(post(URL).param("testMode", mode).contentType(MediaType.APPLICATION_JSON)
+                                .content(mapper.writeValueAsString(body)))
+                        .andExpect(status().isBadRequest())
+                        .andExpect(jsonPath("$.errorCode").value("INVALID_REQUEST"));
+            }
+            ObjectNode body = mapper.valueToTree(Fixtures.request());
+            body.remove("productNoticeText");
+            mvc.perform(post(URL).param("testMode", mode).contentType(MediaType.APPLICATION_JSON)
+                            .content(mapper.writeValueAsString(body)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errorCode").value("INVALID_REQUEST"));
+        }
+        verifyNoInteractions(ai);
     }
     @Test void noticeLengthLimitAppliesBeforeAiInBothModes() throws Exception {
         var request = Fixtures.withNotice(Fixtures.request(), "가".repeat(20001));
@@ -288,6 +306,51 @@ class PurchaseOptionApiTest {
                 .andExpect(jsonPath("$.aiUsage[0].cached_tokens").value(800))
                 .andExpect(jsonPath("$.aiUsage[0].output_tokens").value(200))
                 .andExpect(jsonPath("$.aiUsage[0].total_tokens").value(1200));
+    }
+
+    @Test void invalidInternalCategoryFailsBeforeAiInBothModes() throws Exception {
+        for (String mode : new String[]{"false", "true"}) {
+            for (String category : new String[]{null, "", " \t\r\n ", "가".repeat(501)}) {
+                ObjectNode body = mapper.valueToTree(Fixtures.request());
+                body.put("categoryName", category);
+                mvc.perform(post(URL).param("testMode", mode).contentType(MediaType.APPLICATION_JSON)
+                                .content(mapper.writeValueAsString(body)))
+                        .andExpect(status().isBadRequest())
+                        .andExpect(jsonPath("$.errorCode").value("INVALID_REQUEST"));
+            }
+            ObjectNode body = mapper.valueToTree(Fixtures.request());
+            body.remove("categoryName");
+            mvc.perform(post(URL).param("testMode", mode).contentType(MediaType.APPLICATION_JSON)
+                            .content(mapper.writeValueAsString(body)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errorCode").value("INVALID_REQUEST"));
+        }
+        verifyNoInteractions(ai);
+    }
+
+    @Test void categoryMaximumLengthIsAcceptedAndSentToAi() throws Exception {
+        when(ai.infer(any())).thenReturn(Fixtures.proposal());
+        ObjectNode body = mapper.valueToTree(Fixtures.request());
+        String category = "가".repeat(500);
+        body.put("categoryName", category);
+        for (String mode : new String[]{"false", "true"}) {
+            mvc.perform(post(URL).param("testMode", mode).contentType(MediaType.APPLICATION_JSON)
+                            .content(mapper.writeValueAsString(body)))
+                    .andExpect(status().isOk());
+        }
+        verify(ai).infer(argThat(request -> category.equals(request.categoryName())));
+    }
+
+    @Test void removedBrandFieldIsRejected() throws Exception {
+        ObjectNode body = mapper.valueToTree(Fixtures.request());
+        body.put("brand", "예전 브랜드");
+        for (String mode : new String[]{"false", "true"}) {
+            mvc.perform(post(URL).param("testMode", mode).contentType(MediaType.APPLICATION_JSON)
+                            .content(mapper.writeValueAsString(body)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errorCode").value("INVALID_JSON"));
+        }
+        verifyNoInteractions(ai);
     }
 
     @Test void oldOptionValueFieldsAreRejected() throws Exception {

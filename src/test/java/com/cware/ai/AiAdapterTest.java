@@ -22,7 +22,8 @@ class AiAdapterTest {
     PurchaseOptionAiService ai;
     @BeforeEach void setUp() throws Exception {
         model=mock(ChatModel.class);
-        ai=new PurchaseOptionAiService(model,new ObjectMapper());
+        ai=new PurchaseOptionAiService(model,new ObjectMapper(), new PurchaseOptionPromptProvider("AUTO"),
+                Fixtures.usageLogger(false, null));
     }
     void respond(String json,String finish) {
         when(model.call(any(Prompt.class))).thenReturn(new ChatResponse(List.of(
@@ -35,8 +36,8 @@ class AiAdapterTest {
     }
     @Test void unconfiguredScreenUnitsAreSentWithoutEnumAndPreservedInFinalResult() throws Exception {
         var request = new com.cware.ai.dto.InferenceRequest("50945478", "플럭스 109cm(43인치) TV",
-                "플럭스", "가전", "112143", "TV", List.of("화면크기(cm)", "화면크기(in)"),
-                List.of(new com.cware.ai.dto.SourceOption("1", "단품")), null);
+                "가전>TV", List.of("화면크기(cm)", "화면크기(in)"),
+                List.of(new com.cware.ai.dto.SourceOption("1", "단품")), "제조국: 한국");
         var entries = new java.util.ArrayList<MappingProposal.Entry>();
         for (String[] row : List.of(new String[]{"화면크기(cm)", "109", "cm"},
                 new String[]{"화면크기(in)", "43", "인치"})) {
@@ -170,8 +171,8 @@ class AiAdapterTest {
         var proposal = new MappingProposal(true, .90, List.of(new MappingProposal.Entry("1", "개당 용량", "50ml", .90,
                 "goodsName", "50ml", calculation)), "용량을 추출했습니다.");
         String json = new ObjectMapper().writeValueAsString(proposal);
-        var request = new com.cware.ai.dto.InferenceRequest("1", "50ml", "브랜드", "화장품", "1", "화장품",
-                List.of("개당 용량"), List.of(new com.cware.ai.dto.SourceOption("1", "50ml")), null);
+        var request = new com.cware.ai.dto.InferenceRequest("1", "50ml", "뷰티",
+                List.of("개당 용량"), List.of(new com.cware.ai.dto.SourceOption("1", "50ml")), "제조국: 한국");
         respond(json, "stop");
         assertThat(ai.infer(request)).isEqualTo(proposal);
         respond(json.replace("DIRECT", "RUN_CODE"), "stop");

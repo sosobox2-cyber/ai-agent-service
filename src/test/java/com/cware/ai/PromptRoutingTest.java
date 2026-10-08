@@ -29,16 +29,14 @@ class PromptRoutingTest {
             assertThat(selector.select(fixture(name))).isEqualTo(PurchaseOptionPromptMode.FULL);
         var r = fixture("ai");
         for (String name : List.of("수량", "개당 수량", "개당 용량", "개당 중량", "옵션", "스타일", "화면크기(cm)", "알 수 없는 옵션")) {
-            var unknown = new InferenceRequest(r.goodsId(), r.goodsName(), r.brand(), r.categoryName(),
-                    r.coupangCategoryId(), r.coupangCategoryName(), List.of("색상", name), r.options(), r.productNoticeText());
+            var unknown = new InferenceRequest(r.goodsId(), r.goodsName(), r.categoryName(), List.of("색상", name), r.options(), r.productNoticeText());
             assertThat(selector.select(unknown)).isEqualTo(PurchaseOptionPromptMode.FULL);
         }
     }
 
     @Test void unitSettingsAndPlaceholderSourceAlwaysUseFull() {
         var r = Fixtures.ambiguous();
-        var configured = new InferenceRequest(r.goodsId(), r.goodsName(), r.brand(), r.categoryName(),
-                r.coupangCategoryId(), r.coupangCategoryName(), r.allowedPurchaseOptions(), r.options(), r.productNoticeText(),
+        var configured = new InferenceRequest(r.goodsId(), r.goodsName(), r.categoryName(), r.allowedPurchaseOptions(), r.options(), r.productNoticeText(),
                 List.of(new PurchaseOptionUnit("사이즈", "호", List.of("호"))));
         assertThat(selector.select(configured)).isEqualTo(PurchaseOptionPromptMode.FULL);
         for (String name : List.of("단품", "단일상품"))

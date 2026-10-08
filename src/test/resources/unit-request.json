@@ -2,8 +2,7 @@
   "goodsId": "unit-test",
   "goodsName": "단위 검증 테스트 상품",
   "categoryName": "테스트",
-  "coupangCategoryId": "test",
-  "coupangCategoryName": "테스트",
+  "productNoticeText": "품명: 단위 검증 테스트 상품",
   "allowedPurchaseOptions": ["수량"],
   "purchaseOptionUnits": [
     {"purchaseOptionName": "수량", "defaultUnit": "개", "unitOptions": ["개", "박스", "세트"]}

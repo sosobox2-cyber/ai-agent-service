@@ -10,8 +10,7 @@ class MockOptionInferenceTest {
         var original = mapper.readValue(java.nio.file.Files.readString(java.nio.file.Path.of("examples/tv-request.json")),
                 com.cware.ai.dto.InferenceRequest.class);
         var request = new com.cware.ai.dto.InferenceRequest(original.goodsId(),
-                "TV 109cm(43인치) 또는 127cm(50인치)", original.brand(), original.categoryName(),
-                original.coupangCategoryId(), original.coupangCategoryName(), original.allowedPurchaseOptions(),
+                "TV 109cm(43인치) 또는 127cm(50인치)", original.categoryName(), original.allowedPurchaseOptions(),
                 original.options(), original.productNoticeText());
         assertThat(MockOptionInferenceService.infer(request).mappings()).isEmpty();
     }

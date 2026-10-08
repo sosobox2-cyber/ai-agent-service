@@ -38,7 +38,7 @@ AI는 매핑을 제안하고, 서버는 그 결과를 검증합니다. 검증과
 
 한 요청에 상품 하나와 최대 200개 단품을 받아, 단품별 쿠팡 구매옵션명과 값을 매핑합니다. 웹 테스트 화면과 API는 같은 Spring Boot 서버에서 제공합니다. 실제 AI 경로는 요청을 받는 동안 AI 응답을 기다리는 동기 처리 방식입니다.
 
-SK스토아 상품정보고시는 `productNoticeText`라는 긴 텍스트로 입력받습니다. 실제 AI가 원본 옵션명의 의미를 판단하는 보조 자료이며, 정보고시를 별도의 쿠팡 고시 항목으로 변환하는 기능은 없습니다. 상품정보와 허용 구매옵션명은 호출자가 전달하며, SK스토아나 쿠팡에서 자동 조회하지 않습니다.
+SK스토아 상품정보고시는 필수 필드 `productNoticeText`라는 긴 텍스트로 입력받습니다. 실제 AI가 원본 옵션명의 의미를 판단하는 보조 자료이며, 정보고시를 별도의 쿠팡 고시 항목으로 변환하는 기능은 없습니다. 상품정보와 허용 구매옵션명은 호출자가 전달하며, SK스토아나 쿠팡에서 자동 조회하지 않습니다.
 
 데이터베이스, 결과 저장, 캐시 저장·조회, 메시지 큐, 배치 작업은 구현되어 있지 않습니다. 추론 결과는 HTTP 응답으로 반환하며, 상품 등록·수정과 자동 적용은 호출 측에서 결정합니다.
 
@@ -58,15 +58,12 @@ SK스토아 상품정보고시는 `productNoticeText`라는 긴 텍스트로 입
 |---|---|---|---|
 | `goodsId` | 문자열 | 예 | 상품 코드, 최대 100자 |
 | `goodsName` | 문자열 | 예 | 상품명, 최대 500자 |
-| `brand` | 문자열 | 아니요 | 브랜드, 최대 200자 |
-| `categoryName` | 문자열 | 예 | 내부 / SK스토아 카테고리, 최대 500자 |
-| `coupangCategoryId` | 문자열 | 예 | 쿠팡 카테고리 키, 최대 100자 |
-| `coupangCategoryName` | 문자열 | 예 | 쿠팡 카테고리명, 최대 500자 |
-| `allowedPurchaseOptions` | 문자열 배열 | 예 | 1~20개, 각 이름 최대 100자, 중복 불가 |
+| `categoryName` | 문자열 | 예 | 내부 / SK스토아 카테고리명, 공백 불가, 최대 500자 |
+| `allowedPurchaseOptions` | 문자열 배열 | 예 | 1~200개, 각 이름 최대 100자, 중복 불가 |
 | `options` | 객체 배열 | 예 | 1~200개 단품, null 단품 불가 |
 | `options[].optionId` | 문자열 | 예 | 최대 100자, 요청 내 중복 불가 |
 | `options[].optionName1` | 문자열 | 예 | 분리하지 않은 원본 옵션명, 최대 500자 |
-| `productNoticeText` | 문자열 | 아니요 | SK스토아 정보고시 항목명과 값을 이어 붙인 텍스트, 최대 20,000자 |
+| `productNoticeText` | 문자열 | 예 | SK스토아 정보고시 항목명과 값을 이어 붙인 텍스트, 공백 불가, 최대 20,000자 |
 
 필수 문자열과 옵션명 배열의 각 이름은 빈 문자열이나 공백만 있는 값을 허용하지 않습니다. 정의되지 않은 JSON 필드는 거부합니다. 허용 구매옵션명을 모두 채울 필요는 없지만, 각 단품에는 최소 하나의 유효한 매핑이 필요합니다.
 
@@ -127,7 +124,7 @@ SK스토아 상품정보고시는 `productNoticeText`라는 긴 텍스트로 입
 | AI 응답 형식 | 엄격한 JSON Schema, 요청의 단품 ID·허용 옵션명으로 `enum` 제한 |
 | AI 응답 본문 제한 | 최대 65,536자, 종료 사유 `stop` 필요 |
 | AI 판단 사유 제한 | 한국어 1~3문장으로 지시, 서버는 비어 있지 않은 최대 2,000자 문자열인지 검증 |
-| 입력 식별 | 해시 버전 `input-v4`, 상품·브랜드·카테고리·정보고시·옵션 목록 포함 |
+| 입력 식별 | 해시 버전 `input-v8`, 상품·내부 카테고리·정보고시·기술서 구성·단위 설정·옵션 목록 포함 |
 
 로컬 실행은 Java 17과 Maven을 사용합니다. 별도 Tomcat 설치는 필요하지 않습니다. `mvn test`로 테스트하고 `mvn package` 또는 `mvn verify`로 실행 JAR을 생성합니다. 실행 파일은 `target/ai-agent-service-0.1.0-SNAPSHOT.jar`입니다.
 
@@ -294,7 +291,7 @@ purchase-option:
       confidence-threshold: 0.7
 ```
 
-각 호출의 실제 usage는 같은 UUID `inferenceId`로 연결하여 기본 경로 `logs/ai-usage.jsonl`에 기록합니다. 최초 `retryCount=0`, 재추론 `retryCount=1`이며 `initialPromptMode`, `promptMode`, `finalPromptMode`, `retryReason`, `retryReasons`, `status`, `validationPassed`, 검증 오류와 confidence도 포함합니다. 콘솔 설정과 독립적으로 파일 기록을 수행합니다. FULL에서 API 장애가 발생해도 앞선 LIGHT usage는 보존됩니다. 상세 설정과 집계 스크립트는 [AI Failover 문서](ai-inference-failover.md)를 참고하세요.
+각 호출의 실제 usage는 같은 UUID `inferenceId`로 연결하여 기본 경로 `logs/ai-usage.jsonl`에 기록합니다. 최초 `retryCount=0`, 재추론 `retryCount=1`이며 `initialPromptMode`, `promptMode`, `finalPromptMode`, `retryReason`, `retryReasons`, `status`, `validationPassed`, 검증 사유 코드와 confidence도 포함합니다. 콘솔 설정과 독립적으로 파일 기록을 수행합니다. FULL에서 API 장애가 발생해도 앞선 LIGHT usage는 보존됩니다. 상세 설정과 집계 스크립트는 [AI Failover 문서](ai-inference-failover.md)를 참고하세요.
 
 ### 신뢰도와 실패 판단
 
@@ -486,3 +483,6 @@ flowchart TD
 7. `GlobalExceptionHandler`와 `app.js.showResult()`: 오류와 결과가 사용자에게 전달되는 방식을 확인합니다.
 
 실행 방법과 API 요청 예제는 프로젝트 루트의 [README.md](../README.md)를 참고하세요.
+
+
+현재 JSONL 필드·Logback Appender·일별 gzip Rolling·보관 정책은 [AI 호출 이력 안내](ai-call-history.md)를 참고하세요.

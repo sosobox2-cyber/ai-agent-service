@@ -20,7 +20,7 @@ class AiUsageLoggerTest {
     }
 
     @Test void countsCachedTokensAsSubsetAndEstimatesCost() {
-        var usage = AiUsageLogger.measure(PurchaseOptionPromptMode.LIGHT, 1, response("gpt-4.1-mini", 800));
+        var usage = Fixtures.usageLogger(false, null).measureUsage(PurchaseOptionPromptMode.LIGHT, 1, response("gpt-4.1-mini", 800));
         assertThat(usage.input_tokens()).isEqualTo(1000);
         assertThat(usage.cached_tokens()).isEqualTo(800);
         assertThat(usage.output_tokens()).isEqualTo(200);
@@ -33,6 +33,15 @@ class AiUsageLoggerTest {
         assertThat(AiUsageLogger.measure(PurchaseOptionPromptMode.FULL, 1, response("gpt-4.1-mini", null)).cached_tokens()).isNull();
         assertThat(AiUsageLogger.measure(PurchaseOptionPromptMode.FULL, 1, response("gpt-4.1-mini", null)).estimated_cost_usd()).isNull();
         assertThat(AiUsageLogger.measure(PurchaseOptionPromptMode.FULL, 1, response("other-model", 0)).estimated_cost_usd()).isNull();
+    }
+
+    @Test void externalPricesCanChangeAndMissingPricesDoNotInventCost() {
+        var pricing = new com.cware.ai.config.AiUsagePricing();
+        assertThat(pricing.estimate("gpt-4.1-mini", 1000, 800, 200)).isNull();
+        pricing.setModels(java.util.Map.of("gpt-4.1-mini", new com.cware.ai.config.AiUsagePricing.Rates(
+                new java.math.BigDecimal("2"), new java.math.BigDecimal("1"), new java.math.BigDecimal("3"))));
+        assertThat(pricing.estimate("gpt-4.1-mini", 1000, 800, 200)).isEqualByComparingTo("0.0018");
+        assertThat(pricing.estimate("gpt-4.1-mini", 1000, null, 200)).isNull();
     }
 
     @Test void disabledByDefaultAndLogsOnlyUsageWhenEnabled(CapturedOutput output) {

@@ -19,8 +19,7 @@ class BundleWeightContextTest {
 
     private InferenceRequest named(String name) throws Exception {
         var r = request();
-        return new InferenceRequest(r.goodsId(), name, r.brand(), r.categoryName(), r.coupangCategoryId(),
-                r.coupangCategoryName(), r.allowedPurchaseOptions(), r.options(), r.productNoticeText());
+        return new InferenceRequest(r.goodsId(), name, r.categoryName(), r.allowedPurchaseOptions(), r.options(), r.productNoticeText());
     }
 
     private MappingProposal.Entry entry(InferenceRequest r, String target, String value) {

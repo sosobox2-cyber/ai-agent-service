@@ -1,10 +1,8 @@
 {
   "goodsId": "100000123",
   "goodsName": "남성 오버핏 반팔 티셔츠",
-  "brand": "ABC",
   "categoryName": "패션 > 남성의류 > 티셔츠",
-  "coupangCategoryId": "123456",
-  "coupangCategoryName": "남성 티셔츠",
+  "productNoticeText": "제품 소재: 면, 색상: 상세페이지 참조, 치수: 상세페이지 참조",
   "allowedPurchaseOptions": [
     "색상",
     "사이즈"

@@ -10,6 +10,33 @@ import static org.assertj.core.api.Assertions.*;
 class RequestValidationTest {
     private final RequestValidator validator = new RequestValidator();
 
+    @Test void acceptsTwoHundredPurchaseOptionsAndRejectsTwoHundredAndOne() {
+        var base = Fixtures.request();
+        var names = java.util.stream.IntStream.range(0, 201)
+                .mapToObj(i -> "option" + i).toList();
+        var units = names.stream()
+                .map(name -> new PurchaseOptionUnit(name, "kg", List.of("kg"))).toList();
+        try (var factory = Validation.buildDefaultValidatorFactory()) {
+            var beanValidator = factory.getValidator();
+            var accepted = new InferenceRequest(base.goodsId(), base.goodsName(), base.categoryName(),
+                    names.subList(0, 200), base.options(), base.productNoticeText(), units.subList(0, 200));
+            assertThat(beanValidator.validate(accepted)).isEmpty();
+            validator.validate(accepted);
+
+            var tooManyNames = new InferenceRequest(base.goodsId(), base.goodsName(), base.categoryName(),
+                    names, base.options(), base.productNoticeText(), units.subList(0, 200));
+            assertThat(beanValidator.validate(tooManyNames))
+                    .extracting(violation -> violation.getPropertyPath().toString())
+                    .containsExactly("allowedPurchaseOptions");
+
+            var tooManyUnits = new InferenceRequest(base.goodsId(), base.goodsName(), base.categoryName(),
+                    names.subList(0, 200), base.options(), base.productNoticeText(), units);
+            assertThat(beanValidator.validate(tooManyUnits))
+                    .extracting(violation -> violation.getPropertyPath().toString())
+                    .containsExactly("purchaseOptionUnits");
+        }
+    }
+
     @Test void acceptsAllowedOptionNames() {
         validator.validate(Fixtures.request());
         assertThat(Fixtures.request().allowedPurchaseOptions()).containsExactly("핏", "색상", "사이즈");
@@ -25,8 +52,7 @@ class RequestValidationTest {
 
     @Test void rejectsDuplicateAllowedNames() {
         var base = Fixtures.request();
-        var request = new InferenceRequest(base.goodsId(), base.goodsName(), base.brand(), base.categoryName(),
-                base.coupangCategoryId(), base.coupangCategoryName(), List.of("색상", "색상"),
+        var request = new InferenceRequest(base.goodsId(), base.goodsName(), base.categoryName(), List.of("색상", "색상"),
                 base.options(), base.productNoticeText());
         assertThatThrownBy(() -> validator.validate(request)).hasMessageContaining("입력");
     }

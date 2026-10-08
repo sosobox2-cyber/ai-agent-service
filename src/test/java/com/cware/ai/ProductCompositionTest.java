@@ -19,9 +19,9 @@ class ProductCompositionTest {
     private final ObjectMapper mapper = new ObjectMapper();
 
     private InferenceRequest request(String composition) {
-        return new InferenceRequest("composition-test", "선크림", null, "뷰티", "1", "선크림",
+        return new InferenceRequest("composition-test", "선크림", "뷰티>선크림",
                 List.of("수량", "개당 용량"), List.of(new SourceOption("1", "단일상품")),
-                null, List.of(), composition);
+                "제조국: 한국", List.of(), composition);
     }
 
     @Test void acceptsOmittedCompositionAndEnforcesMaximumLength() throws Exception {

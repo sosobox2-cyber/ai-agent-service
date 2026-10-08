@@ -1,73 +1,116 @@
-# 구매옵션 매핑 API 명세서
+# 구매옵션 매핑 API 연동 명세서
 
-현재 서버 구현 기준의 연동 안내입니다. 상품 정보를 보내면 구매옵션별 추론 결과와 서버 검증 결과를 반환합니다. 쿠팡 상품 등록·수정 기능은 제공하지 않습니다.
+현재 저장소의 Java 구현과 `application.yml`을 기준으로 작성했습니다. 상품 데이터와 단품 옵션명을 보내면 구매옵션 분석 결과와 서버의 최종 판단을 반환합니다. 예제의 상품 데이터·신뢰도·사용량·비용은 설명용이며 실제 AI 결과를 보장하지 않습니다.
 
-## 1. 주소와 호출 방식
+## 1. API 개요
+
+SK스토아 상품의 단품 옵션명을 쿠팡 구매옵션별 값으로 구분하는 동기식 API입니다. 한 요청에 상품 하나와 단품 1~200개를 전달합니다. 쿠팡 상품 등록·수정은 수행하지 않습니다.
+
+서버가 요청을 보고 분석 방식을 자동 선택합니다. 설정과 첫 분석 결과에 따라 상세 분석을 한 번 더 수행할 수 있습니다. 클라이언트가 LIGHT/FULL을 지정하는 요청 필드는 없습니다. 추가 분석은 응답 시간과 AI 호출 비용을 늘릴 수 있습니다.
+
+## 2. 호출 방법
 
 | 항목 | 사양 |
 | --- | --- |
-| 운영 기본 주소 | `https://ai-agent-service-seven.vercel.app` |
-| 로컬 기본 주소 | `http://127.0.0.1:8081` |
 | 메서드 | `POST` |
 | 경로 | `/api/v1/coupang/purchase-options/infer` |
+| 로컬 기본 주소 | `http://127.0.0.1:8081` — 기본 설정, 실행 환경에서 변경 가능 |
+| 기존 안내의 배포 주소 | `https://ai-agent-service-seven.vercel.app` — 저장소의 배포 안내에 기재된 주소이며 현재 가용성·인증·배포 버전은 이번 코드 검토로 확인하지 않음 |
 | 요청 헤더 | `Content-Type: application/json` |
-| 요청·응답 형식 | UTF-8 JSON |
-| 인증 | 현재 애플리케이션의 이 엔드포인트에는 별도 인증 헤더가 없습니다. OpenAI API 키는 서버에서 설정합니다. |
+| 응답 | JSON, 비스트리밍 |
+| 인코딩 | 요청 JSON 파일은 UTF-8로 저장 |
+| 인증 | 현재 애플리케이션에는 이 API의 인증 헤더 검사나 Spring Security 설정이 없음 |
+
+OpenAI API 키는 서버에서 설정합니다. 이 API 요청에 OpenAI 키를 보내지 마세요. 서버의 API 키가 없으면 실제 추론은 HTTP 503으로 반환되며 테스트 모드는 사용할 수 있습니다.
 
 ### 쿼리 매개변수
 
 | 이름 | 타입 | 기본값 | 설명 |
 | --- | --- | --- | --- |
-| `testMode` | boolean | `false` | `true`이면 OpenAI를 호출하지 않고 모의 추출합니다. |
+| `testMode` | boolean | `false` | `true`이면 실제 AI를 호출하지 않고 모의 추출 |
 
-실제 AI 호출은 서버의 API 키 설정이 필요하며 비용이 발생합니다. 테스트 모드는 API 키 없이 사용할 수 있지만 실제 AI의 판단과 동일한 결과를 보장하지 않습니다.
+연동 시 `true` 또는 `false`를 명시하세요. boolean으로 변환할 수 없는 값은 HTTP 400의 `INVALID_REQUEST`입니다. 본문에 `testMode`를 넣지 않습니다.
 
-## 2. 요청 필드
+### curl
 
-요청 본문에는 상품 객체를 직접 보냅니다. 클라이언트에서 `product`로 감싸지 않습니다.
+5절의 요청을 UTF-8 `request.json`으로 저장한 다음 호출합니다. 다음 예제는 과금이 없는 테스트 모드입니다.
+
+```bash
+curl --request POST 'http://127.0.0.1:8081/api/v1/coupang/purchase-options/infer?testMode=true' \
+  --header 'Content-Type: application/json' \
+  --data-binary '@request.json'
+```
+
+실제 AI 분석은 `testMode=false`로 바꾸거나 쿼리를 생략합니다. PowerShell에서는 `curl.exe`와 한 줄 명령을 사용할 수 있습니다. 운영 호출은 담당자가 확인한 기본 주소로 교체하세요.
+
+## 3. 연동 시 중요: 결과 처리 규칙
+
+**HTTP 200만으로 적용 가능한 결과라고 판단하면 안 됩니다.**
+
+| 확인 사항 | 처리 규칙 |
+| --- | --- |
+| `success` | HTTP 요청 성공이 아니라 추론 결과의 서버 최종 승인 여부 |
+| 적용 후보 | 기본적으로 `success=true && autoApplyCandidate=true`인 경우만 사용 |
+| 후속 처리 데이터 | `items` 사용. `purchaseOptions`의 키는 구매옵션명, 값은 추출 문자열 |
+| 최종 상세 | `optionMappings`는 최종 결과의 원본 단품·구매옵션·값을 보여주는 상세 매핑 |
+| AI 제안 | `aiAssessment.mappings`는 판단·검토 자료. 최종 적용 데이터로 사용하지 않음 |
+| `REVIEW_REQUIRED` | 정상적으로 반환되는 업무 판단 결과. 시스템 장애로 간주하지 않음 |
+| `RESULT_VALIDATION_FAILED` | 결과 검증 실패. HTTP 200이어도 최종 목록은 비어 있으므로 검토 |
+| `TEST_MODE` | 모의 결과가 있어도 실제 적용 대상으로 사용하지 않음 |
+
+현재 구현은 승인 시 두 플래그를 모두 true, 그 외에는 모두 false로 반환합니다. `autoApplyCandidate=true`는 후속 시스템의 적용 후보라는 뜻이며 **이 API가 쿠팡 상품을 등록하거나 수정했다는 뜻이 아닙니다.**
+
+허용 목록은 사용할 수 있는 구매옵션의 범위입니다. 모든 허용 구매옵션명이 반환되는 것은 아닙니다. 서버는 단품마다 최소 하나의 매핑을 요구하지만 각 단품에 모든 허용 항목이 있는지까지 검사하지 않습니다. 후속 시스템이 반드시 요구하는 구매옵션은 호출자가 추가로 확인하세요.
+
+## 4. Request
+
+상품 객체를 요청 본문으로 직접 보냅니다. `product` 객체로 감싸지 않습니다. 아래에 없는 필드(`brand`, `coupangCategoryId`, `coupangCategoryName`, `promptMode` 등)를 보내면 현재 Jackson 설정에 따라 `INVALID_JSON`이 발생합니다.
 
 | 필드 | 타입 | 필수 | 제한·설명 |
 | --- | --- | --- | --- |
-| `goodsId` | string | 예 | 상품 ID, 공백 불가, 최대 100자 |
-| `goodsName` | string | 예 | 상품명, 공백 불가, 최대 500자 |
-| `brand` | string | 아니오 | 브랜드, 최대 200자 |
-| `categoryName` | string | 예 | 원본 카테고리명, 공백 불가, 최대 500자 |
-| `coupangCategoryId` | string | 예 | 쿠팡 카테고리 ID, 공백 불가, 최대 100자 |
-| `coupangCategoryName` | string | 예 | 쿠팡 카테고리명, 공백 불가, 최대 500자 |
-| `allowedPurchaseOptions` | string[] | 예 | 허용 구매옵션명 1~20개, 각 항목 공백 불가·최대 100자, 중복 불가 |
-| `options` | object[] | 예 | 원본 단품 1~200개, null 항목 불가 |
-| `productNoticeText` | string | 아니오 | 상품정보고시 원문, 최대 20,000자 |
-| `productCompositionText` | string | 아니오 | 상품 기술서의 구성 원문, 최대 20,000자. 생략 또는 null 가능. 예: 본품 선크림 50ml 7개 + 사은품 파우치 1개 |
-| `purchaseOptionUnits` | object[] | 아니오 | 구매옵션명별 단위 설정, 최대 20개. 생략 또는 null이면 빈 목록으로 처리 |
+| `goodsId` | string | 예 | 상품 ID, 공백뿐인 값 불가, 최대 100자 |
+| `goodsName` | string | 예 | 상품명, 공백뿐인 값 불가, 최대 500자 |
+| `categoryName` | string | 예 | 내부 / SK스토아 카테고리명, 공백뿐인 값 불가, 최대 500자 |
+| `allowedPurchaseOptions` | string[] | 예 | 1~200개, 각 이름 공백뿐인 값 불가·최대 100자, 중복 불가 |
+| `options` | object[] | 예 | 단품 1~200개, null 항목 불가 |
+| `productNoticeText` | string | 예 | SK스토아 상품정보고시 원문, 공백뿐인 값 불가, 최대 20,000자 |
+| `purchaseOptionUnits` | object[] | 아니오 | 0~200개, null 항목 불가. 생략·null이면 빈 목록으로 처리 |
+| `productCompositionText` | string 또는 null | 아니오 | 상품 기술서·구성 원문, 최대 20,000자. 생략·null·빈 문자열·공백 문자열 허용 |
 
-### productCompositionText 사용 규칙
+필수 문자열 필드는 누락·null·빈 문자열·공백뿐인 문자열을 허용하지 않습니다. 필수 목록은 누락·null·빈 목록을 허용하지 않습니다. 두 모드에서 동일하게 요청을 검증합니다.
 
-상품 기술서의 구성 항목을 원문 문자열로 전달합니다. 상품정보고시(`productNoticeText`)와 별도 필드이며 생략, null 또는 빈 문자열로 전달할 수 있습니다. 최대 20,000자를 초과하면 HTTP 400의 `INVALID_REQUEST`로 반환합니다. 기존 요청에는 이 필드를 추가하지 않아도 됩니다.
-
-AI는 상품명·정보고시와 함께 읽고 본품과 사은품, 판매 묶음 수와 포장 안의 내용물 수를 구분합니다. 상품 공통 구성은 단일 단품 요청의 수량·용량·중량 판단에 사용하며, 여러 단품의 개별 옵션이나 원본 옵션명에 없는 일반 색상·사이즈·핏을 채우는 용도로 사용하지 않습니다. 사은품·증정품은 본품 계산에서 제외하도록 지시합니다. 자료 간 수량·구성이 충돌하면 임의로 어느 자료를 우선하지 않고 AI가 `certain=false`로 검토 사유를 설명하도록 지시합니다. 실제 AI 최종 결과가 불확실하면 `REVIEW_REQUIRED`로 반환합니다. 서버가 원문 간 충돌이나 계산의 정확성을 직접 검증한다는 뜻은 아닙니다.
-
-구성 내용만 전달해도 모든 구매옵션을 반환하는 것은 아닙니다. 필요한 수량·용량·중량 항목을 `allowedPurchaseOptions`에 포함하세요. 구성 내용은 `inputHash`에 포함되므로 값이 달라지면 해시도 달라집니다. 테스트 모드는 일부 명시된 수량·용량 패턴만 처리하며 복잡한 구성의 의미 판단을 검증하지 않습니다.
+길이는 Java 문자열의 길이 기준입니다. 일반 문자열은 자동으로 앞뒤 공백을 제거하지 않으며 중복·이름 포함 여부는 대소문자를 포함한 정확한 문자열로 비교합니다. 표시명을 그대로 전달하세요.
 
 ### options 항목
 
-| 필드 | 타입 | 필수 | 설명 |
+| 필드 | 타입 | 필수 | 제한·설명 |
 | --- | --- | --- | --- |
-| `optionId` | string | 예 | 단품 ID, 공백 불가·최대 100자, 요청 안에서 중복 불가 |
-| `optionName1` | string | 예 | 원본 단품 옵션명, 공백 불가·최대 500자 |
+| `optionId` | string | 예 | 공백뿐인 값 불가, 최대 100자, 같은 요청에서 중복 불가 |
+| `optionName1` | string | 예 | 실제 단품 옵션명, 공백뿐인 값 불가, 최대 500자 |
+
+옵션명 자체의 중복은 요청 검증에서 막지 않습니다. 다만 서로 다른 단품의 최종 구매옵션 조합이 같으면 결과 검증이 실패할 수 있습니다.
 
 ### purchaseOptionUnits 항목
 
-| 필드 | 타입 | 필수 | 설명 |
+| 필드 | 타입 | 필수 | 제한·설명 |
 | --- | --- | --- | --- |
-| `purchaseOptionName` | string | 예 | 최대 100자. `allowedPurchaseOptions`에 있는 이름과 정확히 매핑, 같은 이름의 설정 중복 불가 |
-| `defaultUnit` | string | 예 | 판단하기 어려울 때 사용하는 기본단위, 최대 30자 |
-| `unitOptions` | string[] | 예 | 단위 선택지 1~30개, 각 항목 최대 30자, 중복 불가 |
+| `purchaseOptionName` | string | 예 | 공백뿐인 값 불가·최대 100자. 허용 목록에 정확히 포함, 같은 이름의 설정 중복 불가 |
+| `defaultUnit` | string | 예 | 공백뿐인 값·앞뒤 공백 불가, 최대 30자 |
+| `unitOptions` | string[] | 예 | 1~30개. 각 항목 공백뿐인 값·앞뒤 공백 불가·최대 30자, 중복 불가 |
 
-단위 이름은 공백 문자열이나 앞뒤 공백을 포함할 수 없습니다. 기본단위는 단위 선택지에 포함되어 있지 않아도 됩니다. 설정된 구매옵션은 숫자와 선택지의 단위 또는 기본단위를 조합해 반환합니다. 적합한 선택지가 없으면 기본단위를 사용합니다.
+기본단위는 `unitOptions`에 없어도 됩니다. 색상·일반 사이즈는 단위 설정 없이 이름만 전달할 수 있습니다. 단위 선택지에 적합한 단위가 없으면 기본단위를 사용하도록 AI에 지시합니다. 서버가 단위를 자동 변환하거나 숫자를 재계산하지는 않습니다.
 
-단위 설정이 없는 구매옵션은 AI가 근거에 맞는 값을 도출합니다. 예를 들어 화면크기는 `109cm`, `43인치`처럼 반환할 수 있습니다. 단위를 모두 `개`로 강제하지 않습니다.
+단위 설정이 있는 결과는 숫자 바로 뒤에 선택지 또는 기본단위가 붙어야 합니다. 예: `6개`, `1,000ml`, `5.2kg`. `6 개`, 음수, 부호를 붙인 수, 지수 표기는 현재 검증 패턴에서 통과하지 않습니다. `calculation`이 있으면 `outputUnit`도 결과 값의 단위와 같아야 합니다.
 
-## 3. 요청 예제
+단위 설정이 없으면 값과 표기를 AI 제안 그대로 사용합니다. 화면크기의 `109cm`, `43인치`와 같은 값을 임의로 `개`로 바꾸지 않습니다.
+
+### productCompositionText
+
+상품정보고시와 별도로 기술서의 상품 구성을 원문으로 전달합니다. 생략해도 기존 요청은 유효합니다. 필요한 수량·용량·중량 항목은 `allowedPurchaseOptions`에 포함하세요.
+
+본품·사은품·묶음 구성 구분, 일반 색상·사이즈의 원문 유지 등은 AI 프롬프트의 판단 지침입니다. 구성 원문이 있다고 모든 항목을 반환하거나, 서버가 원문 충돌·계산 정확성을 보증하지는 않습니다. 상세 지침은 별도 API 내부 설계/운영 문서에서 설명합니다.
+
+## 5. Request 예제
 
 ### 색상·사이즈
 
@@ -75,10 +118,7 @@ AI는 상품명·정보고시와 함께 읽고 본품과 사은품, 판매 묶�
 {
   "goodsId": "sample-clothing",
   "goodsName": "블랙 니트탑",
-  "brand": "예제 브랜드",
   "categoryName": "의류>상의",
-  "coupangCategoryId": "1007572",
-  "coupangCategoryName": "의류>상의",
   "productNoticeText": "색상: 블랙, 치수: S(90) / M(95) / L(100) / XL(105)",
   "allowedPurchaseOptions": ["색상", "패션의류/잡화 사이즈"],
   "options": [
@@ -90,15 +130,13 @@ AI는 상품명·정보고시와 함께 읽고 본품과 사은품, 판매 묶�
 }
 ```
 
-### 기술서 구성에 따른 수량·용량과 단위 설정
+### 기술서 구성과 단위 설정
 
 ```json
 {
   "goodsId": "sample-sunscreen",
   "goodsName": "선크림 구성 상품",
   "categoryName": "뷰티>선크림",
-  "coupangCategoryId": "sample-category",
-  "coupangCategoryName": "뷰티>선케어",
   "productNoticeText": "용량: 50ml",
   "productCompositionText": "본품 선크림 50ml 7개 + 사은품 파우치 1개",
   "allowedPurchaseOptions": ["수량", "개당 용량"],
@@ -110,135 +148,120 @@ AI는 상품명·정보고시와 함께 읽고 본품과 사은품, 판매 묶�
 }
 ```
 
-예제의 카테고리 값은 호출 구조 설명용입니다. 실제 연동에서는 상품에 해당하는 카테고리 값을 전달하세요.
+본품 `수량=7개`, `개당 용량=50ml`를 기대하는 설명용 요청입니다. 사은품을 합친 `8개`나 총용량 `350ml`를 개당 용량으로 쓰는 값은 기대값과 다릅니다. 실제 AI의 값과 근거를 별도로 확인하세요.
 
-이 예제는 기술서 구성에서 본품 `수량=7개`, `개당 용량=50ml`를 판단하는 요청입니다. 사은품 파우치를 더해 `8개`로 반환하거나 총용량 `350ml`를 개당 용량으로 사용하는 결과는 기대값과 다릅니다. 실제 AI 응답의 값과 근거를 확인하세요.
+## 6. Response
 
-## 4. 호출 코드
+### 주요 필드 역할
 
-### curl
+| 필드 | 역할 | 적용 시 사용 |
+| --- | --- | --- |
+| `items` | 서버가 조립·검증한 단품별 최종 구매옵션 결과 | 두 승인 플래그를 확인한 후 후속 처리에 사용 |
+| `optionMappings` | 최종 매핑의 단품 ID·원본 옵션명·구매옵션명·값·근거 상세 | 결과 추적·검토에 사용 |
+| `aiAssessment` | AI 제안과 검토 정보. 최종 승인과 별개이며 실패 시에도 제안이 남을 수 있음 | 적용 데이터로 사용하지 않음 |
+| `serverAssessment` | 서버 최종 판단 코드·사유·신뢰도 기준 | 승인·보류 사유 확인 |
 
-앞의 요청 JSON을 UTF-8 파일 `request.json`으로 저장합니다. 다음 명령은 비용이 발생하지 않는 테스트 모드 호출입니다.
-
-```bash
-curl --request POST 'https://ai-agent-service-seven.vercel.app/api/v1/coupang/purchase-options/infer?testMode=true' \
-  --header 'Content-Type: application/json' \
-  --data-binary '@request.json'
-```
-
-실제 AI 추론은 `testMode=false`로 변경하거나 쿼리 매개변수를 생략합니다. PowerShell에서는 `curl.exe`를 사용하고 명령을 한 줄로 입력할 수 있습니다.
-
-### JavaScript
-
-```javascript
-async function inferPurchaseOptions(product, testMode = true) {
-  const response = await fetch(
-    `/api/v1/coupang/purchase-options/infer?testMode=${testMode}`,
-    {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(product)
-    }
-  );
-  const result = await response.json();
-  if (!response.ok) {
-    throw new Error(`${result.errorCode}: ${result.reason}`);
-  }
-  // HTTP 200에서도 검토 필요·테스트 모드이면 success=false입니다.
-  return result;
-}
-```
-
-이 코드는 같은 서버에서 실행하는 화면 기준입니다. 다른 서버에서 호출할 때는 기본 주소를 붙이고 해당 환경의 접근 설정을 확인하세요.
-
-## 5. 응답 필드
+### 최상위 필드
 
 | 필드 | 타입 | 설명 |
 | --- | --- | --- |
-| `goodsId` | string 또는 null | 요청 상품 ID. 예외 처리 응답에서는 null일 수 있음 |
-| `success` | boolean | 실제 AI 결과가 검증과 신뢰도 기준을 통과했는지 |
-| `autoApplyCandidate` | boolean | 자동 적용 후보 여부. 현재 서비스가 상품에 직접 적용하지는 않음 |
-| `confidence` | number | AI 전체 신뢰도와 유효한 개별 매핑 신뢰도의 최솟값, 0~1 |
-| `optionMappings` | object[] | 최종 상세 매핑 목록 |
-| `items` | object[] | 단품별 최종 구매옵션 결과 |
-| `reason` | string | 결과 사유 |
-| `validationErrors` | string[] | 검증 오류 목록, 없으면 빈 배열 |
-| `errorCode` | string 또는 null | 정상 승인 시 null, 테스트·검토·실패 시 코드 |
-| `inputHash` | string 또는 null | 입력 해시, 예외 처리 응답에서는 null일 수 있음 |
-| `promptVersion` | string | 서버의 프롬프트 버전. 버전 문자열을 고정값으로 가정하지 말 것 |
+| `goodsId` | string 또는 null | 요청 상품 ID. 예외 처리 응답에서는 null |
+| `success` | boolean | 추론 결과의 최종 승인 여부. HTTP 요청 성공 여부와 다름 |
+| `autoApplyCandidate` | boolean | 후속 시스템의 적용 후보 여부. 실제 쿠팡 등록·수정은 수행하지 않음 |
+| `confidence` | number | 전체·유효한 개별 매핑 신뢰도의 최솟값. 유효한 전체 신뢰도가 없으면 0, 테스트·예외 응답은 0 |
+| `optionMappings` | object[] | 최종 상세 매핑. 결과 보류·실패 시 빈 배열 |
+| `items` | object[] | 최종 단품 결과. 결과 보류·실패 시 빈 배열 |
+| `reason` | string | 결과 사유. 문자열을 프로그램 분기용 코드로 해석하지 않음 |
+| `validationErrors` | string[] | 서버 검증 오류. 없으면 빈 배열이며 검토 필요여도 비어 있을 수 있음 |
+| `errorCode` | string 또는 null | 승인 시 null, 테스트·검토·오류 시 코드 |
+| `inputHash` | string 또는 null | 입력의 SHA-256 해시. 예외 처리에서는 null. 캐시 적중·중복 요청 억제를 뜻하지 않음 |
+| `promptVersion` | string | 서버 프롬프트 버전. 고정 문자열로 가정하지 않음 |
 | `inferenceSource` | string | `AI`, `TEST`, `NONE` |
-| `aiAssessment` | object 또는 null | 서버 승인 여부와 별개인 AI 제안 |
-| `serverAssessment` | object | 서버 판단 코드·사유·신뢰도 기준 |
-| `aiUsage` | object[] | 해당 요청의 실제 AI 호출별 사용량, 호출이 없거나 예외 처리 응답이면 빈 배열 |
+| `aiAssessment` | object 또는 null | 테스트·예외 응답은 null. 실제 분석에서는 최종 제안 또는 검토 정보 |
+| `serverAssessment` | object | 서버 최종 판단 |
+| `aiUsage` | object[] | 현재 요청의 AI 호출별 사용량. 호출이 없거나 예외 처리 응답이면 빈 배열 |
+
+`items`는 요청 `options`의 순서로 조립됩니다. JSON 객체 `purchaseOptions`의 키 순서에는 의존하지 마세요. 승인 시 신뢰도는 0~1이며 기본 승인 기준은 0.80입니다. 실제 기준은 `serverAssessment.confidenceThreshold`로 확인하세요. 신뢰도는 AI 자체 평가이며 정답 확률이 아닙니다.
+
+### items 항목
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `optionId` | string | 요청 단품 ID |
+| `purchaseOptions` | object | 구매옵션명 → 추출 값. 키와 값은 모두 문자열 |
+
+```json
+{"optionId": "1", "purchaseOptions": {"색상": "블랙", "패션의류/잡화 사이즈": "90"}}
+```
 
 ### optionMappings 항목
 
 | 필드 | 타입 | 설명 |
 | --- | --- | --- |
 | `optionId` | string | 원본 단품 ID |
-| `sourceOptionName` | string | 원본 옵션명 |
+| `sourceOptionName` | string | 요청의 원본 단품 옵션명 |
 | `targetPurchaseOptionName` | string | 허용 구매옵션명 |
-| `value` | string | 추출한 값 |
-| `confidence` | number | 개별 매핑 신뢰도 |
-| `evidenceSource` | string 또는 null | AI 응답은 `goodsName`, `productNoticeText`, `productCompositionText` 또는 null. 일반 옵션명 추출은 null |
-| `evidenceText` | string 또는 null | 근거 원문. 일반 옵션명 추출은 null일 수 있음 |
-| `calculation` | object 또는 null | 수량·단위 등의 연산 설명. 일반 문자열은 null일 수 있음 |
+| `value` | string | 추출 값 |
+| `confidence` | number | 개별 신뢰도 |
+| `evidenceSource` | string 또는 null | AI 스키마의 출처는 `goodsName`, `productNoticeText`, `productCompositionText` 또는 null |
+| `evidenceText` | string 또는 null | AI가 제안한 근거. 원문 일치 여부를 서버가 보증하지 않음 |
+| `calculation` | object 또는 null | AI가 제안한 연산 설명. 서버 재계산 결과가 아님 |
 
-### items 항목
+### aiAssessment / serverAssessment
 
-`optionId`는 단품 ID이며 `purchaseOptions`는 구매옵션명을 키, 추출 값을 값으로 갖는 객체입니다. 한 단품에 여러 구매옵션이 들어갈 수 있습니다.
+| 객체·필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `aiAssessment.certain` | boolean 또는 null | AI의 확실성 판단 또는 검토 전환 결과 |
+| `aiAssessment.confidence` | number 또는 null | 제안 전체 신뢰도. 최상위 최저 신뢰도와 다를 수 있음 |
+| `aiAssessment.mappings` | object[] 또는 null | 제안 매핑. 항목 필드는 `optionMappings`와 같으나 `sourceOptionName` 없음. 실패 정보에서는 null 항목이나 잘못된 값이 남을 수 있음 |
+| `aiAssessment.reason` | string 또는 null | AI 판단 또는 검토 사유 |
+| `serverAssessment.decisionCode` | string | `ACCEPTED`, `AI_UNCERTAIN`, `LOW_CONFIDENCE`, `RESULT_VALIDATION_FAILED`, `TEST_MODE` 또는 예외 오류 코드 |
+| `serverAssessment.reason` | string | 서버 승인·보류 사유 |
+| `serverAssessment.confidenceThreshold` | number | 서버의 최종 승인 신뢰도 기준 |
 
-```json
-{
-  "optionId": "1",
-  "purchaseOptions": {"색상": "블랙", "패션의류/잡화 사이즈": "90"}
-}
-```
+최종 AI 검증 실패 시 추론 어댑터가 `certain=false`와 검토 사유로 제안을 바꿀 수 있습니다. 따라서 `aiAssessment`는 AI 응답 원문 그대로라고 가정하면 안 됩니다. 파싱하지 못한 응답은 빈 제안 목록으로 나타날 수 있습니다. 낮은 신뢰도로 보류한 경우에는 `aiAssessment.certain=true`가 남아 있을 수도 있습니다.
 
-### AI·서버 판단
-
-`aiAssessment`는 `certain`(boolean), `confidence`(number), `mappings`(배열), `reason`(문자열)을 포함합니다. 제안 매핑 필드는 `optionMappings`와 같지만 `sourceOptionName`은 없습니다. 검증 실패 시에도 AI 제안이 남아 있을 수 있으므로 승인된 결과로 사용하면 안 됩니다. 실제 AI의 최종 검증 실패 시 서버가 `certain=false`로 바꾸고 `reason`에 검토 사유를 남깁니다. 따라서 이 필드는 AI 원문 응답과 항상 같지는 않습니다. 파싱할 수 없는 최종 응답은 빈 제안 목록과 검토 사유로 나타납니다.
-
-`serverAssessment`는 `decisionCode`, `reason`, `confidenceThreshold`를 포함합니다. 판단 코드는 `ACCEPTED`, `AI_UNCERTAIN`, `LOW_CONFIDENCE`, `RESULT_VALIDATION_FAILED`, `TEST_MODE` 또는 예외 오류 코드입니다. 기본 신뢰도 기준은 0.8이며 서버 설정에 따라 달라질 수 있습니다.
-
-### calculation 객체
+### calculation
 
 | 필드 | 타입 | 설명 |
 | --- | --- | --- |
 | `operation` | string | `DIRECT`, `CONVERT`, `SUM`, `PACK_COUNT`, `PACK_CONTENT` |
 | `outputUnit` | string | 출력 단위 |
-| `operands` | object[] | 피연산자 목록. 각 항목은 문자열 `amount`, 문자열 `unit`, 객체 `evidence` |
-| `context` | object 또는 null | 구성 판단을 설명하는 근거 |
+| `operands` | object[] | 각 피연산자는 문자열 `amount`, 문자열 `unit`, 객체 `evidence` |
+| `context` | object 또는 null | 구성 판단의 근거 |
 
-`evidence`와 `context`는 `source`와 `text` 문자열을 갖습니다. `source`는 실제 근거 출처인 `goodsName`, `productNoticeText`, `productCompositionText`, `optionName1` 중 하나입니다. `DIRECT`는 직접 추출, `CONVERT`는 단위 변환, `SUM`은 합산, `PACK_COUNT`는 묶음 수량, `PACK_CONTENT`는 묶음 내부 수량을 나타냅니다. 응답은 AI의 판단을 담고 있으며 수학적 정확성을 보증하는 필드는 아닙니다.
+`evidence`와 `context`는 문자열 `source`, `text`를 갖습니다. AI 스키마의 source는 `goodsName`, `productNoticeText`, `productCompositionText`, `optionName1` 중 하나입니다. DIRECT는 직접 추출, CONVERT는 단위 변환, SUM은 합산, PACK_COUNT는 묶음 수량, PACK_CONTENT는 묶음 내부 수량을 뜻합니다. 의미·원문 근거·연산 정확성은 AI의 판단이며 서버가 직접 재검증하지 않습니다.
 
-기술서 구성을 근거로 판단한 매핑에서는 `evidenceSource=productCompositionText`가 반환될 수 있습니다. 위 선크림 요청의 수량 매핑에 대한 설명용 발췌 예시는 다음과 같습니다. 실제 AI는 상품명·정보고시 등 다른 근거를 선택할 수도 있습니다.
+### aiUsage
 
-```json
-{
-  "optionId": "1",
-  "sourceOptionName": "단일상품",
-  "targetPurchaseOptionName": "수량",
-  "value": "7개",
-  "confidence": 0.95,
-  "evidenceSource": "productCompositionText",
-  "evidenceText": "본품 선크림 50ml 7개",
-  "calculation": {
-    "operation": "DIRECT",
-    "outputUnit": "개",
-    "operands": [{
-      "amount": "7",
-      "unit": "개",
-      "evidence": {"source": "productCompositionText", "text": "본품 선크림 50ml 7개"}
-    }],
-    "context": null
-  }
-}
-```
+응답의 토큰·비용 필드는 **snake_case**입니다. 서버 내부 JSONL 로그의 camelCase 필드와 혼동하지 마세요.
 
-## 6. 성공 응답 예제
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `model` | string | 응답 모델명. 확인 불가하거나 허용된 모델명 형식 밖이면 `unknown` |
+| `mode` | string | 호출에 사용한 `LIGHT` 또는 `FULL`. 클라이언트 선택값이 아님 |
+| `attempt` | integer | 최초 호출 1, 추가 상세 분석 2 |
+| `input_tokens` | integer 또는 null | API 응답 usage의 입력 토큰 |
+| `cached_tokens` | integer 또는 null | API가 제공한 캐시 입력. 입력 토큰에 이미 포함됨 |
+| `output_tokens` | integer 또는 null | API 응답 usage의 출력 토큰 |
+| `total_tokens` | integer 또는 null | API 응답 usage의 전체 토큰 |
+| `estimated_cost_usd` | number 또는 null | 서버의 외부 단가 설정으로 계산한 예상 USD 비용 |
+| `inferenceId` | string 또는 null | 같은 상품 추론 요청의 호출을 연결하는 UUID. OpenAI request ID가 아님 |
+| `initialPromptMode` | string | 최초 선택 모드 |
+| `finalPromptMode` | string | 현재 호출 기준 마지막 모드 또는 예정 모드. FULL 전환 예정 LIGHT 행도 FULL |
+| `retryCount` | integer | 최초 0, 추가 분석 1 |
+| `retryReasons` | string[] | 진단용 검증·전환 사유 코드. 응답 처리 분기는 최종 승인 필드를 기준으로 함 |
+| `status` | string 또는 null | 호출별 `SUCCESS`, `VALIDATION_ERROR`, `REVIEW_REQUIRED`. 상품 요청의 최종 승인과 별도로 해석 |
 
-다음은 단품 하나에 대한 실제 AI 승인 응답 형태의 설명용 예제입니다. 신뢰도·사유·해시·버전·사용량은 요청마다 달라집니다. 토큰 값과 비용은 예시입니다.
+null은 확인 불가이며 실제 0과 다릅니다. 여러 호출의 사용량은 합산하되 캐시 토큰을 입력 토큰에 다시 더하지 마세요. 합산 대상 중 null이 있으면 알려진 값의 부분합과 완전한 합계를 구분하세요. 단가·입력·캐시·출력 중 필요한 값이 없으면 예상 비용은 null입니다.
+
+API 호출 중 예외가 발생하면 응답은 `aiUsage=[]`입니다. 첫 번째 호출이 과금된 뒤 추가 호출이 실패해도 응답에서 첫 호출의 사용량을 받을 수 없습니다. 빈 배열을 무료 호출의 증거로 사용하지 마세요. 서버 운영 담당자는 내부 호출 이력을 확인할 수 있습니다.
+
+## 7. Response 예제
+
+### 실제 AI 승인 형태
+
+다음은 5절 의류 요청에서 `options`를 ID 1 하나로 줄였을 때의 설명용 응답입니다. 네 단품 요청 전체에 대한 응답을 의미하지 않습니다. 해시·버전·사유·토큰·비용은 예시입니다.
 
 ```json
 {
@@ -268,107 +291,106 @@ async function inferPurchaseOptions(product, testMode = true) {
       "calculation": null
     }
   ],
-  "items": [{"optionId": "1", "purchaseOptions": {"색상": "블랙", "패션의류/잡화 사이즈": "90"}}],
+  "items": [
+    {
+      "optionId": "1",
+      "purchaseOptions": {
+        "색상": "블랙",
+        "패션의류/잡화 사이즈": "90"
+      }
+    }
+  ],
   "reason": "원본 옵션명에서 색상과 사이즈를 확인했습니다.",
   "validationErrors": [],
   "errorCode": null,
-  "inputHash": "요청별 입력 해시",
+  "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "promptVersion": "coupang-option-v18",
   "inferenceSource": "AI",
   "aiAssessment": {
     "certain": true,
     "confidence": 0.95,
     "mappings": [
-      {"optionId": "1", "targetPurchaseOptionName": "색상", "value": "블랙", "confidence": 0.95, "evidenceSource": null, "evidenceText": null, "calculation": null},
-      {"optionId": "1", "targetPurchaseOptionName": "패션의류/잡화 사이즈", "value": "90", "confidence": 0.95, "evidenceSource": null, "evidenceText": null, "calculation": null}
+      {
+        "optionId": "1",
+        "targetPurchaseOptionName": "색상",
+        "value": "블랙",
+        "confidence": 0.95,
+        "evidenceSource": null,
+        "evidenceText": null,
+        "calculation": null
+      },
+      {
+        "optionId": "1",
+        "targetPurchaseOptionName": "패션의류/잡화 사이즈",
+        "value": "90",
+        "confidence": 0.95,
+        "evidenceSource": null,
+        "evidenceText": null,
+        "calculation": null
+      }
     ],
     "reason": "원본 옵션명에서 색상과 사이즈를 확인했습니다."
   },
-  "serverAssessment": {"decisionCode": "ACCEPTED", "reason": "서버 검증을 통과했습니다.", "confidenceThreshold": 0.8},
-  "aiUsage": [{"model": "gpt-4.1-mini-2025-04-14", "mode": "LIGHT", "attempt": 1, "input_tokens": 2000, "cached_tokens": 0, "output_tokens": 500, "total_tokens": 2500, "estimated_cost_usd": 0.0016}]
+  "serverAssessment": {
+    "decisionCode": "ACCEPTED",
+    "reason": "AI의 확실 판정, 신뢰도 기준 및 서버의 기본 구조 검증을 통과했습니다. 값과 근거는 AI 판단을 사용합니다.",
+    "confidenceThreshold": 0.8
+  },
+  "aiUsage": [
+    {
+      "model": "gpt-4.1-mini-2025-04-14",
+      "mode": "LIGHT",
+      "attempt": 1,
+      "input_tokens": 2000,
+      "cached_tokens": 0,
+      "output_tokens": 500,
+      "total_tokens": 2500,
+      "estimated_cost_usd": 0.0016,
+      "inferenceId": "5d6d0000-0000-4000-8000-000000000001",
+      "initialPromptMode": "LIGHT",
+      "finalPromptMode": "LIGHT",
+      "retryCount": 0,
+      "retryReasons": [],
+      "status": "SUCCESS"
+    }
+  ]
 }
 ```
 
-## 7. AI 호출 사용량
+### 구성 근거와 calculation 상세 발췌
 
-| 필드 | 타입 | 설명 |
-| --- | --- | --- |
-| `model` | string | API 응답의 모델명 |
-| `mode` | string | 선택한 프롬프트 모드 `LIGHT` 또는 `FULL` |
-| `attempt` | integer | 1은 최초 호출, 2는 LIGHT 검증 실패 후 FULL 재추론 |
-| `input_tokens` | integer 또는 null | 입력 토큰 수 |
-| `cached_tokens` | integer 또는 null | 입력 중 캐시된 토큰 수. 입력에 이미 포함됨 |
-| `output_tokens` | integer 또는 null | 출력 토큰 수 |
-| `total_tokens` | integer 또는 null | API에서 보고한 전체 토큰 수 |
-| `estimated_cost_usd` | number 또는 null | 서버에 등록된 모델 단가로 계산한 예상 USD 비용 |
-| `inferenceId` | string 또는 null | 같은 상품 추론 요청의 호출을 연결하는 UUID |
-| `initialPromptMode` | string | 최초 선택 모드 LIGHT/FULL |
-| `finalPromptMode` | string | 최종 모드. 재추론 예정 LIGHT 행에서도 FULL |
-| `retryCount` | integer | 최초 0, FULL 재추론 1 |
-| `retryReasons` | string[] | 전환 사유 목록. FULL 행에는 최초 LIGHT의 실패 사유 유지 |
-| `status` | string 또는 null | SUCCESS, VALIDATION_ERROR, REVIEW_REQUIRED. 예외 호출은 JSONL에 API_ERROR로 기록 |
-
-알 수 없는 값은 null이며 0과 구분해야 합니다. 여러 호출이 있으면 각 호출을 합산합니다. 캐시 토큰을 입력 토큰에 다시 더하지 않습니다. 예상 비용은 청구서 확정 금액이 아니며 모델 단가나 사용량을 확인할 수 없으면 null입니다.
-
-LIGHT는 단순 문자열 추출 요청에 사용합니다. 계산형 옵션·단위 설정·판단이 모호한 요청은 FULL을 사용합니다. 클라이언트 요청에 모드 선택 필드는 없습니다. 테스트 모드는 `aiUsage=[]`입니다. 호출 중 예외로 반환된 오류 응답의 빈 목록은 비용 발생 여부를 판단하는 근거로 사용할 수 없습니다.
-
-기본 JSONL 경로는 `logs/ai-usage.jsonl`이며 `AI_USAGE_JSONL_PATH`로 변경합니다. 파일 기록은 `AI_USAGE_JSONL_ENABLED=true`가 기본이며 콘솔 로그 설정과 독립적입니다. JSONL에는 응답 메트릭 외에 `goodsId`, `promptMode`, `retryReason`(첫 사유), `validationPassed`, `validationErrors`, `certain`, `confidence`, `minimumMappingConfidence`, `timestamp`도 기록합니다. FULL 호출 자체가 실패해도 앞선 LIGHT 사용량은 이 파일에서 확인할 수 있습니다. 검증 실패 행은 실제 수신한 usage를 보존하고, API 오류로 알 수 없는 사용량은 null로 기록합니다.
-
-## 8. 오류 코드와 HTTP 상태
-
-### LIGHT → FULL Failover
-
-서버는 최초 요청에서 PromptSelector로 LIGHT/FULL을 선택합니다. LIGHT 결과가 `certain=false`이거나 매핑·응답 검증에 실패한 경우 같은 상품 데이터로 FULL을 명시하여 한 번만 호출합니다. 재추론에서도 기존 User Prompt와 JSON Schema를 사용하며 이전 응답을 덧붙이지 않습니다. 처음부터 FULL인 요청에는 이 재호출을 적용하지 않습니다.
-
-| 상황 | 최대 호출 수 |
-| --- | --- |
-| 정상 LIGHT | 1 |
-| LIGHT 검증 실패 | 2 |
-| 처음부터 FULL | 1 |
-
-FULL도 검증에 실패하면 HTTP 200에서 `errorCode=REVIEW_REQUIRED`, `success=false`, `autoApplyCandidate=false`, `aiAssessment.certain=false`를 반환하며 `items`와 `optionMappings`는 비웁니다. FULL 호출 자체가 실패하면 기존 timeout·429·5xx 등의 오류 정책을 유지합니다. 이 장애에는 Prompt Failover를 추가 적용하지 않습니다.
-
-기본 설정은 `purchase-option.ai.retry.enabled=true`, `max-retries=1`, `confidence-threshold-enabled=false`, `confidence-threshold=0.7`입니다. `max-retries`는 0 또는 1만 허용합니다. 클라이언트 요청 JSON에는 재추론 설정 필드가 없습니다. 낮은 confidence만으로는 재추론하지 않으며 기존 최종 승인 기준 `app.inference.confidence-threshold=0.80`은 별개로 유지합니다.
-
-| 재추론 사유 코드 | 조건 |
-| --- | --- |
-| CERTAIN_FALSE | certain=false |
-| MISSING_OPTION_MAPPING | 입력 optionId에 대한 매핑 누락 |
-| UNKNOWN_OPTION_ID | 입력에 없는 optionId |
-| INVALID_PURCHASE_OPTION | allowedPurchaseOptions 밖의 이름 |
-| DUPLICATE_MAPPING | 동일 (optionId, targetPurchaseOptionName) 중복 |
-| EMPTY_VALUE | mapping이 null 또는 필수 필드가 null/blank |
-| INVALID_RESPONSE | 응답 형식·완료 여부 또는 기존 서버 검증 실패 |
-| LOW_CONFIDENCE | 선택적 재추론 신뢰도 기준을 활성화한 경우에만 사용 |
-
-### LIGHT → FULL 사용량 예제
-
-다음은 LIGHT의 단품 매핑 누락을 FULL이 해결한 경우의 `aiUsage` 예시입니다. 수치와 UUID는 설명용이며 실제 요청의 사용량은 API 응답에서 가져옵니다.
+선크림 요청의 수량 매핑 설명용 예제입니다. 실제 AI가 다른 근거를 선택할 수도 있습니다.
 
 ```json
-[
-  {
-    "model": "gpt-4.1-mini", "mode": "LIGHT", "attempt": 1,
-    "input_tokens": 1000, "cached_tokens": 800, "output_tokens": 200,
-    "total_tokens": 1200, "estimated_cost_usd": 0.00048,
-    "inferenceId": "5d6d0000-0000-4000-8000-000000000001",
-    "initialPromptMode": "LIGHT", "finalPromptMode": "FULL", "retryCount": 0,
-    "retryReasons": ["MISSING_OPTION_MAPPING", "INVALID_RESPONSE"], "status": "VALIDATION_ERROR"
-  },
-  {
-    "model": "gpt-4.1-mini", "mode": "FULL", "attempt": 2,
-    "input_tokens": 1000, "cached_tokens": 800, "output_tokens": 200,
-    "total_tokens": 1200, "estimated_cost_usd": 0.00048,
-    "inferenceId": "5d6d0000-0000-4000-8000-000000000001",
-    "initialPromptMode": "LIGHT", "finalPromptMode": "FULL", "retryCount": 1,
-    "retryReasons": ["MISSING_OPTION_MAPPING", "INVALID_RESPONSE"], "status": "SUCCESS"
+{
+  "optionId": "1",
+  "sourceOptionName": "단일상품",
+  "targetPurchaseOptionName": "수량",
+  "value": "7개",
+  "confidence": 0.95,
+  "evidenceSource": "productCompositionText",
+  "evidenceText": "본품 선크림 50ml 7개",
+  "calculation": {
+    "operation": "DIRECT",
+    "outputUnit": "개",
+    "operands": [
+      {
+        "amount": "7",
+        "unit": "개",
+        "evidence": {
+          "source": "productCompositionText",
+          "text": "본품 선크림 50ml 7개"
+        }
+      }
+    ],
+    "context": null
   }
-]
+}
 ```
 
-### FULLでも失敗した場合の応答例
+### 추가 분석도 검토 필요인 경우 — 주요 필드 발췌
 
-다음은 단품 1개 입력에서 최종 FULL도 불확실하다고 판단한 경우의 주요 필드 발췌입니다. 나머지 기존 응답 필드도 정상적으로 반환합니다.
+최종 적용 목록은 비어 있지만 검토용 제안은 남을 수 있습니다. 전체 응답에는 해시·버전·출처·`aiUsage` 등 나머지 필드도 포함됩니다.
 
 ```json
 {
@@ -382,62 +404,175 @@ FULL도 검증에 실패하면 HTTP 200에서 `errorCode=REVIEW_REQUIRED`, `succ
   "validationErrors": [],
   "errorCode": "REVIEW_REQUIRED",
   "aiAssessment": {
-    "certain": false, "confidence": 0.95,
-    "mappings": [{"optionId": "1", "targetPurchaseOptionName": "색상", "value": "블랙", "confidence": 0.95,
-      "evidenceSource": null, "evidenceText": null, "calculation": null}],
+    "certain": false,
+    "confidence": 0.95,
+    "mappings": [
+      {
+        "optionId": "1",
+        "targetPurchaseOptionName": "색상",
+        "value": "블랙",
+        "confidence": 0.95,
+        "evidenceSource": null,
+        "evidenceText": null,
+        "calculation": null
+      }
+    ],
     "reason": "REVIEW_REQUIRED: [CERTAIN_FALSE]; certain=false; AI: 원문만으로 판단하기 어렵습니다."
   },
-  "serverAssessment": {"decisionCode": "AI_UNCERTAIN", "reason": "AI가 certain=false로 판단하여 서버가 적용을 보류했습니다.", "confidenceThreshold": 0.8}
+  "serverAssessment": {
+    "decisionCode": "AI_UNCERTAIN",
+    "reason": "AI가 certain=false로 판단하여 서버가 적용을 보류했습니다.",
+    "confidenceThreshold": 0.8
+  }
 }
 ```
 
-이 예시의 제안 매핑은 검토용입니다. 오류 상세는 `reason`, `validationErrors`와 각 호출 로그의 검증 결과를 함께 확인합니다. `CERTAIN_FALSE`만 있는 경우 기존 구조 검증 오류인 `validationErrors`는 빈 목록일 수 있습니다.
+### 추가 분석 시 aiUsage 발췌
 
-### 오류 코드
+두 호출의 UUID는 같고 사용량은 각각 기록됩니다. 첫 행의 `VALIDATION_ERROR`만 보고 최종 실패로 처리하지 마세요.
 
-| HTTP | errorCode | 의미 |
+```json
+[
+  {
+    "model": "gpt-4.1-mini",
+    "mode": "LIGHT",
+    "attempt": 1,
+    "input_tokens": 1000,
+    "cached_tokens": 800,
+    "output_tokens": 200,
+    "total_tokens": 1200,
+    "estimated_cost_usd": 0.00048,
+    "inferenceId": "5d6d0000-0000-4000-8000-000000000001",
+    "initialPromptMode": "LIGHT",
+    "finalPromptMode": "FULL",
+    "retryCount": 0,
+    "retryReasons": [
+      "MISSING_OPTION_MAPPING",
+      "INVALID_RESPONSE"
+    ],
+    "status": "VALIDATION_ERROR"
+  },
+  {
+    "model": "gpt-4.1-mini",
+    "mode": "FULL",
+    "attempt": 2,
+    "input_tokens": 1000,
+    "cached_tokens": 800,
+    "output_tokens": 200,
+    "total_tokens": 1200,
+    "estimated_cost_usd": 0.00048,
+    "inferenceId": "5d6d0000-0000-4000-8000-000000000001",
+    "initialPromptMode": "LIGHT",
+    "finalPromptMode": "FULL",
+    "retryCount": 1,
+    "retryReasons": [
+      "MISSING_OPTION_MAPPING",
+      "INVALID_RESPONSE"
+    ],
+    "status": "SUCCESS"
+  }
+]
+```
+
+## 8. 오류 코드 / HTTP Status
+
+| HTTP | errorCode | 의미·권장 대응 |
 | --- | --- | --- |
-| 200 | null | 실제 AI 결과 승인 |
-| 200 | `TEST_MODE` | 모의 추출 완료, 자동 적용 대상 아님 |
-| 200 | `REVIEW_REQUIRED` | 실제 AI 최종 검증 실패·불확실 또는 신뢰도 기준 미달 |
-| 200 | `RESULT_VALIDATION_FAILED` | 테스트 모드 등의 결과 검증 실패 |
-| 400 | `INVALID_REQUEST` | 필드 제약, 중복 값 또는 쿼리 매개변수 오류 |
-| 400 | `INVALID_JSON` | JSON 해석 실패 |
-| 429 | `AI_RATE_LIMIT` | OpenAI 요청 제한 |
-| 500 | `INTERNAL_ERROR` | 예상하지 못한 서버 오류 |
-| 502 | `AI_UPSTREAM_ERROR` | 외부 AI 호출 실패 |
-| 503 | `AI_NOT_CONFIGURED` | 실제 AI 호출에 필요한 서버 API 키 미설정 |
-| 504 | `AI_TIMEOUT` | 외부 시간 초과 또는 OpenAI 408·504 |
+| 200 | null | 실제 AI 결과 승인. 두 승인 플래그를 확인하고 `items` 사용 |
+| 200 | `TEST_MODE` | 모의 결과. 실제 적용 금지 |
+| 200 | `REVIEW_REQUIRED` | 최종 AI 불확실·검증 실패 또는 신뢰도 기준 미달. 입력과 판단 사유 검토 |
+| 200 | `RESULT_VALIDATION_FAILED` | 결과 구조·조립 검증 실패. 테스트 모드 및 서비스의 방어 분기에서 반환 가능 |
+| 400 | `INVALID_REQUEST` | 필수·길이·개수 제약, 중복·단위 설정 또는 쿼리 변환 오류 |
+| 400 | `INVALID_JSON` | 잘못된 JSON, 모르는 필드, 본문 구조·타입 오류 등 |
+| 429 | `AI_RATE_LIMIT` | 외부 AI 요청 제한 |
+| 500 | `INTERNAL_ERROR` | 예상하지 못한 서버 예외 |
+| 502 | `AI_UPSTREAM_ERROR` | 외부 AI 호출 실패. 외부의 다른 HTTP 오류도 이 코드로 변환 |
+| 503 | `AI_NOT_CONFIGURED` | 서버의 OpenAI 키 미설정. 서버 담당자 확인 |
+| 504 | `AI_TIMEOUT` | 감지된 시간 초과 또는 외부 408·504 |
 
-### 잘못된 요청 응답 예제
+표는 현재 컨트롤러·서비스·예외 처리기에서 확인되는 코드입니다. 잘못된 URL·메서드·Content-Type, 프록시/배포 플랫폼 오류까지 같은 JSON 계약을 보장하는 목록은 아닙니다. 현재 포괄 예외 처리기는 처리되지 않은 프레임워크 예외도 `INTERNAL_ERROR`로 바꿀 수 있으므로 임의로 404·405·415 등의 JSON 계약을 가정하지 마세요.
+
+AI가 돌려준 JSON을 파싱하지 못하거나 응답이 완료되지 않았으면 현재 추론 경로에서 검토 결과로 처리합니다. 해당 파싱 예외의 내부 코드 `AI_INVALID_JSON`을 일반적인 외부 오류 계약으로 사용하지 마세요. 상세 경로는 내부 문서에 정리되어 있습니다.
+
+### 잘못된 요청 — 전체 응답 설명용 예제
+
+중복 단품 ID로 요청 검증이 실패한 경우입니다. 예외 처리 응답은 상품 ID·해시를 보존하지 않습니다.
 
 ```json
 {
-  "goodsId": null,
-  "success": false,
-  "autoApplyCandidate": false,
-  "confidence": 0,
-  "optionMappings": [],
-  "items": [],
+  "goodsId": null, "success": false, "autoApplyCandidate": false, "confidence": 0,
+  "optionMappings": [], "items": [],
   "reason": "입력 데이터를 확인하세요.",
   "validationErrors": ["optionId는 중복될 수 없습니다."],
-  "errorCode": "INVALID_REQUEST",
-  "inputHash": null,
-  "promptVersion": "coupang-option-v18",
-  "inferenceSource": "NONE",
+  "errorCode": "INVALID_REQUEST", "inputHash": null,
+  "promptVersion": "coupang-option-v18", "inferenceSource": "NONE",
   "aiAssessment": null,
   "serverAssessment": {"decisionCode": "INVALID_REQUEST", "reason": "입력 데이터를 확인하세요.", "confidenceThreshold": 0.8},
   "aiUsage": []
 }
 ```
 
-## 9. 결과 처리 규칙
+업무 보류 결과와 통신 실패를 구분하세요. 클라이언트 자동 재호출은 서버가 제공하는 계약이 아닙니다. 응답을 못 받았더라도 이미 AI 호출·과금이 진행되었을 수 있으며 같은 입력을 다시 보내면 별도 요청으로 처리합니다.
 
-1. HTTP 상태와 JSON 응답을 함께 확인합니다. HTTP 200만으로 성공을 판단하지 않습니다.
-2. `success=true`이고 `autoApplyCandidate=true`인 경우 최종 `items`를 적용 후보로 사용합니다.
-3. `REVIEW_REQUIRED`와 `RESULT_VALIDATION_FAILED`에서는 최종 결과 목록이 비워집니다. `aiAssessment.mappings`는 검토 자료입니다.
-4. `TEST_MODE`는 `success=false`, `autoApplyCandidate=false`, `confidence=0`, `inferenceSource=TEST`이며 모의 `items`와 `optionMappings`가 반환될 수 있습니다.
-5. LIGHT 검증 실패 시 FULL을 한 번 호출합니다. 정상 LIGHT와 처음부터 FULL은 1회, LIGHT 검증 실패는 최대 2회입니다. 최종 FULL 실패 후 추가 호출은 없습니다.
-6. 재추론된 결과가 성공하면 FULL 결과만 적용 후보로 사용합니다. 두 호출의 비용은 모두 합산하며 연결에는 `inferenceId`를 사용합니다.
+## 9. 테스트 모드
 
-신뢰도는 AI 전체 confidence와 각 매핑 confidence 중 최솟값입니다. 실제 승인에는 `certain=true`, 서버의 신뢰도 기준 이상, 결과 검증 통과가 모두 필요합니다. AI 신뢰도는 자체 평가값이며 실제 정답 확률을 의미하지 않습니다.
+`testMode=true`는 OpenAI를 호출하지 않으므로 API 키와 AI 비용이 필요하지 않습니다. 기본 색상·숫자 사이즈·핏, 일부 명시된 수량·용량·중량·화면크기 패턴을 모의 추출합니다. 복잡한 구성이나 실제 AI 정확도를 검증하는 기능이 아닙니다.
+
+모의 결과 검증을 통과하면 `errorCode=TEST_MODE`, `inferenceSource=TEST`, `success=false`, `autoApplyCandidate=false`, `confidence=0`, `aiAssessment=null`, `aiUsage=[]`입니다. 이 경우에만 모의 `items`와 `optionMappings`가 제공됩니다.
+
+검증에 실패하면 HTTP 200의 `RESULT_VALIDATION_FAILED`와 빈 최종 목록을 반환합니다. 요청이 잘못된 경우에는 실제 AI 모드와 마찬가지로 HTTP 400입니다. 모의 모드에서도 필수 상품정보고시·내부 카테고리를 보내세요.
+
+## 10. 결과 처리 예제
+
+같은 서버의 화면에서 사용하는 JavaScript 예제입니다. 다른 시스템에서는 확인된 기본 주소를 붙이세요. 브라우저의 다른 origin에서 호출할 경우 별도의 CORS 구성이 필요할 수 있으며 현재 프로젝트는 CORS 허용 설정을 제공하지 않습니다.
+
+```javascript
+async function inferPurchaseOptions(product, testMode = true) {
+  const response = await fetch(
+    `/api/v1/coupang/purchase-options/infer?testMode=${testMode}`,
+    {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(product)
+    }
+  );
+  // 프록시 오류 등 비JSON 응답과 네트워크 예외는 호출자가 별도로 처리합니다.
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error(`JSON 응답을 확인할 수 없습니다. HTTP ${response.status}`);
+  }
+  if (!response.ok) {
+    throw new Error(`${result.errorCode ?? 'HTTP_ERROR'}: ${result.reason ?? response.status}`);
+  }
+  if (result.inferenceSource === 'TEST' || result.errorCode === 'TEST_MODE') {
+    return {kind: 'TEST', previewItems: result.items ?? [], result};
+  }
+  if (result.success === true && result.autoApplyCandidate === true) {
+    // 필요하면 후속 시스템의 필수 구매옵션도 여기서 확인합니다.
+    return {kind: 'APPLY_CANDIDATE', items: result.items, result};
+  }
+  // REVIEW_REQUIRED / RESULT_VALIDATION_FAILED: 제안 매핑을 적용하지 않습니다.
+  return {
+    kind: 'REVIEW',
+    reason: result.serverAssessment?.reason ?? result.reason,
+    errors: result.validationErrors ?? [],
+    result
+  };
+}
+```
+
+이 예제는 적용 후보 데이터를 반환할 뿐 쿠팡 등록·수정을 실행하지 않습니다. 오류 메시지와 판단 사유는 진단용 문구이므로 내용 전체를 파싱해 업무 상태를 판단하지 마세요.
+
+## 11. 참고 사항 / 보안·운영 주의
+
+**현재 API에는 애플리케이션 인증과 호출량 제한이 없습니다.** 기본 로컬 주소는 127.0.0.1이며 Docker 배포 이미지는 0.0.0.0으로 수신합니다. 공개 주소로 배포하거나 프록시가 외부 요청을 전달하면 인증 없는 실제 AI 호출로 비용이 발생할 수 있습니다.
+
+운영 TODO: 외부 공개 전 인증 또는 네트워크 접근 제한, 호출량·비용 제한을 운영 담당자가 마련해야 합니다. 이번 문서 정리에서는 인증 기능을 추가하지 않았습니다. 배포 플랫폼·프록시에서 별도로 보호하는지는 저장소만으로 확인할 수 없습니다.
+
+서버는 호출별 최소 사용량 메타데이터를 JSONL로 기록할 수 있습니다. 클라이언트는 로그 파일에 직접 접근할 필요가 없으며 응답의 `aiUsage`를 사용합니다. 장애 문의는 상품 ID·실행 시각·오류 코드·판단 사유를 전달하세요. 예외 응답에 inferenceId가 없을 수 있습니다.
+
+AI 프롬프트에 전달되는 상품정보와 호출 이력의 기록 범위는 다릅니다. 로그에 원문이 없다고 AI에 원문이 전달되지 않는 것은 아닙니다. 상품정보를 실제 AI 모드로 보낼 때 이 점을 고려하세요.
+
+내부 선택 기준·재추론·프롬프트·스키마·검증·로그·설정은 별도 **API 구매옵션 추론 내부 설계/운영 문서**를 참고하세요. 화면 상단의 내부 설계/운영 링크 또는 `/ai-operations.html`에서 열 수 있습니다. 저장소 원문은 `src/main/resources/static/ai-operations.md`입니다.

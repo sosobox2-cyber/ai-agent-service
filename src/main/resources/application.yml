@@ -26,6 +26,19 @@ app:
     usage-log-enabled: ${AI_USAGE_LOG_ENABLED:false}
     usage-jsonl-enabled: ${AI_USAGE_JSONL_ENABLED:true}
     usage-jsonl-path: ${AI_USAGE_JSONL_PATH:logs/ai-usage.jsonl}
+    usage-jsonl-max-history: ${AI_USAGE_JSONL_MAX_HISTORY:30}
+    usage-jsonl-total-size-cap: ${AI_USAGE_JSONL_TOTAL_SIZE_CAP:1GB}
+    # 기존 추정 단가를 코드에서 외부 설정으로 이동. 운영 단가는 관리자가 갱신한다.
+    usage-pricing:
+      models:
+        "[gpt-4.1-mini]":
+          input-per-million: ${AI_PRICE_INPUT_PER_MILLION:0.40}
+          cached-per-million: ${AI_PRICE_CACHED_PER_MILLION:0.10}
+          output-per-million: ${AI_PRICE_OUTPUT_PER_MILLION:1.60}
+        "[gpt-4.1-mini-2025-04-14]":
+          input-per-million: ${AI_PRICE_INPUT_PER_MILLION:0.40}
+          cached-per-million: ${AI_PRICE_CACHED_PER_MILLION:0.10}
+          output-per-million: ${AI_PRICE_OUTPUT_PER_MILLION:1.60}
 purchase-option:
   ai:
     retry:

@@ -8,17 +8,14 @@ const resultDetails = document.querySelector('#result-details');
 const submitButton = document.querySelector('#submit-button');
 const testModeInput = document.querySelector('#test-mode');
 const noticeInput = form.elements.productNoticeText;
-const unitRows = document.querySelector('#unit-rows');
-const unitRowTemplate = document.querySelector('#unit-row-template');
+const purchaseOptionRows = document.querySelector('#purchase-option-rows');
+const purchaseOptionRowTemplate = document.querySelector('#purchase-option-row-template');
 
 const examples = {
   "sample": {
     "goodsId": "68535109",
     "goodsName": "[아이그너]아이그너 레터링 자카드 니트탑",
-    "brand": "아이그너",
     "categoryName": "스포츠/레저>스포츠패션/슈즈/아웃도어>스포츠의류(여성)긴팔",
-    "coupangCategoryId": "1007572",
-    "coupangCategoryName": "스포츠 의류>긴팔>여성 긴팔",
     "allowedPurchaseOptions": [
       "패션의류/잡화 사이즈",
       "색상"
@@ -47,9 +44,6 @@ const examples = {
     "goodsId": "64629042",
     "goodsName": "[리르]스마일 링클 패치 9박스 (1박스 10피스*5매)+무료체험분 10피스 1매",
     "categoryName": "뷰티>화장품/헤어/바디>스킨케어팩/마스크",
-    "coupangCategoryId": "BC73050300",
-    "coupangCategoryName": "화장품/향수>마스크/팩>마스크팩",
-    "brand": "리르",
     "productNoticeText": "005:제조국:한국,008:품질보증기준:관련 법 및 소비자 분쟁 해결 기준을 따름,041:내용물의 용량 또는 중량:스마일 링클패치 9박스(1박스: 5매, 총 50패치)+ 무료체험분 1매(10패치)\n※1매 (미간 패치 x 6, 팔자 패치 x 4 = 총 10패치)\n모양별 개별 중량 0.2g(최외부 지지체 포함), 1매 PET 필름 포함 약 3.5g,042:제품 주요 사양:모든 피부용,043:사용기한 또는 개봉 후 사용기간:제조일로부터 36개월 ,044:사용방법:본품을 피부에 붙이고 8시간 후 떼어낸다.,045:화장품제조업자, 화장품책임판매업자 및 맞춤형 화장품판매업자:㈜코바스 / (주)아이더블유컴퍼니\n,046:「화장품법」에 따라 기재 표시하여야 하는 모든 성분:아크릴레이트코폴리머,1,2-헥산다이올,소듐아크릴레이트/소듐아크릴로일다이메틸타우레이트코폴리머,폴리아이소부텐,글루코노락톤,피브이피,부틸렌글라이콜,정제수,카프릴릴/카프릴글루코사이드,솔비탄올리에이트,아데노신,글리세린,육두구추출물,수크로오스,소듐하이알루로네이트,포타슘하이알루로네이트,베타-글루칸,하이드롤라이즈드옥수수전분,병풀추출물,하이드롤라이즈드소듐하이알루로,047:「화장품법」에 따른 기능성 화장품(미백, 주름개선, 자외선 차단제품 등)의 경우 “화장품법에 따른 기능성 화장품 심사(또는 보고)를 필함”의 문구:피부의 주름개선에 도움을 준다.,048:사용할 때의 주의사항:1) 화장품 사용 시 또는 사용 후 직사광선에 의하여 사용부위가 붉은 반점, 부어오름 또는 가려움증 등의 이상 증상이나 부작용이 있는 경우에는 전문의 등과 상담할 것\n2) 상처가 있는 부위 등에는 사용을 자제할 것\n3) 보관 및 취급시의 주의사항\n 가. 어린이의 손이 닿지 않는 곳에 보관할 것\n 나. 직사광선을 피해서 보관할 것\n4) 눈 주위를 피,049:소비자상담 관련 전화번호:070-4062-3616",
     "allowedPurchaseOptions": [
       "개당 수량",
@@ -66,9 +60,6 @@ const examples = {
     "goodsId": "65578661",
     "goodsName": "[김소형헤밀레](미리주문)(최다구성패키지)김소형 본초순백 비단쌀 안색 선크림 50ml 7개",
     "categoryName": "뷰티>화장품/헤어/바디>썬케어선블록",
-    "coupangCategoryId": "48050018",
-    "coupangCategoryName": "뷰티>스킨케어>선케어>선크림",
-    "brand": "김소형헤밀레",
     "productNoticeText": "005:제조국:한국,008:품질보증기준:관련 법 및 소비자 분쟁 해결 기준을 따름,041:내용물의 용량 또는 중량:김소형 본초순백 비단쌀 안색 선크림 50ml,042:제품 주요 사양:모든 피부 타입,043:사용기한 또는 개봉 후 사용기간:제조일로부터 36개월까지 (26년 2월 이후 제조)\n\n수시 생산 제품으로 각 상품마다 제조년월일/소비기한(유통기한)/품질유지기한이 상이합니다. 발송될 상품의 정확한 정보를 확인하시려면 판매자에게 문의 바랍니다. (정보고시상 판매자 연락처 참조),044:사용방법:본 품 적당량을 취하여 피부에 고르게 펴 바른다.,045:화장품제조업자, 화장품책임판매업자 및 맞춤형 화장품판매업자:화장품제조업자:유씨엘(주) / 화장품책임판매업자:본초테라피김소형헤밀레(주),046:「화장품법」에 따라 기재 표시하여야 하는 모든 성분:정제수, 쌀수(200,000ppm), 호모살레이트, 부틸렌글라이콜, 비스-에칠헥실옥시페놀메톡시페닐트리아진, 옥토크릴렌, 다이부틸아디페이트, 티타늄디옥사이드, 1,2-헥산다이올, C12-15알킬벤조에이트, 나이아신아마이드, 아이소데케인, 트라이메틸실록시실리케이트, 실리카, 베헤닐알코올, 카프릴릴메티콘, 비닐다이메티콘, 글리세린, 암모늄아크릴로일다이메,047:「화장품법」에 따른 기능성 화장품(미백, 주름개선, 자외선 차단제품 등)의 경우 “화장품법에 따른 기능성 화장품 심사(또는 보고)를 필함”의 문구:자외선 차단(SPF50+ PA++++)+미백+주름개선 3중 기능성 화장품,048:사용할 때의 주의사항:1. 화장품 사용 시 또는 사용 후 직사광선에 의하여 사용부위가 붉은 반점, 부어오름 또는 가려움증 등의 이상 증상이나 부작용이 있는 경우 전문의 등과 상담할 것\n\n2. 상처가 있는 부위 등에는 사용을 자제할 것\n\n3. 보관 및 취급시의 주의사항\n\n가. 어린이의 손이 닿지 않는 곳에 보관할 것\n\n나. 직사광선을 피해서 보관할 것,049:소비자상담 관련 전화번호:고객센터 1566-3393",
     "allowedPurchaseOptions": [
       "개당 용량",
@@ -85,9 +76,6 @@ const examples = {
     "goodsId": "65579064",
     "goodsName": "[종가][종가] 전라도 포기김치 4.2kg + 파김치 1kg",
     "categoryName": "식품>가공식품>김치포기김치",
-    "coupangCategoryId": "BC15010600",
-    "coupangCategoryName": "김치/반찬>김치>포기김치>",
-    "brand": "종가",
     "productNoticeText": "049:소비자상담 관련 전화번호:080-080-8866,059:제조연월일, 소비기한 또는 품질유지기한:냉장보관 60일,066:식품의 유형:김치,067:생산자 및 소재지, 수입품의 경우 수입자를 함께 표기:대상(주)횡성공장,068:원재료명 (「농수산물의 원산지 표시 등에 관한 법률」에 따른 원산지 표시 포함) 및 함량 (원재료 함량 표시대상 식품에 한함):기타 수산물가공품, 양파, 액젓, 고춧가루, 마늘, 기타가공품, 무, 절임배추, 소스류, 소스류, 당류가공품, 기타가공품, 조미액젓, 갓, 곡류가공품, 액젓, 대파,069:영양성분(영양성분 표시대상 식품에 한함):전라도 포기김치 : 총내용량 4,200g, 100당 45kcal, 나트륨 580mg(29%), 탄수화물 6g(2%), 당류 3g(3%), 지방 1.2g(2%), 트랜스지방 0g, 포화지방 0g(0%), 콜레스테롤 0mg(0%), 단백질 2g(4%),070:유전자변형식품에 해당하는 경우의 표시:해당없음,071:영유아식 또는 체중조절식품 등에 해당하는 경우 표시광고 사전심의필:해당없음,072:포장단위별 내용량의 용량(중량), 수량:전라도 포기김치 4.2kg + 파1kg,157:소비자 안전을 위한 주의사항:- 대두, 밀, 새우, 잣 성분 혼입 가능\n\n- 계절에 따라 쪽파가 실파로 변경 될 수 있습니다. ,158:제품명:종가 칼칼하고 진하게 깊은 맛 전라도 포기김치,179:수입식품의 경우 \"수입식품안전관리 특별법에 따른 수입신고를 필함\" 의 문구:해당없음,185:품목제조보고번호:-",
     "allowedPurchaseOptions": [
       "개당 중량",
@@ -104,9 +92,6 @@ const examples = {
     "goodsId": "65592697",
     "goodsName": "[해즈픽]시그니처 케어 칫솔 10개",
     "categoryName": "생활용품>욕실용품>구강용품/타월/목욕칫솔/치실",
-    "coupangCategoryId": "49090020",
-    "coupangCategoryName": "생활·주방>헤어·바디·구강·면도>구강케어>치실·치간칫솔",
-    "brand": "해즈픽",
     "productNoticeText": "004:제조자,수입품의 경우 수입자를 함께 표기:(주)케이앤케이 ,019:품명 및 모델명:[해즈픽] 시그니처 케어 칫솔 10개 세트 \n*컬러: 민트, 핑크, 오렌지, 그레이, 블루 2개씩,049:소비자상담 관련 전화번호:070-4027-4667,126:법에 의한 인증·허가 등을 받았음을 확인할 수 있는 경우 그에 대한 사항:위생용품의 유형 : 일반용 칫솔,127:제조국 또는 원산지:한국",
     "allowedPurchaseOptions": [
       "개당 수량",
@@ -125,9 +110,6 @@ examples.tv = {
   "goodsId": "50945478",
   "goodsName": "[플럭스][5년무상AS]플럭스 109cm(43인치) 이동형 QLED TV (셀프설치)",
   "categoryName": "가전/디지털>영상/주방/생활/계절가전>영상가전LED TV",
-  "coupangCategoryId": "112143",
-  "coupangCategoryName": "가전/디지털>TV/영상가전>TV>",
-  "brand": "플럭스",
   "productNoticeText": "004:제조자,수입품의 경우 수입자를 함께 표기:상품상세내용참조,005:제조국:상품상세내용참조,008:품질보증기준:소비자분쟁해결 기준에 따름,009:A/S 책임자와 전화번호:주식회사미래가디언 031-812-3020,011:크기:957 X 206 X 604,019:품명 및 모델명:TV, PLX-43UHWH,020:KC 인증정보 (「전기용품 및 생활용품 안전관리법」에 따른 안전인증ㆍ안전확인ㆍ공급자적합성확인대상제품 및 「전파법」에 따른 적합인증ㆍ적합등록 대상 기자재에 한함):상품상세내용참조,022:동일모델의 출시년월:202503,023:화면사양 (화면크기, 해상도, 화면비율 등):QLED UHD(4K : 3840*2160), DOLBY ATMOS, .,029:정격전압, 소비전력:220V, 75W,144:에너지소비효율등급 (「에너지이용 합리화법」에 따른 에너지소비효율등급 표시대상 기자재에 한함):1등급,178:추가설치비용:0",
   "allowedPurchaseOptions": [
     "화면크기(in)", "화면크기(cm)", "설치지원방식", "스탠드/벽걸이 구분", "모델명/품번", "화면크기 (cm/(인치))"
@@ -155,47 +137,22 @@ examples.weight.purchaseOptionUnits = [
   { purchaseOptionName: '개당 중량', defaultUnit: 'kg', unitOptions: ['kg', 'g', 'mg'] }
 ];
 
-function syncUnitNameChoices() {
-  const names = [...new Set(splitNames(form.elements.allowedPurchaseOptions.value))];
-  const selects = [...unitRows.querySelectorAll('[data-unit-field="purchaseOptionName"]')];
-  const selected = selects.map(select => select.value);
-  selects.forEach((select, index) => {
-    const previous = selected[index];
-    const placeholder = element('option', previous && !names.includes(previous)
-      ? '허용 목록에서 제외됨 · 다시 선택' : '허용 옵션명 선택');
-    placeholder.value = '';
-    select.replaceChildren(placeholder);
-    names.forEach(name => {
-      const choice = element('option', name);
-      choice.value = name;
-      choice.disabled = selected.some((value, other) => other !== index && value === name);
-      select.append(choice);
-    });
-    select.value = names.includes(previous) ? previous : '';
-  });
-  document.querySelector('#add-unit-row').disabled = names.length === 0;
-}
-
-function addUnitRow(units = {}) {
-  if (unitRows.children.length >= 20) {
-    showMessage('단위 설정은 최대 20개까지 입력할 수 있습니다.');
+function addPurchaseOptionRow(option = {}) {
+  if (purchaseOptionRows.children.length >= 200) {
+    showMessage('구매옵션은 최대 200개까지 입력할 수 있습니다.');
     return;
   }
-  const row = unitRowTemplate.content.firstElementChild.cloneNode(true);
-  unitRows.append(row);
-  syncUnitNameChoices();
-  row.querySelectorAll('[data-unit-field]').forEach(input => {
-    const field = input.dataset.unitField;
-    input.value = field === 'unitOptions' ? (units.unitOptions || []).join(', ') : units[field] || '';
+  const row = purchaseOptionRowTemplate.content.firstElementChild.cloneNode(true);
+  row.querySelectorAll('[data-purchase-field]').forEach(input => {
+    const field = input.dataset.purchaseField;
+    input.value = field === 'unitOptions' ? (option.unitOptions || []).join(', ') : option[field] || '';
   });
-  row.querySelector('[data-unit-field="purchaseOptionName"]').addEventListener('change', syncUnitNameChoices);
   row.querySelector('.remove-row').addEventListener('click', () => {
-    row.remove();
-    syncUnitNameChoices();
+    if (purchaseOptionRows.children.length > 1) row.remove();
+    else row.querySelectorAll('input').forEach(input => { input.value = ''; });
   });
-  syncUnitNameChoices();
+  purchaseOptionRows.append(row);
 }
-
 function addRow(option = {}) {
   if (rows.children.length >= 200) {
     showMessage('단품은 최대 200개까지 입력할 수 있습니다.');
@@ -219,13 +176,14 @@ function resizeNoticeInput() {
 }
 
 function loadExample(example) {
-  for (const field of ['goodsId', 'goodsName', 'brand', 'categoryName', 'coupangCategoryId', 'coupangCategoryName', 'productNoticeText', 'productCompositionText']) {
+  for (const field of ['goodsId', 'goodsName', 'categoryName', 'productNoticeText', 'productCompositionText']) {
     form.elements[field].value = example[field] ?? '';
   }
-  form.elements.allowedPurchaseOptions.value = example.allowedPurchaseOptions.join(', ');
-  unitRows.replaceChildren();
-  (example.purchaseOptionUnits || []).forEach(addUnitRow);
-  syncUnitNameChoices();
+  purchaseOptionRows.replaceChildren();
+  const unitsByName = new Map((example.purchaseOptionUnits || []).map(units => [units.purchaseOptionName, units]));
+  example.allowedPurchaseOptions.forEach(name => {
+    addPurchaseOptionRow({ purchaseOptionName: name, ...unitsByName.get(name) });
+  });
   rows.replaceChildren();
   example.options.forEach(addRow);
   resultPanel.hidden = true;
@@ -238,23 +196,23 @@ function splitNames(text) {
 
 function makeRequest() {
   const request = {};
-  for (const field of ['goodsId', 'goodsName', 'categoryName', 'coupangCategoryId', 'coupangCategoryName']) {
+  for (const field of ['goodsId', 'goodsName', 'categoryName']) {
     request[field] = form.elements[field].value.trim();
   }
-  const brand = form.elements.brand.value.trim();
-  if (brand) request.brand = brand;
   const productNoticeText = form.elements.productNoticeText.value;
-  if (productNoticeText.trim()) request.productNoticeText = productNoticeText;
+  request.productNoticeText = productNoticeText;
   const productCompositionText = form.elements.productCompositionText.value;
   if (productCompositionText.trim()) request.productCompositionText = productCompositionText;
-  request.allowedPurchaseOptions = splitNames(form.elements.allowedPurchaseOptions.value);
-  const units = [...unitRows.querySelectorAll('tr')].map(row => {
+  const purchaseOptions = [...purchaseOptionRows.querySelectorAll('tr')].map(row => {
     const values = {};
-    row.querySelectorAll('[data-unit-field]').forEach(input => {
-      values[input.dataset.unitField] = input.dataset.unitField === 'unitOptions' ? splitNames(input.value) : input.value.trim();
+    row.querySelectorAll('[data-purchase-field]').forEach(input => {
+      values[input.dataset.purchaseField] = input.dataset.purchaseField === 'unitOptions'
+        ? splitNames(input.value) : input.value.trim();
     });
     return values;
   });
+  request.allowedPurchaseOptions = purchaseOptions.map(option => option.purchaseOptionName);
+  const units = purchaseOptions.filter(option => option.defaultUnit || option.unitOptions.length);
   if (units.length) request.purchaseOptionUnits = units;
   request.options = [...rows.querySelectorAll('tr')].map(row => {
     const option = {};
@@ -268,11 +226,15 @@ function makeRequest() {
 }
 
 function validateRequest(request) {
+  if (!request.categoryName?.trim()) return '내부 카테고리를 입력하세요.';
+  if (!request.productNoticeText?.trim()) return 'SK스토아 상품정보고시를 입력하세요.';
   if (request.allowedPurchaseOptions.length < 1) return '허용 옵션명을 한 개 이상 입력하세요.';
-  if (request.allowedPurchaseOptions.length > 20) return '허용 옵션명은 최대 20개입니다.';
+  if (request.allowedPurchaseOptions.length > 200) return '구매옵션명은 최대 200개입니다.';
+  if (request.allowedPurchaseOptions.some(name => !name || name.length > 100)) return '각 구매옵션명을 1~100자로 입력하세요.';
+  if (new Set(request.allowedPurchaseOptions).size !== request.allowedPurchaseOptions.length) return '구매옵션명이 중복되었습니다.';
   const unitNames = new Set();
   for (const units of request.purchaseOptionUnits || []) {
-    if (!request.allowedPurchaseOptions.includes(units.purchaseOptionName)) return '단위를 설정할 허용 옵션명을 선택하세요.';
+    if (!request.allowedPurchaseOptions.includes(units.purchaseOptionName)) return '단위를 설정할 구매옵션명을 입력하세요.';
     if (unitNames.has(units.purchaseOptionName)) return '같은 구매옵션명의 단위 설정은 한 번만 입력하세요.';
     unitNames.add(units.purchaseOptionName);
     if (!units.defaultUnit) return '기본단위를 입력하세요.';
@@ -496,10 +458,9 @@ function showMessage(message) {
 }
 
 noticeInput.addEventListener('input', resizeNoticeInput);
-form.elements.allowedPurchaseOptions.addEventListener('input', syncUnitNameChoices);
 window.addEventListener('resize', resizeNoticeInput);
 document.querySelector('#add-row').addEventListener('click', () => addRow());
-document.querySelector('#add-unit-row').addEventListener('click', () => addUnitRow());
+document.querySelector('#add-purchase-option-row').addEventListener('click', () => addPurchaseOptionRow());
 document.querySelectorAll('[data-example]').forEach(button => {
   button.addEventListener('click', () => loadExample(examples[button.dataset.example]));
 });
@@ -521,7 +482,7 @@ form.addEventListener('submit', async event => {
     showResult(request, { success: false, reason: '서버에 연결할 수 없거나 응답을 읽지 못했습니다.', errorCode: 'NETWORK_ERROR' }, 0);
   } finally {
     submitButton.disabled = false;
-    submitButton.textContent = '매핑 결과 확인 →';
+    submitButton.textContent = 'AI 매핑 결과 ->';
   }
 });
 

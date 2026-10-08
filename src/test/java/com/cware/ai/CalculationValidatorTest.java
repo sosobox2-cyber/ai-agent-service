@@ -26,8 +26,7 @@ class CalculationValidatorTest {
                 new Calculation(op, unit, List.of(operands), context));
     }
     private InferenceRequest named(InferenceRequest r, String name) {
-        return new InferenceRequest(r.goodsId(), name, r.brand(), r.categoryName(), r.coupangCategoryId(),
-                r.coupangCategoryName(), r.allowedPurchaseOptions(), r.options(), r.productNoticeText());
+        return new InferenceRequest(r.goodsId(), name, r.categoryName(), r.allowedPurchaseOptions(), r.options(), r.productNoticeText());
     }
 
     @Test void directExtractionNormalizesWhitespaceAndTrailingZeroAndConversionWorks() throws Exception {

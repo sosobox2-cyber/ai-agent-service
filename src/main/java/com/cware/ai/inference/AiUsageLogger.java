@@ -1,96 +1,156 @@
 package com.cware.ai.inference;
 
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.encoder.PatternLayoutEncoder;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.rolling.RollingFileAppender;
+import ch.qos.logback.core.rolling.TimeBasedRollingPolicy;
+import ch.qos.logback.core.util.FileSize;
+import com.cware.ai.config.AiUsagePricing;
+import com.cware.ai.dto.*;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.*;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.metadata.EmptyUsage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.openai.api.OpenAiApi;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.*;
 import org.springframework.stereotype.Component;
-import java.math.BigDecimal;
-import com.cware.ai.dto.AiCallUsage;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Autowired;
-import java.nio.file.*;
 import java.nio.charset.StandardCharsets;
-import java.io.IOException;
-import java.time.Instant;
+import java.nio.file.Path;
+import java.time.OffsetDateTime;
 import java.util.*;
 
-/** 요청·응답 본문, API 키, 헤더 없이 usage 수치만 기록한다. */
+/** API 키·프롬프트·본문 없이 호출별 usage를 독립 Logback appender에 기록한다. */
 @Component
-public final class AiUsageLogger {
+public final class AiUsageLogger implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(AiUsageLogger.class);
     private final boolean enabled;
-    private final Path jsonlPath;
-    private final ObjectMapper json = new ObjectMapper();
+    private final AiUsagePricing pricing;
+    private final ObjectWriter json;
+    private final ch.qos.logback.classic.Logger fileLogger;
+    private final RollingFileAppender<ILoggingEvent> appender;
+
     public AiUsageLogger(boolean enabled) { this(enabled, null); }
-    public AiUsageLogger(boolean enabled, Path jsonlPath) { this.enabled = enabled; this.jsonlPath = jsonlPath; }
+    public AiUsageLogger(boolean enabled, Path path) {
+        this(enabled, path, new ObjectMapper(), new AiUsagePricing(), 30, "1GB");
+    }
 
     @Autowired
     public AiUsageLogger(@Value("${app.ai.usage-log-enabled:false}") boolean enabled,
             @Value("${app.ai.usage-jsonl-enabled:true}") boolean jsonlEnabled,
-            @Value("${app.ai.usage-jsonl-path:logs/ai-usage.jsonl}") String jsonlPath) {
-        this(enabled, jsonlEnabled ? Path.of(jsonlPath) : null);
+            @Value("${app.ai.usage-jsonl-path:logs/ai-usage.jsonl}") String path,
+            @Value("${app.ai.usage-jsonl-max-history:30}") int maxHistory,
+            @Value("${app.ai.usage-jsonl-total-size-cap:1GB}") String totalSizeCap,
+            ObjectMapper mapper, AiUsagePricing pricing) {
+        this(enabled, jsonlEnabled ? safePath(path) : null, mapper, pricing, maxHistory, totalSizeCap);
+    }
+
+    public AiUsageLogger(boolean enabled, Path path, ObjectMapper mapper, AiUsagePricing pricing,
+            int maxHistory, String totalSizeCap) {
+        this.enabled = enabled;
+        this.pricing = pricing;
+        ObjectMapper logMapper = mapper.copy().disable(SerializationFeature.INDENT_OUTPUT);
+        logMapper.setSerializationInclusion(JsonInclude.Include.ALWAYS);
+        this.json = logMapper.writer();
+        ch.qos.logback.classic.Logger logger = null;
+        RollingFileAppender<ILoggingEvent> sink = null;
+        if (path != null) {
+            try {
+                LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
+                // 독립 인스턴스 이름으로 테스트/다른 출력 경로의 appender 중복을 방지한다.
+                logger = context.getLogger("AI_PURCHASE_OPTION_USAGE." + UUID.randomUUID());
+                logger.setAdditive(false);
+                logger.setLevel(ch.qos.logback.classic.Level.INFO);
+                sink = new RollingFileAppender<>() {
+                    @Override public void addError(String message) { reportFailure(null); }
+                    @Override public void addError(String message, Throwable error) { reportFailure(error); }
+                };
+                sink.setContext(context);
+                sink.setName("AI_PURCHASE_OPTION_USAGE");
+                String absolute = path.toAbsolutePath().toString();
+                sink.setFile(absolute);
+                PatternLayoutEncoder encoder = new PatternLayoutEncoder();
+                encoder.setContext(context);
+                encoder.setCharset(StandardCharsets.UTF_8);
+                encoder.setPattern("%msg%n");
+                encoder.start();
+                sink.setEncoder(encoder);
+                TimeBasedRollingPolicy<ILoggingEvent> rolling = new TimeBasedRollingPolicy<>();
+                rolling.setContext(context);
+                rolling.setParent(sink);
+                String stem = absolute.endsWith(".jsonl") ? absolute.substring(0, absolute.length() - 6) : absolute;
+                rolling.setFileNamePattern(stem + ".%d{yyyy-MM-dd}.jsonl.gz");
+                rolling.setMaxHistory(Math.max(1, maxHistory));
+                rolling.setTotalSizeCap(FileSize.valueOf(totalSizeCap));
+                rolling.setCleanHistoryOnStart(true);
+                rolling.start();
+                sink.setRollingPolicy(rolling);
+                sink.start();
+                logger.addAppender(sink);
+            } catch (RuntimeException e) {
+                if (sink != null) sink.stop();
+                sink = null;
+                reportFailure(e);
+            }
+        }
+        this.fileLogger = logger;
+        this.appender = sink;
+    }
+
+    private static Path safePath(String path) {
+        try { return Path.of(path); }
+        catch (RuntimeException e) { reportFailure(e); return null; }
+    }
+
+    private static void reportFailure(Throwable error) {
+        // 예외 메시지/스택에는 입력·응답·경로가 섞일 수 있으므로 기록하지 않는다.
+        LOG.warn("AI usage JSONL 기록 실패; 추론 처리는 계속합니다 ({})",
+                error == null ? "appender unavailable" : error.getClass().getSimpleName());
     }
 
     public void recordInference(String inferenceId, String goodsId, PurchaseOptionPromptMode initial,
             PurchaseOptionPromptMode mode, int retryCount, List<AiRetryReason> retryReasons,
-            AiInferenceValidationResult validation, String status, ChatResponse response, MappingProposal proposal) {
-        record(inferenceId, mode, retryCount + 1, response);
-        if (jsonlPath == null) return;
-        var usage = measure(mode, retryCount + 1, response);
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("timestamp", Instant.now().toString());
-        row.put("inferenceId", inferenceId);
-        row.put("goodsId", goodsId);
-        row.put("promptMode", mode);
-        row.put("initialPromptMode", initial);
-        // For a discarded LIGHT call the final mode is known to be FULL.
-        row.put("finalPromptMode", "VALIDATION_ERROR".equals(status) ? PurchaseOptionPromptMode.FULL : mode);
-        row.put("retryCount", retryCount);
-        row.put("retryReason", retryReasons.isEmpty() ? null : retryReasons.get(0));
-        row.put("retryReasons", retryReasons);
-        row.put("status", status);
-        row.put("validationPassed", validation == null ? null : validation.valid());
-        row.put("validationErrors", validation == null ? List.of() : validation.errors());
-        row.put("certain", proposal == null ? null : proposal.certain());
-        row.put("confidence", proposal == null ? null : proposal.confidence());
-        row.put("minimumMappingConfidence", proposal == null || proposal.mappings() == null ? null :
-                proposal.mappings().stream().filter(Objects::nonNull).map(MappingProposal.Entry::confidence)
-                        .filter(ResultValidator::validConfidence).min(Double::compare).orElse(null));
-        row.put("model", usage.model());
-        row.put("input_tokens", usage.input_tokens());
-        row.put("cached_tokens", usage.cached_tokens());
-        row.put("output_tokens", usage.output_tokens());
-        row.put("total_tokens", usage.total_tokens());
-        row.put("estimated_cost_usd", usage.estimated_cost_usd());
-        append(row);
-    }
-
-    private synchronized void append(Map<String, Object> row) {
+            AiInferenceValidationResult validation, String status, ChatResponse response, MappingProposal proposal,
+            long elapsedMs) {
         try {
-            Path absolute = jsonlPath.toAbsolutePath();
-            Files.createDirectories(absolute.getParent());
-            Files.writeString(absolute, json.writeValueAsString(row) + "\n", StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        } catch (IOException | RuntimeException e) {
-            LOG.warn("AI usage JSONL write failed ({})", e.getClass().getSimpleName());
-        }
+            record(inferenceId, mode, retryCount + 1, response);
+            if (fileLogger == null) return;
+            if (appender == null || !appender.isStarted()) { reportFailure(null); return; }
+            AiCallUsage usage = measureUsage(mode, retryCount + 1, response);
+            var reasons = retryReasons == null ? List.<AiRetryReason>of() : List.copyOf(retryReasons);
+            var row = new AiPurchaseOptionUsageLog(OffsetDateTime.now().toString(), inferenceId, goodsId,
+                    null, mode, usage.model(), usage.input_tokens(), usage.cached_tokens(), usage.output_tokens(),
+                    usage.total_tokens(), proposal == null ? null : proposal.certain(),
+                    proposal == null || !ResultValidator.validConfidence(proposal.confidence()) ? null : proposal.confidence(),
+                    proposal == null || proposal.mappings() == null ? null : proposal.mappings().size(),
+                    elapsedMs, status, initial, "VALIDATION_ERROR".equals(status) ? PurchaseOptionPromptMode.FULL : mode,
+                    retryCount, reasons.isEmpty() ? null : reasons.get(0), reasons,
+                    validation == null ? null : validation.valid(), usage.estimated_cost_usd());
+            fileLogger.info(json.writeValueAsString(row));
+        } catch (Exception e) { reportFailure(e); }
     }
 
     public void record(String callId, PurchaseOptionPromptMode mode, int attempt, ChatResponse response) {
         if (!enabled) return;
-        AiCallUsage usage = measure(mode, attempt, response);
+        AiCallUsage usage = measureUsage(mode, attempt, response);
         LOG.info("ai_usage call_id={} mode={} attempt={} model={} input_tokens={} cached_tokens={} output_tokens={} total_tokens={} estimated_cost_usd={}",
                 callId, usage.mode(), usage.attempt(), usage.model(), usage.input_tokens(), usage.cached_tokens(),
                 usage.output_tokens(), usage.total_tokens(), usage.estimated_cost_usd());
     }
 
+    public AiCallUsage measureUsage(PurchaseOptionPromptMode mode, int attempt, ChatResponse response) {
+        AiCallUsage usage = measure(mode, attempt, response);
+        return new AiCallUsage(usage.model(), mode, attempt, usage.input_tokens(), usage.cached_tokens(),
+                usage.output_tokens(), usage.total_tokens(),
+                pricing.estimate(usage.model(), usage.input_tokens(), usage.cached_tokens(), usage.output_tokens()));
+    }
+
     public static AiCallUsage measure(PurchaseOptionPromptMode mode, int attempt, ChatResponse response) {
         var metadata = response == null ? null : response.getMetadata();
         String model = metadata == null ? "unknown" : metadata.getModel();
-        // 모델명에도 임의의 응답 문자열을 로그로 통과시키지 않는다.
         if (model == null || !model.matches("(?:gpt-|o[1-9])[a-zA-Z0-9._:-]{1,95}")) model = "unknown";
         var usage = metadata == null ? null : metadata.getUsage();
         Integer input = null, output = null, total = null, cached = null;
@@ -99,16 +159,13 @@ public final class AiUsageLogger {
             if (usage.getNativeUsage() instanceof OpenAiApi.Usage nativeUsage && nativeUsage.promptTokensDetails() != null)
                 cached = nativeUsage.promptTokensDetails().cachedTokens();
         }
-        return new AiCallUsage(model, mode, attempt, input, cached, output, total, estimate(model, input, cached, output));
+        return new AiCallUsage(model, mode, attempt, input, cached, output, total, null);
     }
 
-    static BigDecimal estimate(String model, Integer input, Integer cached, Integer output) {
-        // 2026-10-06 공식 Standard 텍스트 단가: 1M 토큰당 input $0.40, cached $0.10, output $1.60.
-        if (!model.matches("gpt-4\\.1-mini(?:-2025-04-14)?") || input == null || cached == null || output == null
-                || cached < 0 || input < cached || output < 0) return null;
-        return BigDecimal.valueOf(input - cached).multiply(new BigDecimal("0.40"))
-                .add(BigDecimal.valueOf(cached).multiply(new BigDecimal("0.10")))
-                .add(BigDecimal.valueOf(output).multiply(new BigDecimal("1.60")))
-                .divide(new BigDecimal("1000000"));
+    @PreDestroy public void close() {
+        if (appender != null) {
+            fileLogger.detachAppender(appender);
+            appender.stop();
+        }
     }
 }

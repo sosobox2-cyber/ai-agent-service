@@ -36,8 +36,7 @@ class NamedSetContextTest {
 
     @Test void onlyReturnsQuantityWhenItIsTheOnlyAllowedName() throws Exception {
         var r = request();
-        var single = new InferenceRequest(r.goodsId(), r.goodsName(), r.brand(), r.categoryName(), r.coupangCategoryId(),
-                r.coupangCategoryName(), List.of("수량"), r.options(), r.productNoticeText());
+        var single = new InferenceRequest(r.goodsId(), r.goodsName(), r.categoryName(), List.of("수량"), r.options(), r.productNoticeText());
         var proposal = MockOptionInferenceService.infer(single);
         assertThat(proposal.mappings()).hasSize(1);
         assertThat(proposal.mappings().get(0).value()).isEqualTo("1세트");
@@ -68,8 +67,7 @@ class NamedSetContextTest {
 
     @Test void sheetSetsUseSheetUnit() throws Exception {
         var r = request();
-        var sheets = new InferenceRequest(r.goodsId(), "시트 10매", r.brand(), r.categoryName(), r.coupangCategoryId(),
-                r.coupangCategoryName(), r.allowedPurchaseOptions(), r.options(), "시트 10매 세트");
+        var sheets = new InferenceRequest(r.goodsId(), "시트 10매", r.categoryName(), r.allowedPurchaseOptions(), r.options(), "시트 10매 세트");
         assertThat(QuantityContext.mockEntry(sheets, "개당 수량").value()).isEqualTo("10매입");
     }
 }

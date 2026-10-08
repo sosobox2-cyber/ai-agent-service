@@ -92,7 +92,7 @@ API 키, Authorization 헤더, 상품/정보고시 본문, 요청·응답 JSON�
 
 `logs/ai-usage.jsonl`에 기본적으로 UTF-8 JSONL을 기록한다. 경로는 `AI_USAGE_JSONL_PATH`, 활성화 여부는 `AI_USAGE_JSONL_ENABLED`로 변경한다. `AI_USAGE_LOG_ENABLED`의 콘솔 설정과 독립적이다. 파일 기록 실패는 경고로 알리며 추론 응답에는 영향을 주지 않는다.
 
-각 행에는 `timestamp`, `inferenceId`, `goodsId`, `promptMode`, `initialPromptMode`, `finalPromptMode`, `retryCount`, `retryReason`, `retryReasons`, `status`, `validationPassed`, `validationErrors`, `certain`, `confidence`, `minimumMappingConfidence`와 기존 모델·usage·비용을 기록한다. LIGHT와 FULL은 같은 `inferenceId`로 연결한다. FULL 행은 LIGHT의 전환 사유를 유지하고 FULL 자체의 검증 오류는 `validationErrors`에 남긴다.
+각 행에는 `timestamp`, `inferenceId`, `goodsId`, `promptMode`, `initialPromptMode`, `finalPromptMode`, `retryCount`, `retryReason`, `retryReasons`, `status`, `validationPassed`, `certain`, `confidence`와 기존 모델·usage·비용을 기록한다. LIGHT와 FULL은 같은 `inferenceId`로 연결한다. FULL 행은 LIGHT의 전환 사유를 유지하고 현재 JSONL에는 `validationErrors`나 `minimumMappingConfidence`가 없다. FULL 자체의 상세 검증 사유는 응답의 `reason`, `validationErrors`, `serverAssessment`로 확인한다.
 
 상태는 `SUCCESS`, `VALIDATION_ERROR`(LIGHT 실패, FULL 예정), `REVIEW_REQUIRED`, `API_ERROR`로 구분한다. 낮은 신뢰도만으로 최종 검토 필요가 된 결과는 `validationPassed=true`, `status=REVIEW_REQUIRED`로 구분된다. FULL API 장애 시에도 이전 LIGHT의 실제 usage는 남는다. 수신하지 못한 usage·비용은 null이다.
 
@@ -120,7 +120,7 @@ UI 합계·재요청·누락된 메트릭·0 값·테스트 모드 검증은 `no
  + output_tokens × 1.60) / 1,000,000
 ```
 
-cached_tokens는 전체 입력에 포함된 부분집합이므로 중복 과금으로 계산하지 않는다. 알려진 `gpt-4.1-mini`/`gpt-4.1-mini-2025-04-14`만 비용을 추정하며 다른 모델이나 캐시 정보 누락은 비용 `null`로 남긴다. 가격 변경 시 `AiUsageLogger`의 단가도 갱신해야 한다. 이 값은 청구서, 세금, 통화 환율을 포함하지 않는다.
+cached_tokens는 전체 입력에 포함된 부분집합이므로 중복 과금으로 계산하지 않는다. 알려진 `gpt-4.1-mini`/`gpt-4.1-mini-2025-04-14`만 비용을 추정하며 다른 모델이나 캐시 정보 누락은 비용 `null`로 남긴다. 단가는 `application.yml`의 `app.ai.usage-pricing.models` 외부 설정으로 관리한다. 가격 변경 시 운영 설정을 갱신한다. 이 값은 청구서, 세금, 통화 환율을 포함하지 않는다.
 
 [공식 Prompt Caching 문서](https://developers.openai.com/api/docs/guides/prompt-caching)에 따라 고정 지시문을 앞에, 요청별 상품 JSON을 뒤에 유지한다. 캐시 적중은 보장하지 않는다. 스키마의 요청별 enum, 프롬프트 모드, 반복 호출 간격 등의 차이가 실제 캐시량에 영향을 줄 수 있다. 짧은 LIGHT가 항상 캐시 비용까지 더 저렴하다고 단정하지 않고 actual usage와 비용을 비교한다. 별도 캐시 파라미터나 API/모델 변경은 이번 범위에 포함하지 않는다.
 
@@ -156,3 +156,6 @@ Remove-Item Env:OPENAI_RUN_COST_COMPARISON
 System Prompt 자체는 3,702 → 635 텍스트 토큰(82.8% 감소)이다. 의류 요청의 캐시 없는 입력 비용만 위 추정에 적용하면 약 $0.001908 → $0.0006812가 된다. 이는 출력 비용, 실제 캐시, API framing을 포함하지 않는 입력 텍스트 비용 시나리오이며 요청당 최종 청구 비용이 아니다. cached/output/total_tokens 및 전체 예상 비용은 실제 비교 파일에서 확인해야 한다.
 
 작업 시작과 종료 시 기존 FULL 파일의 SHA-256은 모두 `2B6A237F01F8FF0143E6E584826A3F2ADB53D9B5A367BE3495B612EC16B9EDF0`로 같았다. 이전 작업에서 추가한 상세 규칙·예시를 그대로 보존했다.
+
+
+현재 JSONL 필드·Logback Appender·일별 gzip Rolling·보관 정책은 [AI 호출 이력 안내](ai-call-history.md)를 참고하세요.

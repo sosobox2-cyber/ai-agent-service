@@ -6,12 +6,16 @@ function guideNode(tag, text) {
 }
 
 function guideInline(node, text) {
-  const pattern = /(`[^`]+`|\*\*[^*]+\*\*)/g;
+  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|<br\s*\/?>)/g;
   let cursor = 0;
   for (const match of text.matchAll(pattern)) {
     node.append(document.createTextNode(text.slice(cursor, match.index)));
-    const code = match[0].startsWith('`');
-    node.append(guideNode(code ? 'code' : 'strong', match[0].slice(code ? 1 : 2, code ? -1 : -2)));
+    if (match[0].startsWith('<br')) {
+      node.append(guideNode('br'));
+    } else {
+      const code = match[0].startsWith('`');
+      node.append(guideNode(code ? 'code' : 'strong', match[0].slice(code ? 1 : 2, code ? -1 : -2)));
+    }
     cursor = match.index + match[0].length;
   }
   node.append(document.createTextNode(text.slice(cursor)));
@@ -28,6 +32,23 @@ function renderGuide(markdown, root, toc) {
   while (i < lines.length) {
     const line = lines[i];
     if (!line.trim()) { i++; continue; }
+    if (/^\s*---\s*$/.test(line)) {
+      root.append(guideNode('hr'));
+      i++;
+      continue;
+    }
+    if (/^>\s?/.test(line)) {
+      const quote = guideNode('blockquote');
+      while (i < lines.length && /^>\s?/.test(lines[i])) {
+        const text = lines[i++].replace(/^>\s?/, '');
+        if (!text.trim()) continue;
+        const paragraph = guideNode('p');
+        guideInline(paragraph, text);
+        quote.append(paragraph);
+      }
+      root.append(quote);
+      continue;
+    }
     if (line.startsWith('```')) {
       const language = line.slice(3).trim();
       const content = [];
@@ -45,10 +66,14 @@ function renderGuide(markdown, root, toc) {
     if (heading) {
       const node = guideNode(`h${heading[1].length}`);
       guideInline(node, heading[2]);
+      if (heading[1].length === 3 && heading[2] === 'purchaseOptionUnits 항목') {
+        node.id = 'guide-purchase-option-units';
+      }
       if (heading[1].length === 2) {
         node.id = `guide-section-${++section}`;
         const item = guideNode('li');
-        const link = guideNode('a', heading[2]);
+        const link = guideNode('a');
+        guideInline(link, heading[2].replace(/^\d+\.\s+/, ''));
         link.href = `#${node.id}`;
         item.append(link);
         tocList.append(item);
@@ -61,6 +86,11 @@ function renderGuide(markdown, root, toc) {
       const wrapper = guideNode('div');
       wrapper.className = 'table-scroll';
       const table = guideNode('table');
+        if (/^(필드|객체·필드)$/.test(line.split('|')[1].trim())) {
+          table.className = 'field-table';
+        } else if (line.split('|')[1].trim() === '설명용 JSON 키') {
+          table.className = 'call-options-table';
+        }
       const head = guideNode('thead');
       const body = guideNode('tbody');
       const addRow = (text, tag, parent) => {

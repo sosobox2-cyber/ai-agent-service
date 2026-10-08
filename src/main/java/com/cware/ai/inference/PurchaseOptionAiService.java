@@ -102,14 +102,17 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
             String inferenceId, PurchaseOptionPromptMode initial, PurchaseOptionPromptMode mode,
             int retryCount, List<AiRetryReason> retryReasons, Consumer<AiCallUsage> usage) {
         ChatResponse response;
+        Prompt prompt = new Prompt(List.of(new SystemMessage(prompts.system(mode)), new UserMessage(input)),
+                OpenAiChatOptions.builder().responseFormat(format).build());
+        long started = System.nanoTime();
         try {
-            response = model.call(new Prompt(List.of(new SystemMessage(prompts.system(mode)), new UserMessage(input)),
-                    OpenAiChatOptions.builder().responseFormat(format).build()));
+            response = model.call(prompt);
         } catch (RuntimeException e) {
             usageLogger.recordInference(inferenceId, request.goodsId(), initial, mode, retryCount,
-                    retryReasons, null, "API_ERROR", null, null);
+                    retryReasons, null, "API_ERROR", null, null, (System.nanoTime() - started) / 1_000_000);
             throw e; // Transport errors never trigger prompt failover.
         }
+        long elapsedMs = (System.nanoTime() - started) / 1_000_000;
         MappingProposal proposal = null;
         AiInferenceValidationResult validation;
         try {
@@ -125,8 +128,8 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
         String status = willRetry ? "VALIDATION_ERROR" : validation.valid() && validator.meetsApplicationConfidence(proposal)
                 ? "SUCCESS" : "REVIEW_REQUIRED";
         usageLogger.recordInference(inferenceId, request.goodsId(), initial, mode, retryCount,
-                retryCount == 0 ? validation.reasons() : retryReasons, validation, status, response, proposal);
-        usage.accept(AiUsageLogger.measure(mode, retryCount + 1, response).withInference(inferenceId,
+                retryCount == 0 ? validation.reasons() : retryReasons, validation, status, response, proposal, elapsedMs);
+        usage.accept(usageLogger.measureUsage(mode, retryCount + 1, response).withInference(inferenceId,
                 initial, willRetry ? PurchaseOptionPromptMode.FULL : mode, retryCount,
                 retryCount == 0 ? validation.reasons() : retryReasons, status));
         return new Attempt(proposal, validation);

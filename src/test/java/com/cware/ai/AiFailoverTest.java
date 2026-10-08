@@ -28,11 +28,13 @@ import static org.mockito.Mockito.*;
 
 class AiFailoverTest {
     @TempDir Path temp;
+    final List<AiUsageLogger> loggers = new ArrayList<>();
+    @AfterEach void closeLoggers() { loggers.forEach(AiUsageLogger::close); }
     final ObjectMapper mapper = new ObjectMapper();
     final ChatModel model = mock(ChatModel.class);
-    final InferenceRequest request = new InferenceRequest("68535109", "니트", "브랜드", "의류", "1", "의류",
+    final InferenceRequest request = new InferenceRequest("68535109", "니트", "의류",
             List.of("색상", "패션의류/잡화 사이즈"), List.of(new SourceOption("1", "블랙/90"),
-            new SourceOption("2", "블랙/95"), new SourceOption("3", "블랙/100"), new SourceOption("4", "블랙/105")), null);
+            new SourceOption("2", "블랙/95"), new SourceOption("3", "블랙/100"), new SourceOption("4", "블랙/105")), "제조국: 한국");
 
     static MappingProposal good() {
         List<MappingProposal.Entry> entries = new ArrayList<>();
@@ -53,7 +55,9 @@ class AiFailoverTest {
 
     PurchaseOptionInferenceService service(String mode, AiRetryProperties settings) throws Exception {
         var provider = new PurchaseOptionPromptProvider(mode);
-        var ai = new PurchaseOptionAiService(model, mapper, provider, new AiUsageLogger(false, temp.resolve("usage.jsonl")),
+        var logger = Fixtures.usageLogger(false, temp.resolve("usage.jsonl"));
+        loggers.add(logger);
+        var ai = new PurchaseOptionAiService(model, mapper, provider, logger,
                 settings, new AiInferenceValidator(new ResultValidator(), settings));
         return new PurchaseOptionInferenceService(new RequestValidator(), ai, new ResultValidator(),
                 new InputHashService(mapper), Fixtures.properties());
@@ -119,7 +123,7 @@ class AiFailoverTest {
         assertThat(full.path("initialPromptMode").asText()).isEqualTo("LIGHT");
         assertThat(full.path("finalPromptMode").asText()).isEqualTo("FULL");
         assertThat(full.path("retryReason").asText()).isEqualTo(reason.name());
-        assertThat(full.path("input_tokens").asInt() + light.path("input_tokens").asInt()).isEqualTo(2000);
+        assertThat(full.path("inputTokens").asInt() + light.path("inputTokens").asInt()).isEqualTo(2000);
         assertThat(result.aiUsage().stream().map(AiCallUsage::estimated_cost_usd)
                 .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add)).isEqualByComparingTo("0.00096");
     }
@@ -146,9 +150,8 @@ class AiFailoverTest {
     }
 
     @Test void selectorChosenFullProductNeverFailsOver() throws Exception {
-        var fullProduct = new InferenceRequest(request.goodsId(), request.goodsName(), request.brand(),
-                request.categoryName(), request.coupangCategoryId(), request.coupangCategoryName(),
-                List.of("수량"), request.options(), null);
+        var fullProduct = new InferenceRequest(request.goodsId(), request.goodsName(), request.categoryName(),
+                List.of("수량"), request.options(), request.productNoticeText());
         when(model.call(any(Prompt.class))).thenReturn(response(new MappingProposal(true, .95, List.of(), "누락")));
         var result = service("AUTO", AiRetryProperties.defaults()).infer(fullProduct);
         assertThat(result.errorCode()).isEqualTo("REVIEW_REQUIRED");
@@ -168,8 +171,8 @@ class AiFailoverTest {
         assertThat(lines).hasSize(2);
         var light = mapper.readTree(lines.get(0));
         var full = mapper.readTree(lines.get(1));
-        assertThat(light.path("input_tokens").asInt()).isEqualTo(1000);
-        assertThat(full.path("input_tokens").isNull()).isTrue();
+        assertThat(light.path("inputTokens").asInt()).isEqualTo(1000);
+        assertThat(full.path("inputTokens").isNull()).isTrue();
         assertThat(full.path("status").asText()).isEqualTo("API_ERROR");
         assertThat(full.path("inferenceId")).isEqualTo(light.path("inferenceId"));
     }

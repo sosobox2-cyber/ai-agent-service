@@ -12,8 +12,8 @@ import static org.assertj.core.api.Assertions.*;
 class PurchaseOptionUnitTest {
     private final PurchaseOptionUnit units = new PurchaseOptionUnit("수량", "개", List.of("개", "박스", "세트"));
     private InferenceRequest request(List<PurchaseOptionUnit> settings, String source) {
-        return new InferenceRequest("unit-test", "테스트 상품", null, "테스트", "test", "테스트",
-                List.of("수량"), List.of(new SourceOption("1", source)), null, settings);
+        return new InferenceRequest("unit-test", "테스트 상품", "테스트",
+                List.of("수량"), List.of(new SourceOption("1", source)), "제조국: 한국", settings);
     }
 
     @Test void mockUsesExplicitUnitAndFallsBackOnlyForBareNumber() {
@@ -39,8 +39,8 @@ class PurchaseOptionUnitTest {
     }
 
     @Test void mixedRequestOnlyRestrictsUnitsForConfiguredTarget() {
-        var r = new InferenceRequest("mixed", "TV 109cm", null, "가전", "112143", "TV",
-                List.of("수량", "화면크기(cm)"), List.of(new SourceOption("1", "단품")), null, List.of(units));
+        var r = new InferenceRequest("mixed", "TV 109cm", "가전>TV",
+                List.of("수량", "화면크기(cm)"), List.of(new SourceOption("1", "단품")), "제조국: 한국", List.of(units));
         var screen = new MappingProposal.Entry("1", "화면크기(cm)", "109cm", .95, "goodsName", "109cm",
                 new Calculation(Calculation.Operation.DIRECT, "cm", List.of(
                         new Calculation.Operand("109", "cm", new Calculation.Evidence("goodsName", "109cm"))), null));

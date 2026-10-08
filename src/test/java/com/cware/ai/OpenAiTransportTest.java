@@ -36,7 +36,7 @@ class OpenAiTransportTest {
         assertThat(usage.cached_tokens()).isEqualTo(800);
         assertThat(usage.output_tokens()).isEqualTo(200);
         assertThat(usage.total_tokens()).isEqualTo(1200);
-        assertThat(usage.estimated_cost_usd()).isEqualByComparingTo("0.00048");
+        assertThat(usage.estimated_cost_usd()).isNull(); // 가격 설정 없는 순수 usage 측정
         server.verify();
     }
     @Test void actualSpringAiSerializesStrictSchemaAndParsesResponse() throws Exception {
