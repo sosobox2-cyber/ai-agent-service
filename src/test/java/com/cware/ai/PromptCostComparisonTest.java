@@ -31,13 +31,22 @@ class PromptCostComparisonTest {
             var mode = provider.select(request);
             String user = Files.readString(Path.of("src/main/resources/prompts/coupang-purchase-option-user.txt"))
                     + "\n" + mapper.writeValueAsString(Map.of("product", com.cware.ai.dto.AiProductData.from(request)));
-            String schema = mapper.writeValueAsString(PurchaseOptionAiService.schema(request));
+            String fullSchema = mapper.writeValueAsString(PurchaseOptionAiService.schema(request, PurchaseOptionPromptMode.FULL));
+            String selectedSchema = mapper.writeValueAsString(PurchaseOptionAiService.schema(request, mode));
             int fullSystem = encoding.countTokensOrdinary(provider.system(PurchaseOptionPromptMode.FULL));
             int selectedSystem = encoding.countTokensOrdinary(provider.system(mode));
-            int unchanged = encoding.countTokensOrdinary(user) + encoding.countTokensOrdinary(schema);
-            rows.add(Map.of("fixture", name, "mode", mode, "full_system_text_tokens", fullSystem,
-                    "selected_system_text_tokens", selectedSystem, "baseline_input_text_tokens", fullSystem + unchanged,
-                    "optimized_input_text_tokens", selectedSystem + unchanged, "saved_input_text_tokens", fullSystem - selectedSystem));
+            int userTokens = encoding.countTokensOrdinary(user);
+            int fullSchemaTokens = encoding.countTokensOrdinary(fullSchema);
+            int selectedSchemaTokens = encoding.countTokensOrdinary(selectedSchema);
+            Map<String,Object> row = new LinkedHashMap<>();
+            row.put("fixture", name); row.put("mode", mode);
+            row.put("full_system_text_tokens", fullSystem); row.put("selected_system_text_tokens", selectedSystem);
+            row.put("user_product_text_tokens", userTokens);
+            row.put("full_schema_text_tokens", fullSchemaTokens); row.put("selected_schema_text_tokens", selectedSchemaTokens);
+            row.put("baseline_input_text_tokens", fullSystem + userTokens + fullSchemaTokens);
+            row.put("optimized_input_text_tokens", selectedSystem + userTokens + selectedSchemaTokens);
+            row.put("saved_input_text_tokens", fullSystem + fullSchemaTokens - selectedSystem - selectedSchemaTokens);
+            rows.add(row);
             if (mode == PurchaseOptionPromptMode.LIGHT) assertThat(selectedSystem).isLessThan(fullSystem);
             else assertThat(selectedSystem).isEqualTo(fullSystem);
         }

@@ -1,6 +1,8 @@
 # LIGHT → FULL 자동 재추론
 
-LIGHT 결과가 서버 검증에 실패한 경우에만 같은 상품 데이터로 FULL을 한 번 호출합니다. 기존 누락 보정 대화는 이 흐름으로 교체했습니다. PromptSelector는 시작 시 한 번 호출하고 재추론은 FULL을 직접 지정합니다. System Prompt, User Prompt, JSON Schema와 선택 기준은 변경하지 않습니다.
+v27에서는 각 호출 모드의 Schema를 사용합니다. LIGHT calculation은 null 전용이며 FULL 재추론은 기존 calculation Schema를 사용합니다. 선택 및 재추론 조건은 유지합니다. [변경 기록](light-token-optimization.md)
+
+LIGHT 결과가 서버 검증에 실패한 경우에만 같은 상품 데이터로 FULL을 한 번 호출합니다. 기존 누락 보정 대화는 이 흐름으로 교체했습니다. PromptSelector는 시작 시 한 번 호출하고 재추론은 FULL을 직접 지정합니다. System Prompt, User Prompt, JSON Schema와 선택 기준은 변경하지 않습니다 (v27: LIGHT calculation=null; FULL Schema retained).
 
 | 시작과 결과 | 최대 AI 호출 수 |
 |---|---:|

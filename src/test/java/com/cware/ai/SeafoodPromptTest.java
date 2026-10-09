@@ -20,8 +20,8 @@ class SeafoodPromptTest {
         assertThat(com.cware.ai.inference.MockOptionInferenceService.infer(conflicting).mappings())
                 .noneMatch(entry -> entry.targetPurchaseOptionName().equals("수산물 중량"));
     }
-    @Test void bothModesPreferExplicitIndividualWeightOverTotal() throws Exception {
-        for (String suffix : new String[]{"", "-light"}) {
+    @Test void fullModePrefersExplicitIndividualWeightOverTotal() throws Exception {
+        for (String suffix : new String[]{""}) {
             String prompt = Files.readString(Path.of("src/main/resources/prompts/coupang-purchase-option-system" + suffix + ".txt"));
             assertThat(prompt).contains("수산물 중량=160g", "수량=5개", "확인에만 사용", "총중량만", "충돌");
         }

@@ -53,7 +53,7 @@ class PromptRoutingTest {
         assertThatThrownBy(() -> new PurchaseOptionPromptProvider("LIGHT")).isInstanceOf(IllegalArgumentException.class);
     }
 
-    @Test void lightMapsAllFourClothingItemsAndUsesSameUserInputAndSchemaAsFull() throws Exception {
+    @Test void lightMapsAllFourClothingItemsAndUsesSameUserInputWithNullCalculationSchema() throws Exception {
         var request = fixture("ai");
         List<MappingProposal.Entry> entries = new ArrayList<>();
         for (SourceOption option : request.options()) {
@@ -85,6 +85,14 @@ class PromptRoutingTest {
         assertThat(light.getInstructions().get(1).getText()).isEqualTo(full.getInstructions().get(1).getText());
         com.fasterxml.jackson.databind.JsonNode lightOptions = mapper.valueToTree(light.getOptions());
         com.fasterxml.jackson.databind.JsonNode fullOptions = mapper.valueToTree(full.getOptions());
-        assertThat(lightOptions).isEqualTo(fullOptions);
+        var lightSchema = lightOptions.at("/response_format/json_schema/schema");
+        var fullSchema = fullOptions.at("/response_format/json_schema/schema");
+        assertThat(lightSchema.at("/properties/mappings/items/properties/calculation"))
+                .isEqualTo(mapper.readTree("{\"type\":\"null\"}"));
+        assertThat(fullSchema.at("/properties/mappings/items/properties/calculation/anyOf").size()).isEqualTo(2);
+        var expectedLight = fullSchema.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) expectedLight.at("/properties/mappings/items/properties"))
+                .set("calculation", mapper.readTree("{\"type\":\"null\"}"));
+        assertThat(lightSchema).isEqualTo(expectedLight);
     }
 }

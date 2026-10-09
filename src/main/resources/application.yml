@@ -18,12 +18,12 @@ spring:
 app:
   inference:
     confidence-threshold: 0.80
-    prompt-version: coupang-option-v26
+    prompt-version: coupang-option-v27
     connect-timeout: 5s
     read-timeout: 30s
   ai:
     prompt-mode: ${AI_PROMPT_MODE:AUTO}
-    usage-log-enabled: ${AI_USAGE_LOG_ENABLED:false}
+    usage-log-enabled: ${AI_USAGE_LOG_ENABLED:true}
     usage-jsonl-enabled: ${AI_USAGE_JSONL_ENABLED:true}
     usage-jsonl-path: ${AI_USAGE_JSONL_PATH:logs/ai-usage.jsonl}
     usage-jsonl-max-history: ${AI_USAGE_JSONL_MAX_HISTORY:30}

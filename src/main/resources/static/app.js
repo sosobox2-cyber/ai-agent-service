@@ -485,7 +485,7 @@ function calculationText(calculation) {
 
 function summarizeAiUsage(calls) {
   const summary = {};
-  for (const field of ['input_tokens', 'cached_tokens', 'output_tokens', 'total_tokens', 'estimated_cost_usd']) {
+  for (const field of ['input_tokens', 'cached_tokens', 'output_tokens', 'total_tokens', 'elapsedMs', 'estimated_cost_usd']) {
     summary[field] = calls.length && calls.every(call => Number.isFinite(call?.[field]) && call[field] >= 0)
       ? calls.reduce((total, call) => total + call[field], 0) : null;
   }
@@ -495,7 +495,7 @@ function summarizeAiUsage(calls) {
 function aiUsagePanel(response) {
   const calls = Array.isArray(response?.aiUsage) ? response.aiUsage : [];
   const details = element('details', '', 'usage-details');
-  const modes = [...new Set(calls.map(call => call.mode))].join(' / ');
+  const modes = calls.map(call => call?.mode || '—').join(' → ');
   details.append(element('summary', `AI 호출·토큰 사용량${calls.length ? ` · ${modes} · ${calls.length}회` : ''}`));
   if (!calls.length) {
     details.append(element('p', response?.inferenceSource === 'TEST'
@@ -505,18 +505,102 @@ function aiUsagePanel(response) {
   }
   const number = value => Number.isFinite(value) && value >= 0 ? value.toLocaleString('ko-KR') : '확인 불가';
   const cost = value => Number.isFinite(value) && value >= 0 ? `$${value.toFixed(8)}` : '확인 불가';
+  const elapsed = value => Number.isFinite(value) && value >= 0 ? `${number(value)} ms` : '확인 불가';
   const values = call => [number(call.input_tokens), number(call.cached_tokens), number(call.output_tokens),
-    number(call.total_tokens), cost(call.estimated_cost_usd)];
-  const usageRows = calls.map(call => [call.attempt === 1 ? '최초 호출' : `보정 재요청 (${call.attempt}차)`,
+    number(call.total_tokens), elapsed(call.elapsedMs), cost(call.estimated_cost_usd)];
+  const label = (call, index) => call.retryCount > 0 ? `재추론 (${call.attempt || index + 1}차)`
+    : call.attempt === 1 ? '최초 호출' : `${call.attempt || index + 1}차 호출`;
+  const usageRows = calls.map((call, index) => [label(call, index),
     call.mode, call.model, ...values(call)]);
   if (calls.length > 1) {
-    usageRows.push(['요청 전체 합계', '—', '—', ...values(summarizeAiUsage(calls))]);
+    usageRows.push(['합계', '—', '—', ...values(summarizeAiUsage(calls))]);
   }
-  details.append(table(['호출', '모드', '모델', '입력 토큰', '캐시 입력', '출력 토큰', '총 토큰', '예상 비용 (USD)'], usageRows),
+  details.append(table(['호출', '모드', '모델', '입력 토큰', '캐시 입력', '출력 토큰', '총 토큰', '처리시간', '예상 비용 (USD)'], usageRows),
     element('p', '캐시 입력은 입력 토큰에 포함됩니다. '
-      + (calls.length > 1 ? '합계에는 보정 재요청도 포함됩니다. ' : '')
+      + (calls.length > 1 ? '합계에는 모든 호출이 포함됩니다. 처리시간 합계는 호출 시간의 합산입니다. ' : '')
       + '예상 비용은 지원 모델의 단가로 계산하며, 제공되지 않은 수치는 확인 불가로 표시합니다.', 'usage-note'));
+  calls.forEach((call, index) => {
+    if (!(call.retryCount > 0)) return;
+    const reasons = Array.isArray(call.retryReasons) ? call.retryReasons : call.retryReason ? [call.retryReason] : [];
+    if (reasons.length) details.append(element('p', `${label(call, index)} 사유: ${reasons.join(', ')}`, 'usage-note'));
+  });
   return details;
+}
+
+function aiJudgmentText(response) {
+  const ai = response?.aiAssessment;
+  if (!ai) return response?.inferenceSource === 'TEST' ? 'AI 판단: 모의 테스트 · 측정 안 함' : 'AI 판단: 확인 불가';
+  const certainty = ai.certain === true ? '확정' : ai.certain === false ? '검토 필요' : '판정 없음';
+  const confidence = Number.isFinite(ai.confidence) ? ai.confidence.toFixed(2) : '—';
+  return `AI 판단: ${certainty} · confidence ${confidence}`;
+}
+
+function unitMappingData(request, response) {
+  const options = request?.product?.options || request?.options || [];
+  const approved = Array.isArray(response?.optionMappings) ? response.optionMappings : [];
+  const proposals = Array.isArray(response?.aiAssessment?.mappings) ? response.aiAssessment.mappings : [];
+  const mappings = response?.success || response?.inferenceSource === 'TEST'
+    ? approved : proposals.length ? proposals : approved;
+  const grouped = new Map();
+  for (const mapping of mappings) {
+    if (!mapping) continue;
+    const id = String(mapping.optionId ?? '');
+    if (!grouped.has(id)) grouped.set(id, []);
+    grouped.get(id).push(mapping);
+  }
+  const ids = new Set(options.map(option => String(option.optionId)));
+  return {
+    rows: options.map(option => ({ ...option, mappings: grouped.get(String(option.optionId)) || [] })),
+    unknown: [...grouped.keys()].filter(id => !ids.has(id)),
+    review: response?.success !== true && response?.inferenceSource !== 'TEST'
+  };
+}
+
+function unitResultsPanel(request, response) {
+  const data = unitMappingData(request, response);
+  const simulated = response?.inferenceSource === 'TEST';
+  const panel = element('section', '', `final-result ${simulated ? 'simulated' : data.review ? 'unavailable' : 'approved'}`);
+  const heading = element('div', '', 'final-result-heading');
+  heading.append(element('h3', simulated ? '단품 결과 · 모의 테스트' : data.review ? '단품 결과 · 검토용 AI 제안' : '최종 단품 결과'),
+    element('span', `${data.rows.length}개 단품`, 'final-result-count'));
+  panel.append(heading);
+  if (data.review) panel.append(element('p', '서버가 승인하지 않은 AI 제안입니다. 누락된 매핑과 판단 상세를 확인하세요.', 'unit-result-note'));
+  if (data.rows.length) {
+    const grid = element('table', '', 'result-table unit-result-table');
+    const head = element('thead');
+    const headRow = element('tr');
+    for (const label of ['단품', '원본 옵션', 'AI 매핑']) {
+      const cell = element('th', label);
+      cell.scope = 'col';
+      headRow.append(cell);
+    }
+    head.append(headRow);
+    const body = element('tbody');
+    for (const option of data.rows) {
+      const row = element('tr');
+      const id = element('th', option.optionId);
+      id.scope = 'row';
+      id.dataset.label = '단품';
+      const original = element('td', option.optionName1, 'unit-original');
+      original.dataset.label = '원본 옵션';
+      const values = element('td');
+      values.dataset.label = 'AI 매핑';
+      for (const mapping of option.mappings) {
+        const item = element('div', '', 'unit-mapping');
+        item.append(element('span', mapping.targetPurchaseOptionName ?? '옵션명 없음', 'unit-mapping-name'),
+          element('span', '→', 'unit-mapping-arrow'),
+          element('strong', mapping.value ?? '값 없음', 'unit-mapping-value'));
+        values.append(item);
+      }
+      if (!option.mappings.length) values.append(element('span', '매핑 없음', 'status review unit-mapping-missing'));
+      row.append(id, original, values);
+      body.append(row);
+    }
+    grid.append(head, body);
+    panel.append(grid);
+  } else panel.append(element('p', '요청에 표시할 원본 단품이 없습니다.', 'final-result-empty'));
+  if (data.unknown.length) panel.append(element('p', `원본 요청에 없는 단품 ID가 반환되었습니다: ${data.unknown.map(id => id || '(빈 ID)').join(', ')}`, 'unit-result-warning'));
+  return panel;
 }
 
 function showResult(request, response, httpStatus) {
@@ -527,22 +611,10 @@ function showResult(request, response, httpStatus) {
   const simulated = response?.inferenceSource === 'TEST' && response?.errorCode === 'TEST_MODE';
   resultStatus.className = `status ${simulated ? 'review' : success ? 'success' : httpStatus === 0 || httpStatus >= 400 ? 'error' : 'review'}`;
   resultStatus.textContent = simulated ? '테스트 결과 · 모의' : success ? '매핑 성공' : httpStatus === 0 ? '연결 오류' : httpStatus >= 400 ? `요청 오류 · HTTP ${httpStatus}` : '검토 필요';
+  document.querySelector('#ai-judgment').textContent = aiJudgmentText(response);
   resultSummary.textContent = simulated ? '모의 추출 결과입니다. 자동 적용할 수 없습니다.'
     : success ? '단품별 최종 구매옵션을 확인하세요.' : response?.serverAssessment?.reason || response?.reason || '결과를 확인하세요.';
-  const finalResult = element('section', '', `final-result ${simulated ? 'simulated' : success ? 'approved' : 'unavailable'}`);
-  const finalHeading = element('div', '', 'final-result-heading');
-  finalHeading.append(element('h3', simulated ? '단품 결과 · 모의 테스트' : '최종 단품 결과'),
-    element('span', response?.items?.length ? `${response.items.length}개 단품` : '결과 없음', 'final-result-count'));
-  finalResult.append(finalHeading);
-  if (response?.items?.length) {
-    const names = [...new Set(response.items.flatMap(item => Object.keys(item.purchaseOptions || {})))];
-    finalResult.append(table(['단품 ID', ...names], response.items.map(item => [
-      item.optionId, ...names.map(name => item.purchaseOptions?.[name] ?? '—')
-    ])));
-  } else {
-    finalResult.append(element('p', '확정된 단품 결과가 없습니다. 아래 확인할 항목과 판단 상세를 확인하세요.', 'final-result-empty'));
-  }
-  resultDetails.append(finalResult);
+  resultDetails.append(unitResultsPanel(request, response));
   resultDetails.append(aiUsagePanel(response));
   const diagnostics = element('details', '', 'diagnostic-details');
   diagnostics.open = !success && !simulated;

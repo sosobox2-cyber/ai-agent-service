@@ -1,0 +1,187 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "mappings": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "targetPurchaseOptionName": {
+            "type": "string",
+            "enum": [
+              "패션의류/잡화 사이즈",
+              "색상"
+            ]
+          },
+          "value": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "optionId": {
+            "type": "string",
+            "enum": [
+              "1",
+              "2",
+              "3",
+              "4"
+            ]
+          },
+          "calculation": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "outputUnit": {
+                    "type": "string",
+                    "description": "단위 설정이 없는 구매옵션은 원문과 옵션 의미에 맞는 단위를 그대로 사용한다. 설정된 구매옵션은 해당 unitOptions 또는 defaultUnit을 사용한다."
+                  },
+                  "operands": {
+                    "type": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "unit": {
+                          "type": "string",
+                          "description": "실제 원문 단위. 선택지 밖의 단위도 원문 그대로 보존한다."
+                        },
+                        "amount": {
+                          "type": "string",
+                          "description": "양수 숫자 문자열"
+                        },
+                        "evidence": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "text": {
+                              "type": "string"
+                            },
+                            "source": {
+                              "type": "string",
+                              "enum": [
+                                "goodsName",
+                                "productNoticeText",
+                                "productCompositionText",
+                                "optionName1"
+                              ]
+                            }
+                          },
+                          "type": "object",
+                          "required": [
+                            "source",
+                            "text"
+                          ]
+                        }
+                      },
+                      "type": "object",
+                      "required": [
+                        "amount",
+                        "evidence",
+                        "unit"
+                      ]
+                    }
+                  },
+                  "context": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "text": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string",
+                            "enum": [
+                              "goodsName",
+                              "productNoticeText",
+                              "productCompositionText",
+                              "optionName1"
+                            ]
+                          }
+                        },
+                        "type": "object",
+                        "required": [
+                          "source",
+                          "text"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "operation": {
+                    "type": "string",
+                    "enum": [
+                      "DIRECT",
+                      "CONVERT",
+                      "SUM",
+                      "PACK_COUNT",
+                      "PACK_CONTENT"
+                    ]
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "context",
+                  "operands",
+                  "operation",
+                  "outputUnit"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidenceText": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "실제 원문 근거 요약. 일반 옵션명 추출은 null."
+          },
+          "evidenceSource": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "goodsName",
+              "productNoticeText",
+              "productCompositionText",
+              null
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "calculation",
+          "confidence",
+          "evidenceSource",
+          "evidenceText",
+          "optionId",
+          "targetPurchaseOptionName",
+          "value"
+        ]
+      }
+    },
+    "reason": {
+      "type": "string",
+      "description": "certain 값과 관계없이 반드시 작성하는 비어 있지 않은 한국어 판단 근거 요약. 1~3문장, 공백과 줄바꿈을 포함하여 2000자 이내. 전체 매핑 목록을 반복하지 않는다."
+    },
+    "confidence": {
+      "type": "number"
+    },
+    "certain": {
+      "type": "boolean"
+    }
+  },
+  "type": "object",
+  "required": [
+    "certain",
+    "confidence",
+    "mappings",
+    "reason"
+  ]
+}

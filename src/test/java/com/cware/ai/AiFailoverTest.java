@@ -70,9 +70,13 @@ class AiFailoverTest {
         assertThat(result.aiUsage()).singleElement().satisfies(call -> {
             assertThat(call.mode()).isEqualTo(PurchaseOptionPromptMode.LIGHT);
             assertThat(call.retryCount()).isZero();
+            assertThat(call.elapsedMs()).isNotNull().isGreaterThanOrEqualTo(0L);
         });
         verify(model).call(any(Prompt.class));
         assertThat(Files.readAllLines(temp.resolve("usage.jsonl"))).hasSize(1);
+        var log = mapper.readTree(Files.readAllLines(temp.resolve("usage.jsonl")).get(0));
+        var json = mapper.valueToTree(result);
+        assertThat(json.at("/aiUsage/0/elapsedMs").asLong()).isEqualTo(log.get("elapsedMs").asLong());
     }
 
     static Stream<Arguments> failures() {
@@ -100,6 +104,8 @@ class AiFailoverTest {
         var result = service("AUTO", AiRetryProperties.defaults()).infer(request);
         assertThat(result.success()).isTrue();
         assertThat(result.aiUsage()).extracting(AiCallUsage::retryCount).containsExactly(0, 1);
+        assertThat(result.aiUsage()).allSatisfy(call ->
+                assertThat(call.elapsedMs()).isNotNull().isGreaterThanOrEqualTo(0L));
         assertThat(result.aiUsage().get(1).retryReasons()).contains(reason);
         var prompts = ArgumentCaptor.forClass(Prompt.class);
         verify(model, times(2)).call(prompts.capture());
@@ -117,7 +123,10 @@ class AiFailoverTest {
         assertThat(product.path("options").size()).isEqualTo(request.options().size());
         com.fasterxml.jackson.databind.JsonNode firstOptions = mapper.valueToTree(calls.get(0).getOptions());
         com.fasterxml.jackson.databind.JsonNode fullOptions = mapper.valueToTree(calls.get(1).getOptions());
-        assertThat(firstOptions).isEqualTo(fullOptions);
+        assertThat(firstOptions.at("/response_format/json_schema/schema/properties/mappings/items/properties/calculation/type").asText())
+                .isEqualTo("null");
+        assertThat(fullOptions.at("/response_format/json_schema/schema"))
+                .isEqualTo(mapper.valueToTree(PurchaseOptionAiService.schema(request, PurchaseOptionPromptMode.FULL)));
         var lines = Files.readAllLines(temp.resolve("usage.jsonl"));
         assertThat(lines).hasSize(2);
         var light = mapper.readTree(lines.get(0));

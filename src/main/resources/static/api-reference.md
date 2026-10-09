@@ -259,6 +259,7 @@ AI가 매핑하지 않은 허용 구매옵션 중 기본단위 설정이 없는 
 | `cached_tokens` | integer 또는 null | API가 제공한 캐시 입력. 입력 토큰에 이미 포함됨 |
 | `output_tokens` | integer 또는 null | API 응답 usage의 출력 토큰 |
 | `total_tokens` | integer 또는 null | API 응답 usage의 전체 토큰 |
+| `elapsedMs` | integer 또는 null | 서버에서 측정한 해당 AI 호출 소요시간(ms). JSONL과 동일한 값이며 전체 요청·서버 검증 시간은 포함하지 않음 |
 | `estimated_cost_usd` | number 또는 null | 서버의 외부 단가 설정으로 계산한 예상 USD 비용 |
 | `inferenceId` | string 또는 null | 같은 상품 추론 요청의 호출을 연결하는 UUID. OpenAI request ID가 아님 |
 | `initialPromptMode` | string | 최초 선택 모드 |
@@ -318,7 +319,7 @@ API 호출 중 예외가 발생하면 응답은 `aiUsage=[]`입니다. 첫 번�
   "validationErrors": [],
   "errorCode": null,
   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-  "promptVersion": "coupang-option-v26",
+  "promptVersion": "coupang-option-v27",
   "inferenceSource": "AI",
   "aiAssessment": {
     "certain": true,
@@ -519,7 +520,7 @@ AI가 돌려준 JSON을 파싱하지 못하거나 응답이 완료되지 않았�
   "reason": "입력 데이터를 확인하세요.",
   "validationErrors": ["optionId는 중복될 수 없습니다."],
   "errorCode": "INVALID_REQUEST", "inputHash": null,
-  "promptVersion": "coupang-option-v26", "inferenceSource": "NONE",
+  "promptVersion": "coupang-option-v27", "inferenceSource": "NONE",
   "aiAssessment": null,
   "serverAssessment": {"decisionCode": "INVALID_REQUEST", "reason": "입력 데이터를 확인하세요.", "confidenceThreshold": 0.8},
   "aiUsage": []

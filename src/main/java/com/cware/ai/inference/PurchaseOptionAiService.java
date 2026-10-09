@@ -71,16 +71,13 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
     public MappingProposal infer(InferenceRequest request, Consumer<AiCallUsage> usage) {
         try {
             String input = userPrompt + "\n" + mapper.writeValueAsString(Map.of("product", AiProductData.from(request)));
-            ResponseFormat format = ResponseFormat.builder().type(ResponseFormat.Type.JSON_SCHEMA)
-                    .jsonSchema(ResponseFormat.JsonSchema.builder().name("purchase_option_mapping")
-                            .strict(true).schema(schema(request)).build()).build();
             PurchaseOptionPromptMode initial = prompts.select(request);
             String inferenceId = UUID.randomUUID().toString();
-            Attempt first = attempt(request, input, format, inferenceId, initial, initial, 0, List.of(), usage);
+            Attempt first = attempt(request, input, inferenceId, initial, initial, 0, List.of(), usage);
             if (first.validation().valid()) return first.proposal();
             // One explicit branch: no recursion, loops, or selector invocation on failover.
             if (initial == PurchaseOptionPromptMode.LIGHT && retry.enabled() && retry.maxRetries() == 1) {
-                Attempt full = attempt(request, input, format, inferenceId, initial,
+                Attempt full = attempt(request, input, inferenceId, initial,
                         PurchaseOptionPromptMode.FULL, 1, first.validation().reasons(), usage);
                 return full.validation().valid() ? full.proposal() : review(full);
             }
@@ -99,10 +96,13 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
         }
     }
 
-    private Attempt attempt(InferenceRequest request, String input, ResponseFormat format,
+    private Attempt attempt(InferenceRequest request, String input,
             String inferenceId, PurchaseOptionPromptMode initial, PurchaseOptionPromptMode mode,
             int retryCount, List<AiRetryReason> retryReasons, Consumer<AiCallUsage> usage) {
         ChatResponse response;
+        ResponseFormat format = ResponseFormat.builder().type(ResponseFormat.Type.JSON_SCHEMA)
+                .jsonSchema(ResponseFormat.JsonSchema.builder().name("purchase_option_mapping")
+                        .strict(true).schema(schema(request, mode)).build()).build();
         Prompt prompt = new Prompt(List.of(new SystemMessage(prompts.system(mode)), new UserMessage(input)),
                 OpenAiChatOptions.builder().responseFormat(format).build());
         long started = System.nanoTime();
@@ -132,7 +132,7 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
                 retryCount == 0 ? validation.reasons() : retryReasons, validation, status, response, proposal, elapsedMs);
         usage.accept(usageLogger.measureUsage(mode, retryCount + 1, response).withInference(inferenceId,
                 initial, willRetry ? PurchaseOptionPromptMode.FULL : mode, retryCount,
-                retryCount == 0 ? validation.reasons() : retryReasons, status));
+                retryCount == 0 ? validation.reasons() : retryReasons, status).withElapsedMs(elapsedMs));
         return new Attempt(proposal, validation);
     }
 
@@ -164,6 +164,10 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
 
     /** 매 요청의 허용 이름을 JSON Schema enum에도 주입하며 서버 검증을 별도로 수행한다. */
     public static Map<String,Object> schema(InferenceRequest request) {
+        return schema(request, PurchaseOptionPromptMode.FULL);
+    }
+
+    public static Map<String,Object> schema(InferenceRequest request, PurchaseOptionPromptMode mode) {
         var evidence = object(Map.of("source", Map.of("type", "string", "enum",
                 List.of("goodsName", "productNoticeText", "productCompositionText", "optionName1")), "text", Map.of("type", "string")));
         var operand = object(Map.of("amount", Map.of("type", "string", "description", "양수 숫자 문자열"),
@@ -185,14 +189,29 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
                         Arrays.asList("goodsName", "productNoticeText", "productCompositionText", null)),
                 "evidenceText", Map.of("type", List.of("string", "null"), "description",
                         "실제 원문 근거 요약. 일반 옵션명 추출은 null."),
-                "calculation", Map.of("anyOf", List.of(calculation, Map.of("type", "null")))));
-        return object(Map.of(
+                "calculation", mode == PurchaseOptionPromptMode.LIGHT ? Map.of("type", "null")
+                        : Map.of("anyOf", List.of(calculation, Map.of("type", "null")))));
+        return stableMap(object(Map.of(
                 "certain", Map.of("type", "boolean"),
                 "confidence", Map.of("type", "number"),
                 "mappings", Map.of("type", "array", "items", entry),
                 "reason", Map.of("type", "string", "description",
                         "certain 값과 관계없이 반드시 작성하는 비어 있지 않은 한국어 판단 근거 요약. "
-                        + "1~3문장, 공백과 줄바꿈을 포함하여 2000자 이내. 전체 매핑 목록을 반복하지 않는다.")));
+                        + "1~3문장, 공백과 줄바꿈을 포함하여 2000자 이내. 전체 매핑 목록을 반복하지 않는다."))));
+    }
+
+    /** 객체 키만 정렬한다. enum·anyOf·required 등의 배열 의미와 내용은 유지한다. */
+    private static Map<String,Object> stableMap(Map<String,Object> values) {
+        Map<String,Object> ordered = new LinkedHashMap<>();
+        values.keySet().stream().sorted().forEach(key -> ordered.put(key, stableValue(values.get(key))));
+        return ordered;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Object stableValue(Object value) {
+        if (value instanceof Map<?,?> map) return stableMap((Map<String,Object>) map);
+        if (value instanceof List<?> list) return list.stream().map(PurchaseOptionAiService::stableValue).toList();
+        return value;
     }
     private static Map<String,Object> object(Map<String,Object> properties) {
         return Map.of("type","object","properties",properties,"required",properties.keySet().stream().sorted().toList(),

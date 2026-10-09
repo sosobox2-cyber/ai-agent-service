@@ -202,7 +202,7 @@ API 키가 없어도 대체 `ChatModel`이 등록되므로 서버를 시작하�
 | `responseErrorHandler(new SafeErrorHandler())` | 사용자 정의 처리기 | 외부 HTTP 오류를 프로젝트 오류로 변환 |
 | `RetryTemplate.builder().maxAttempts(1)` | 1회 시도 | API 장애에 대한 클라이언트 자동 재시도 없음. 서버 Validation Failover는 별도 |
 | `confidence-threshold` | `0.80` | 실제 AI 결과의 성공 판단 기준 |
-| `prompt-version` | `coupang-option-v26` | 응답에 포함할 프롬프트 버전 표식 |
+| `prompt-version` | `coupang-option-v27` | 응답에 포함할 프롬프트 버전 표식 |
 
 ## 4. 웹 요청 처리 순서
 

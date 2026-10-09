@@ -1,5 +1,7 @@
 # 구매옵션 AI 호출 분석과 토큰 최적화
 
+아래 수치는 초기 최적화의 기록입니다. 현재 v27의 LIGHT Prompt/Schema 변경 및 동일 입력 재측정은 [LIGHT 입력 최적화](light-token-optimization.md)를 참고하세요. 현재 LIGHT는 calculation=null 전용 Schema를, FULL은 기존 계산 Schema를 사용합니다.
+
 ## 변경 전 호출 구조
 
 이 절은 토큰 최적화 도입 전의 분석 기록이다. 현재 재추론 동작과 로그는 아래의 LIGHT → FULL 및 JSONL 설명을 따른다.
@@ -58,7 +60,7 @@ LIGHT는 전체 단품 순회, 허용 이름, 원문 문자열 추출, 임의 �
 | `PromptRoutingTest`, `AiUsageLoggerTest`, `OpenAiTransportTest` | 라우팅·네 단품·usage·로그 검증 |
 | `PromptCostComparisonTest` | 오프라인 추정과 선택 실행 실제 비교 |
 
-`AI_PROMPT_MODE=AUTO`가 기본이며 `AI_PROMPT_MODE=FULL`로 기존 상세 프롬프트만 사용하도록 즉시 되돌릴 수 있다. 계산 요청까지 LIGHT를 강제하는 설정은 제공하지 않는다. 응답의 프롬프트 버전은 `coupang-option-v26`이다.
+`AI_PROMPT_MODE=AUTO`가 기본이며 `AI_PROMPT_MODE=FULL`로 기존 상세 프롬프트만 사용하도록 즉시 되돌릴 수 있다. 계산 요청까지 LIGHT를 강제하는 설정은 제공하지 않는다. 응답의 프롬프트 버전은 `coupang-option-v27`이다.
 
 ## LIGHT → FULL 재추론과 비용 보호
 

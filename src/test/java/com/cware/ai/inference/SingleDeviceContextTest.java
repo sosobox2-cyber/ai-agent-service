@@ -39,7 +39,7 @@ class SingleDeviceContextTest {
                 java.util.Map.of("화면크기 (cm/(인치))", "75인치", "모델명/품번", "75TR3DQ", "스탠드/벽걸이 구분", "스탠드"));
         var invalid = new MappingProposal(true, .9, List.of(proposal.mappings().get(1), proposal.mappings().get(1)), "중복");
         assertThat(validator.validateProposal(request, invalid)).isNotEmpty();
-        for (String suffix : new String[]{"", "-light"}) {
+        for (String suffix : new String[]{""}) {
             assertThat(Files.readString(Path.of("src/main/resources/prompts/coupang-purchase-option-system" + suffix + ".txt")))
                     .contains("조건부 안내", "75TR3DQ", "calculation=null", "최종 값 하나만");
         }

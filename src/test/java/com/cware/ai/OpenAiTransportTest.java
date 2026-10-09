@@ -54,6 +54,8 @@ class OpenAiTransportTest {
                 .andExpect(jsonPath("$.response_format.json_schema.strict").value(true))
                 .andExpect(jsonPath("$.response_format.json_schema.schema.properties.mappings.items.properties.targetPurchaseOptionName.enum[0]").value("핏"))
                 .andExpect(jsonPath("$.response_format.json_schema.schema.properties.mappings.items.properties.value.type").value("string"))
+                .andExpect(jsonPath("$.response_format.json_schema.schema.properties.mappings.items.properties.calculation.type").value("null"))
+                .andExpect(jsonPath("$.response_format.json_schema.schema.properties.mappings.items.properties.calculation.anyOf").doesNotExist())
                 .andRespond(withSuccess(body,MediaType.APPLICATION_JSON));
         var ai=new PurchaseOptionAiService(model,new ObjectMapper());
         assertThat(ai.infer(Fixtures.request())).isEqualTo(Fixtures.proposal());
