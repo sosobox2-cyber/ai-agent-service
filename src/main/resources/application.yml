@@ -16,6 +16,13 @@ spring:
           temperature: 0
           max-tokens: 4096
 app:
+  security:
+    enabled: ${AI_AGENT_SECURITY_ENABLED:true}
+    api-key: ${AI_AGENT_API_KEY:}
+    api-key-id: ${AI_AGENT_API_KEY_ID:internal-test}
+    rate-limit:
+      enabled: ${AI_AGENT_RATE_LIMIT_ENABLED:true}
+      per-minute: ${AI_AGENT_RATE_LIMIT_PER_MINUTE:30}
   inference:
     confidence-threshold: 0.80
     prompt-version: coupang-option-v27

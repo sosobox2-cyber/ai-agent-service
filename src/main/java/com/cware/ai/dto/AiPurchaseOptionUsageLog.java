@@ -12,4 +12,4 @@ public record AiPurchaseOptionUsageLog(String timestamp, String inferenceId, Str
         Boolean certain, Double confidence, Integer mappingCount, long elapsedMs, String status,
         PurchaseOptionPromptMode initialPromptMode, PurchaseOptionPromptMode finalPromptMode,
         int retryCount, AiRetryReason retryReason, List<AiRetryReason> retryReasons,
-        Boolean validationPassed, BigDecimal estimatedCostUsd) {}
+        Boolean validationPassed, BigDecimal estimatedCostUsd, String apiKeyId) {}

@@ -4,6 +4,36 @@
 
 ## 1. 처리 흐름과 책임
 
+### API 인증 및 호출 제한
+
+추론 API는 외부의 무분별한 호출을 방지하기 위해 **API Key 인증과 호출 횟수 제한(Rate Limit)** 기능을 제공합니다.
+
+API Key 인증은 Controller 실행 전 Filter에서 처리하며, 요청 Header의 `X-API-Key`를 서버에 설정된 `AI_AGENT_API_KEY`와 비교합니다. Key가 없거나 일치하지 않으면 `401 Unauthorized`로 차단하며 OpenAI API는 호출하지 않습니다. 서비스 API Key는 `OPENAI_API_KEY`와 별개입니다.
+
+호출 횟수 제한은 기본 **1분당 30회**이며, 제한을 초과하면 `429 Too Many Requests`를 반환합니다. 이 경우에도 OpenAI API는 호출하지 않습니다.
+
+```text
+요청
+ ↓
+API Key 확인
+ ↓
+호출 횟수 확인
+ ↓
+Controller
+ ↓
+AI 추론
+ ↓
+응답
+```
+
+`ApiProtectionConfig`의 Servlet Filter가 현재 추론 API를 포함한 `/api` 경로를 보호합니다. 정적 페이지·문서는 제외하며 모의 테스트 요청은 동일하게 보호합니다. Key의 SHA-256 digest를 JDK `MessageDigest.isEqual`로 비교하고, 실제 Key나 Header는 로그에 남기지 않습니다.
+
+`ApiRateLimiter`는 API Key ID별 첫 요청부터 60초 동안 허용 횟수를 검사합니다. 동시 요청의 검사·증가는 원자적으로 처리하며, 429에는 남은 대기시간(초)을 나타내는 `Retry-After`를 반환합니다. 현재는 서버 인스턴스별 메모리 제한으로, 다중 서버/컨테이너의 전역 제한은 아닙니다.
+
+인증·제한으로 차단된 요청은 AI Usage 로그를 생성하지 않습니다. 인증한 ID는 요청 속성을 통해 Logger에 전달되며, 정상 AI 호출의 JSONL에는 `apiKeyId`만 추가됩니다. 인증 OFF는 `security-disabled`, HTTP 요청 밖의 내부 호출은 `internal-call`입니다.
+
+### 인증 통과 후 추론 처리
+
 ```text
 PurchaseOptionController
   → 요청 DTO Bean Validation
@@ -286,6 +316,7 @@ Usage는 ChatResponse.metadata.usage의 실제 입력·출력·전체 값을 읽
 | --- | --- |
 | timestamp | 기록 시각, ISO-8601 offset 포함 |
 | inferenceId / goodsId | 상품 요청 UUID / 상품 ID |
+| apiKeyId | 인증한 서비스 Key의 식별자. 실제 Key를 기록하지 않음. 인증 OFF는 security-disabled, 내부 호출은 internal-call |
 | categoryName | 내부 / SK스토아 카테고리명, 앞뒤 공백 제거. 미입력은 null |
 | promptMode / model | 이번 호출 모드 / 응답 모델명 또는 unknown |
 | inputTokens / cachedTokens / outputTokens / totalTokens | 실제 응답 usage, 없으면 null |
@@ -331,7 +362,7 @@ API 키·Authorization·System/User Prompt 전체·요청/응답 전체·상품 
 | spring.ai.openai.chat.options.model | OPENAI_MODEL / gpt-4.1-mini |
 | server.address / server.port | SERVER_ADDRESS / 127.0.0.1, PORT / 8081 |
 
-개발 프로필은 application-dev.yml에서 콘솔 메트릭만 기본 활성화합니다. 파일 기록과 독립적입니다. 여러 인스턴스가 같은 파일에 동시에 쓰지 않도록 인스턴스별 경로를 설정하세요.
+개발 프로필은 application-dev.yml에서 서비스 API Key 인증을 기본 비활성화하며 환경변수로 다시 활성화할 수 있습니다. 콘솔·파일 로그는 독립적으로 설정합니다. 여러 인스턴스가 같은 파일에 동시에 쓰지 않도록 인스턴스별 경로를 설정하세요.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\measure-ai-failover.ps1 -Path .\logs\ai-usage.jsonl
@@ -339,7 +370,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\measure-ai-failove
 
 집계 스크립트는 현재 camelCase와 이전 snake_case 로그를 지원합니다. 호출 수와 LIGHT/FULL 비율, 알려진 토큰·confidence·elapsedMs 평균, 불확실 호출 수, inferenceId별 요청·LIGHT 시작 성공·FULL 전환·최종 검토·API 오류·미완료·비용을 계산합니다. null은 확인 불가로 분리하고 0은 포함합니다. 전환 비율 분모는 LIGHT 시작 건수이며 추가 비용은 retryCount=1 행입니다. 여러 날짜는 gzip 해제 후 필요한 JSONL을 합쳐 분석합니다.
 
-현재 애플리케이션에는 인증·호출량 제한·CORS 허용 설정이 없습니다. 기본 로컬 바인딩은 127.0.0.1, Compose 호스트 포트도 기본 로컬이지만 HOST_ADDRESS로 외부 공개할 수 있습니다. Docker 이미지와 Vercel 이미지 내부는 0.0.0.0입니다. 외부 공개 전 인증·접근 제한·비용 제한이 필요합니다. 외부 플랫폼의 보호 여부는 저장소에서 확인되지 않습니다.
+서비스 API Key 인증과 호출 제한은 기본 활성화됩니다. 운영 시작 전에 `AI_AGENT_API_KEY`를 서버 Secret으로 설정해야 하며, 인증 ON에서 미설정이면 시작에 실패합니다. `AI_AGENT_API_KEY_ID`는 기본 internal-test, `AI_AGENT_RATE_LIMIT_PER_MINUTE`는 기본 30입니다. 인증과 제한은 각각 `AI_AGENT_SECURITY_ENABLED`, `AI_AGENT_RATE_LIMIT_ENABLED`로 제어합니다. 별도의 CORS 허용 설정은 없습니다. 기본 로컬 바인딩은 127.0.0.1이며 Docker 이미지와 Vercel 이미지 내부는 0.0.0.0입니다. 운영에서는 HTTPS와 필요한 네트워크·비용 제한을 함께 적용합니다.
 
 Docker 이미지의 /app는 root가 만들고 실행자는 app 사용자이며 logs 폴더·쓰기 권한을 별도로 마련하지 않습니다. 현재 Compose에는 로그 볼륨도 없습니다. 파일 생성이 실패할 수 있고 컨테이너 교체 시 로컬 로그가 유실될 수 있으므로 실제 배포 환경의 쓰기 가능 경로·영속 저장 정책을 확인하세요. JSONL의 30일 설정만으로 배포 환경의 영속 보관을 보장하지 않습니다. 이번 작업은 이를 문서 TODO로만 기록하며 배포 설정을 변경하지 않습니다.
 

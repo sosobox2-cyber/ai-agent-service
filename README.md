@@ -1,5 +1,7 @@
 # ai-agent-service
 
+서비스 API Key 인증과 인스턴스별 30회/분 제한이 기본 활성화됩니다. 운영 시작 전에 OpenAI Key와 별개인 `AI_AGENT_API_KEY`를 Secret에 설정해야 합니다. 브라우저 테스트 페이지에는 Key를 넣지 않습니다. 설정·호출 방법과 로컬 개발 방법은 [API 보호 안내](docs/api-protection.md)를 참고하세요.
+
 AI 호출 처리시간은 `elapsedMs`(ms)로 파일 로그와 콘솔에 기록하고 API Usage에도 반환합니다. 콘솔 출력은 기본 활성화이며 `AI_USAGE_LOG_ENABLED=false`로 끌 수 있습니다.
 
 LIGHT 입력 최적화 v27은 [변경·측정 기록](docs/light-token-optimization.md)을 참고하세요. LIGHT calculation은 null 전용 Schema를 사용하며 FULL의 기존 계산 계약은 유지합니다.
@@ -43,6 +45,8 @@ API 연동의 결과 처리 규칙은 명세서 앞부분의 **연동 시 중요
 서버 배포는 사용자가 명시적으로 지시한 경우에만 진행합니다. 코드 수정·커밋·테스트 요청만으로 배포를 진행하지 않습니다. 운영 서버 업데이트와 재배포도 이 규칙을 따릅니다.
 
 ## 실행과 웹 테스트 화면
+
+실행 전에 [사용설명서의 API Key 및 호출 제한 설정](src/main/resources/static/user-guide.md#9-api-key-및-호출-제한-설정)을 확인하세요. 운영에서는 서비스 Key를 설정하고 인증을 켜야 합니다. 브라우저 테스트 페이지로 로컬 추론을 실행하려면 dev 프로필 또는 `AI_AGENT_SECURITY_ENABLED=false`를 사용합니다. 실제 AI 호출에는 별도로 `OPENAI_API_KEY`가 필요합니다.
 
 Java 17이 필요합니다. 내장 Tomcat을 사용하므로 Tomcat을 별도로 설치하거나 실행할 필요는 없습니다. IntelliJ에서 `pom.xml`을 Maven 프로젝트로 열고 Project SDK를 JDK 17로 지정한 다음 **AI Agent Service** 실행 구성을 실행하세요. 이 PC의 JDK 17 경로는 `C:\Program Files\Java\jdk-17`입니다. 기본 Java 8로는 실행할 수 없습니다.
 

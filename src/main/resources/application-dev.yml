@@ -1,3 +1,5 @@
 app:
+  security:
+    enabled: ${AI_AGENT_SECURITY_ENABLED:false}
   ai:
     usage-log-enabled: ${AI_USAGE_LOG_ENABLED:true}

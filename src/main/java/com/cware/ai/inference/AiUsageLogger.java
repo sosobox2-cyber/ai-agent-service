@@ -127,7 +127,8 @@ public final class AiUsageLogger implements AutoCloseable {
                     proposal == null || proposal.mappings() == null ? null : proposal.mappings().size(),
                     elapsedMs, status, initial, "VALIDATION_ERROR".equals(status) ? PurchaseOptionPromptMode.FULL : mode,
                     retryCount, reasons.isEmpty() ? null : reasons.get(0), reasons,
-                    validation == null ? null : validation.valid(), usage.estimated_cost_usd());
+                    validation == null ? null : validation.valid(), usage.estimated_cost_usd(),
+                    com.cware.ai.security.ApiRequestIdentity.currentId());
             String message = json.writeValueAsString(row);
             if (enabled) LOG.info("ai_usage {}", message);
             if (fileLogger == null) return;

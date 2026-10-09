@@ -16,12 +16,47 @@ SK스토아 상품의 단품 옵션명을 쿠팡 구매옵션별 값으로 구�
 | 경로 | `/api/v1/coupang/purchase-options/infer` |
 | 로컬 기본 주소 | `http://127.0.0.1:8081` — 기본 설정, 실행 환경에서 변경 가능 |
 | 기존 안내의 배포 주소 | `https://ai-agent-service-seven.vercel.app` — 저장소의 배포 안내에 기재된 주소이며 현재 가용성·인증·배포 버전은 이번 코드 검토로 확인하지 않음 |
-| 요청 헤더 | `Content-Type: application/json` |
+| 요청 헤더 | `Content-Type: application/json`, 인증 ON일 때 `X-API-Key` |
 | 응답 | JSON, 비스트리밍 |
 | 인코딩 | 요청 JSON 파일은 UTF-8로 저장 |
-| 인증 | 현재 애플리케이션에는 이 API의 인증 헤더 검사나 Spring Security 설정이 없음 |
+| 인증 | 서비스 전용 API Key 인증. 기본 ON, dev 프로필에서는 기본 OFF |
 
-OpenAI API 키는 서버에서 설정합니다. 이 API 요청에 OpenAI 키를 보내지 마세요. 서버의 API 키가 없으면 실제 추론은 HTTP 503으로 반환되며 테스트 모드는 사용할 수 있습니다.
+> **중요 — OpenAI API Key는 서버 전용입니다.**
+>
+> **이 API 요청에 OpenAI Key를 보내지 마세요.** `OPENAI_API_KEY`는 서버 환경변수 또는 Secret으로 설정합니다. 요청의 `X-API-Key`에는 별개의 **서비스 전용 Key**를 전달합니다.
+>
+> 서버에 `OPENAI_API_KEY`가 없으면 실제 추론은 **HTTP 503 (`AI_NOT_CONFIGURED`)**으로 반환됩니다. 모의 테스트 모드는 OpenAI Key 없이 사용할 수 있지만, **서비스 API Key 인증이 켜져 있으면 테스트 모드도 인증이 필요합니다.**
+
+### API 인증 및 호출 제한
+
+**API Key 인증**
+
+추론 API는 서비스 전용 API Key를 사용하여 요청을 인증합니다.
+
+API Key 인증이 활성화된 환경에서는 요청 시 `X-API-Key` Header를 반드시 전달해야 합니다.
+
+| Header | 필수 | 설명 |
+| :--- | :---: | :--- |
+| `Content-Type` | Y | `application/json` |
+| `X-API-Key` | Y | AI Agent Service 운영 담당자가 설정·제공한 API Key. 인증 ON일 때 필수 |
+
+> `X-API-Key`에 사용하는 Key는 OpenAI API Key와 별개의 서비스 전용 Key입니다.
+
+요청 예시:
+
+```http
+POST /api/v1/coupang/purchase-options/infer
+Content-Type: application/json
+X-API-Key: <service-api-key>
+```
+
+위 예시는 요청 헤더이며 본문에는 아래 Request 규격의 상품 JSON을 전달합니다. 실제 Key를 소스코드·브라우저 HTML/JavaScript·로그에 기록하지 않습니다. Key가 없거나 비어 있거나 잘못되면 HTTP 401 / `UNAUTHORIZED`로 반환되며 OpenAI를 호출하지 않습니다. 모의 테스트 모드도 동일하게 인증합니다.
+
+**호출 횟수 제한**
+
+기본값은 API Key ID별 첫 요청부터 60초 동안 30회입니다. `AI_AGENT_RATE_LIMIT_ENABLED`와 `AI_AGENT_RATE_LIMIT_PER_MINUTE`로 사용 여부와 허용 횟수를 설정합니다. 초과 시 HTTP 429 / `RATE_LIMIT_EXCEEDED`와 남은 대기시간(초)을 나타내는 `Retry-After` Header를 반환합니다. 인증 실패는 요청 수를 소비하지 않습니다.
+
+Rate Limit은 서버 인스턴스별 메모리 기준으로, 다중 서버/컨테이너의 전역 제한이 아닙니다. 인증·호출 제한으로 차단된 요청은 OpenAI 호출과 AI Usage 로그를 생성하지 않습니다. 정상 AI 호출의 JSONL에는 실제 Key 대신 `apiKeyId`를 기록합니다.
 
 ### 쿼리 매개변수
 
@@ -38,6 +73,7 @@ OpenAI API 키는 서버에서 설정합니다. 이 API 요청에 OpenAI 키를 
 ```bash
 curl --request POST 'http://127.0.0.1:8081/api/v1/coupang/purchase-options/infer?testMode=true' \
   --header 'Content-Type: application/json' \
+  --header 'X-API-Key: <service-api-key>' \
   --data-binary '@request.json'
 ```
 
@@ -499,6 +535,8 @@ API 호출 중 예외가 발생하면 응답은 `aiUsage=[]`입니다. 첫 번�
 | 200 | `RESULT_VALIDATION_FAILED` | 결과 구조·조립 검증 실패. 테스트 모드 및 서비스의 방어 분기에서 반환 가능 |
 | 400 | `INVALID_REQUEST` | 필수·길이·개수 제약, 중복·단위 설정 또는 쿼리 변환 오류 |
 | 400 | `INVALID_JSON` | 잘못된 JSON, 모르는 필드, 본문 구조·타입 오류 등 |
+| 401 | `UNAUTHORIZED` | 서비스 API Key 없음·빈 값·오류·중복 Header. 호출자 Key 설정 확인 |
+| 429 | `RATE_LIMIT_EXCEEDED` | 서비스 요청 한도 초과. `Retry-After` 대기 후 다시 호출 |
 | 429 | `AI_RATE_LIMIT` | 외부 AI 요청 제한 |
 | 500 | `INTERNAL_ERROR` | 예상하지 못한 서버 예외 |
 | 502 | `AI_UPSTREAM_ERROR` | 외부 AI 호출 실패. 외부의 다른 HTTP 오류도 이 코드로 변환 |
@@ -582,9 +620,9 @@ async function inferPurchaseOptions(product, testMode = true) {
 
 ## 11. 참고 사항 / 보안·운영 주의
 
-**현재 API에는 애플리케이션 인증과 호출량 제한이 없습니다.** 기본 로컬 주소는 127.0.0.1이며 Docker 배포 이미지는 0.0.0.0으로 수신합니다. 공개 주소로 배포하거나 프록시가 외부 요청을 전달하면 인증 없는 실제 AI 호출로 비용이 발생할 수 있습니다.
+**서비스 API Key 인증과 호출량 제한이 기본 활성화됩니다.** 기본 로컬 주소는 127.0.0.1이며 Docker 배포 이미지는 0.0.0.0으로 수신합니다. 운영에서는 `AI_AGENT_API_KEY`를 서버 Secret으로 설정하고 HTTPS로 호출하세요. 인증 ON에서 Key가 미설정이면 서버 시작이 실패합니다.
 
-운영 TODO: 외부 공개 전 인증 또는 네트워크 접근 제한, 호출량·비용 제한을 운영 담당자가 마련해야 합니다. 이번 문서 정리에서는 인증 기능을 추가하지 않았습니다. 배포 플랫폼·프록시에서 별도로 보호하는지는 저장소만으로 확인할 수 없습니다.
+브라우저 테스트 페이지에는 서비스 Key를 보관하거나 자동으로 전달하지 않습니다. 로컬에서는 dev 프로필 또는 `AI_AGENT_SECURITY_ENABLED=false`로 테스트할 수 있습니다. 운영에 dev 프로필을 적용하지 마세요. 비용 제한이나 다중 인스턴스의 중앙 호출 제한은 운영 환경에서 별도로 마련해야 합니다.
 
 서버는 호출별 최소 사용량 메타데이터를 JSONL로 기록할 수 있습니다. 클라이언트는 로그 파일에 직접 접근할 필요가 없으며 응답의 `aiUsage`를 사용합니다. 장애 문의는 상품 ID·실행 시각·오류 코드·판단 사유를 전달하세요. 예외 응답에 inferenceId가 없을 수 있습니다.
 
