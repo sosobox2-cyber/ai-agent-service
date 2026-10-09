@@ -30,7 +30,7 @@ class PromptCostComparisonTest {
             var request = request(name);
             var mode = provider.select(request);
             String user = Files.readString(Path.of("src/main/resources/prompts/coupang-purchase-option-user.txt"))
-                    + "\n" + mapper.writeValueAsString(Map.of("product", request));
+                    + "\n" + mapper.writeValueAsString(Map.of("product", com.cware.ai.dto.AiProductData.from(request)));
             String schema = mapper.writeValueAsString(PurchaseOptionAiService.schema(request));
             int fullSystem = encoding.countTokensOrdinary(provider.system(PurchaseOptionPromptMode.FULL));
             int selectedSystem = encoding.countTokensOrdinary(provider.system(mode));

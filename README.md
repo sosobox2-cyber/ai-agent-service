@@ -1,18 +1,18 @@
 # ai-agent-service
 
-AI 호출별 실제 토큰 Usage, 결과 메타데이터와 응답시간을 전용 JSONL에 기록합니다. 저장 경로·일별 Rolling·30일 보관·외부 가격 설정은 [AI 호출 이력 안내](docs/ai-call-history.md)를 참고하세요.
+AI 호출별 상품코드(`goodsId`), 내부 카테고리(`categoryName`), 실제 토큰 Usage, 결과 메타데이터와 응답시간을 전용 JSONL에 기록합니다. `scripts/measure-ai-failover.ps1 -GroupBy goodsId` 또는 `-GroupBy categoryName`으로 모드별 사용 현황과 재추론 전환율을 집계할 수 있습니다. 저장 경로·일별 Rolling·30일 보관·외부 가격 설정은 [AI 호출 이력 안내](docs/ai-call-history.md)를 참고하세요.
 
 상품의 원본 단품 옵션명에서 쿠팡 구매옵션 값을 추출하는 Spring Boot 서비스입니다. 원본 옵션은 `optionId`와 `optionName1`만 전달합니다. 예를 들어 `블랙/90`이라는 **한 문자열**에서 `패션의류/잡화 사이즈=90`, `색상=블랙`을 만들 수 있습니다.
 
-내부 / SK스토아 카테고리명은 필수 필드 `categoryName`으로 전달합니다. 최대 500자이며 누락, null, 빈 문자열 또는 공백뿐인 값은 HTTP 400의 `INVALID_REQUEST`로 반환합니다.
+내부 / SK스토아 카테고리명은 선택 필드 `categoryName`으로 서버에 전달합니다. 상품 ID(`goodsId`)와 내부 카테고리(`categoryName`)는 로그·집계·입력 식별에 사용하며 실제 AI 입력에서는 제외합니다. 상품명·정보고시·구성·허용 구매옵션·단위 설정·단품 ID와 옵션명은 AI에 전달합니다. 카테고리의 누락, null, 빈 문자열 또는 공백뿐인 값을 허용하며, 입력하는 경우 최대 500자입니다. 500자를 초과하면 HTTP 400의 `INVALID_REQUEST`로 반환합니다.
 
 SK스토아 상품정보고시는 필수 필드 `productNoticeText`에 하나의 긴 텍스트로 전달합니다. 실제 AI는 이 내용을 원본 옵션명의 의미를 판단하는 참고 자료로 사용합니다.
 
-상품 기술서의 구성은 선택 필드 `productCompositionText`로 전달할 수 있습니다. 테스트 화면에서는 상품정보고시 아래의 **상품 기술서 · 구성 (선택)**을 클릭해 입력란을 열고 닫습니다. 기본은 접힌 상태이며, 입력 후 접어도 내용은 유지되고 요청에 포함됩니다.
+상품 기술서의 구성은 선택 필드 `productCompositionText`로 전달할 수 있습니다. 테스트 화면에서는 상품정보고시 아래의 **상품 기술서 · 구성 (선택)** 입력란이 기본으로 펼쳐져 있습니다. 클릭해 접어도 입력 내용은 유지되고 요청에 포함됩니다. 페이지를 처음 열면 예제가 자동 입력되지 않으며, 상품 정보와 옵션 입력란이 빈 상태로 시작합니다. 첫 단품 ID는 자동으로 `1`이 입력됩니다.
 
 프로젝트 소개와 화면 사용 방법은 [비개발자용 안내](docs/project-overview.md), 기술 사양과 처리 흐름은 [기술 담당자용 문서](docs/project-flow.md)를 참고하세요.
 
-실제 AI 추론은 입력된 모든 단품을 각각 처리합니다. LIGHT 결과가 `certain=false`이거나 서버의 매핑·응답 검증에 실패하면 동일한 상품 데이터로 FULL을 한 번만 호출합니다. 정상 LIGHT와 처음부터 FULL인 요청은 AI를 한 번만 호출하며, FULL도 검증에 실패하면 `REVIEW_REQUIRED`로 반환합니다. 낮은 confidence만으로 재호출하지 않으며 기존 최종 자동 적용 신뢰도 기준은 유지합니다. API 호출 오류는 이 재추론의 대상이 아닙니다. 두 호출의 실제 사용량과 전환 사유는 동일한 `inferenceId`로 JSONL에 기록합니다. 설정과 통계 집계는 [AI Failover 문서](docs/ai-inference-failover.md)를 참고하세요. 프롬프트 버전은 `coupang-option-v18`입니다. 기존 Prompt·User Prompt·JSON Schema·PromptSelector는 유지합니다.
+실제 AI 추론은 입력된 모든 단품을 각각 처리합니다. LIGHT 결과가 `certain=false`이거나 서버의 매핑·응답 검증에 실패하면 동일한 상품 데이터로 FULL을 한 번만 호출합니다. 정상 LIGHT와 처음부터 FULL인 요청은 AI를 한 번만 호출하며, FULL도 검증에 실패하면 `REVIEW_REQUIRED`로 반환합니다. 낮은 confidence만으로 재호출하지 않으며 기존 최종 자동 적용 신뢰도 기준은 유지합니다. API 호출 오류는 이 재추론의 대상이 아닙니다. 두 호출의 실제 사용량과 전환 사유는 동일한 `inferenceId`로 JSONL에 기록합니다. 설정과 통계 집계는 [AI Failover 문서](docs/ai-inference-failover.md)를 참고하세요. 프롬프트 버전은 `coupang-option-v26`입니다. 기존 Prompt·User Prompt·JSON Schema·PromptSelector는 유지합니다.
 
 구매옵션별 단위를 설정하지 않은 항목은 AI가 원문과 옵션 의미에서 판단한 값·단위를 그대로 반환합니다. 예를 들어 화면크기는 `109cm`, `43인치`로 반환하며 임의로 `개`를 붙이지 않습니다. 단위를 설정한 항목에만 선택지·기본단위 규칙과 서버 단위 검증을 적용합니다.
 
@@ -238,7 +238,7 @@ Vercel은 로컬 `.env`나 `compose.yaml`을 실행 환경 설정으로 사용�
 | `PORT` | `8081` |
 | `SERVER_ADDRESS` | `127.0.0.1` |
 | `app.inference.confidence-threshold` | `0.80` |
-| `app.inference.prompt-version` | `coupang-option-v18` |
+| `app.inference.prompt-version` | `coupang-option-v26` |
 
 신뢰도 기준은 **0.80 이상(0.80 포함)**입니다. AI 전체 신뢰도와 모든 개별 매핑 신뢰도의 최솟값이 기준 이상이고, `certain=true`이며 서버의 응답 형식·단품 검증을 통과하면 `success=true`, `autoApplyCandidate=true`로 반환합니다. 전체 신뢰도가 0.80이어도 개별 매핑이 0.80 미만이거나 다른 검증에 실패하면 반려됩니다. 반려 원인은 `serverAssessment.decisionCode`와 `validationErrors`에서 확인할 수 있습니다.
 

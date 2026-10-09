@@ -47,7 +47,7 @@ class RequestValidationTest {
         assertThatThrownBy(() -> validator.validate(Fixtures.withOptions(base,
                 List.of(base.options().get(0), base.options().get(0))))).hasMessageContaining("입력");
         assertThatThrownBy(() -> validator.validate(Fixtures.withOptions(base,
-                List.of(new SourceOption("1", " "))))).hasMessageContaining("입력");
+                List.of(new SourceOption("1", " "), new SourceOption("2", "화이트"))))).hasMessageContaining("입력");
     }
 
     @Test void rejectsDuplicateAllowedNames() {
@@ -62,7 +62,11 @@ class RequestValidationTest {
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             var beanValidator = factory.getValidator();
             assertThat(beanValidator.validate(Fixtures.withOptions(base, java.util.Arrays.asList((SourceOption) null)))).isNotEmpty();
-            assertThat(beanValidator.validate(Fixtures.withOptions(base, List.of(new SourceOption("1", null))))).isNotEmpty();
+            assertThat(beanValidator.validate(Fixtures.withOptions(base,
+                    List.of(new SourceOption("1", null), new SourceOption("2", "화이트"))))).isNotEmpty();
+            var single = Fixtures.withOptions(base, List.of(new SourceOption("1", null)));
+            assertThat(beanValidator.validate(single)).isEmpty();
+            assertThat(single.options()).containsExactly(new SourceOption("1", "단일상품"));
         }
     }
 }

@@ -51,6 +51,24 @@ class ResultValidatorTest {
                 .anyMatch(error -> error.contains("매핑이 누락"));
     }
 
+    @Test void fillsOnlyMissingOptionsWithoutDefaultUnitsForEachItem() {
+        var request = new InferenceRequest("length-product", "구성품 10개", null,
+                List.of("길이", "수량", "색상", "중량"),
+                List.of(new SourceOption("1", "10개"), new SourceOption("2", "20개 빨강")),
+                "구성품 10개", List.of(new PurchaseOptionUnit("중량", "g", List.of("g", "kg"))));
+        var proposal = new MappingProposal(true, .99, List.of(
+                new MappingProposal.Entry("1", "수량", "10개", .99),
+                new MappingProposal.Entry("2", "수량", "20개", .99),
+                new MappingProposal.Entry("2", "색상", "빨강", .99)), "수량과 두 번째 단품 색상 추출");
+        assertThat(validator.validateProposal(request, proposal)).isEmpty();
+        var items = validator.assemble(request, proposal);
+        assertThat(items.get(0).purchaseOptions()).containsExactlyInAnyOrderEntriesOf(
+                Map.of("길이", "없음", "수량", "10개", "색상", "없음"));
+        assertThat(items.get(1).purchaseOptions()).containsExactlyInAnyOrderEntriesOf(
+                Map.of("길이", "없음", "수량", "20개", "색상", "빨강"));
+        assertThat(validator.validateItems(request, proposal, items)).isEmpty();
+    }
+
     @Test void rejectsUnknownIdsAndDisallowedTargets() {
         for (var entry : List.of(new MappingProposal.Entry("unknown", "색상", "남색", .99),
                 new MappingProposal.Entry("1", "허용되지 않은 항목", "남색", .99))) {

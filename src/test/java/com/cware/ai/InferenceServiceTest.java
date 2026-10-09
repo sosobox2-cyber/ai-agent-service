@@ -69,7 +69,9 @@ class InferenceServiceTest {
         assertThat(result.success()).isTrue();
         assertThat(result.autoApplyCandidate()).isTrue();
         assertThat(result.validationErrors()).isEmpty();
-        assertThat(result.items().get(0).purchaseOptions()).containsExactlyEntriesOf(Map.of("색상", "남색"));
+        assertThat(result.items().get(0).purchaseOptions()).containsExactlyInAnyOrderEntriesOf(Map.of("색상", "남색", "사이즈", "없음"));
+        assertThat(result.optionMappings()).hasSize(1);
+        assertThat(result.aiAssessment().mappings()).hasSize(1);
     }
 
     @Test void lowConfidenceNeverExposesApplicableItems() {

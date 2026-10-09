@@ -1,6 +1,7 @@
 package com.cware.ai;
 
 import com.cware.ai.exception.InferenceException;
+import com.cware.ai.dto.*;
 import com.cware.ai.inference.*;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,7 +24,83 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties="spring.ai.openai.api-key=test-placeholder")
 @AutoConfigureMockMvc
 class PurchaseOptionApiTest {
+    @Test void kitchenTowelUsesGoodsNameForSheetAndRollCountsInTestMode() throws Exception {
+        mvc.perform(post(URL).param("testMode", "true").contentType(MediaType.APPLICATION_JSON)
+                        .content(Files.readString(Path.of("examples/kitchen-towel-request.json"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.errorCode").value("TEST_MODE"))
+                .andExpect(jsonPath("$.validationErrors").isEmpty())
+                .andExpect(jsonPath("$.items[0].purchaseOptions['개당 수량']").value("140매"))
+                .andExpect(jsonPath("$.items[0].purchaseOptions['수량']").value("12개"))
+                .andExpect(jsonPath("$.optionMappings[0].evidenceSource").value("goodsName"))
+                .andExpect(jsonPath("$.optionMappings[1].calculation.operands[0].unit").value("롤"))
+                .andExpect(jsonPath("$.aiUsage").isEmpty());
+        verifyNoInteractions(ai);
+    }
+    @Test void creamExampleReturnsMainProductWeightAndCountWithoutFreeTrialInTestMode() throws Exception {
+        mvc.perform(post(URL).param("testMode", "true").contentType(MediaType.APPLICATION_JSON)
+                        .content(Files.readString(Path.of("examples/cream-request.json"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.errorCode").value("TEST_MODE"))
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.autoApplyCandidate").value(false))
+                .andExpect(jsonPath("$.validationErrors").isEmpty())
+                .andExpect(jsonPath("$.items[0].purchaseOptions['개당 중량']").value("120g"))
+                .andExpect(jsonPath("$.items[0].purchaseOptions['수량']").value("3개"))
+                .andExpect(jsonPath("$.optionMappings[0].evidenceSource").value("productCompositionText"))
+                .andExpect(jsonPath("$.optionMappings[1].calculation.operands[0].unit").value("통"))
+                .andExpect(jsonPath("$.aiUsage").isEmpty());
+        verifyNoInteractions(ai);
+    }
+    @Test void toiletPaperExampleReturnsPackContentsLengthAndSalesQuantityInTestMode() throws Exception {
+        mvc.perform(post(URL).param("testMode", "true").contentType(MediaType.APPLICATION_JSON)
+                        .content(Files.readString(Path.of("examples/toilet-paper-request.json"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.errorCode").value("TEST_MODE"))
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.autoApplyCandidate").value(false))
+                .andExpect(jsonPath("$.validationErrors").isEmpty())
+                .andExpect(jsonPath("$.items[0].purchaseOptions['개당 수량']").value("30롤"))
+                .andExpect(jsonPath("$.items[0].purchaseOptions['길이']").value("22m"))
+                .andExpect(jsonPath("$.items[0].purchaseOptions['수량']").value("4개"))
+                .andExpect(jsonPath("$.optionMappings[2].calculation.operation").value("PACK_COUNT"))
+                .andExpect(jsonPath("$.optionMappings[2].calculation.operands[0].unit").value("팩"));
+        verifyNoInteractions(ai);
+    }
+    @Test void missingLengthAndColorWithoutDefaultUnitsReturnNone() throws Exception {
+        var request = new InferenceRequest("length-product", "구성품 10개", null,
+                java.util.List.of("길이", "수량", "색상"), java.util.List.of(new SourceOption("1", "10개")),
+                "구성품 10개");
+        when(ai.infer(any())).thenReturn(new MappingProposal(true, .99,
+                java.util.List.of(new MappingProposal.Entry("1", "수량", "10개", .99)), "수량만 추출했습니다."));
+        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.items[0].purchaseOptions.길이").value("없음"))
+                .andExpect(jsonPath("$.items[0].purchaseOptions.수량").value("10개"))
+                .andExpect(jsonPath("$.items[0].purchaseOptions.색상").value("없음"))
+                .andExpect(jsonPath("$.optionMappings.length()").value(1))
+                .andExpect(jsonPath("$.aiAssessment.mappings.length()").value(1));
+    }
     private static final String URL="/api/v1/coupang/purchase-options/infer";
+    @Test void emptyOptionsDefaultToSingleProductInTestMode() throws Exception {
+        var original = (ObjectNode) mapper.readTree(java.nio.file.Files.readString(
+                java.nio.file.Path.of("examples/kitchen-towel-request.json")));
+        for (int variant = 0; variant < 4; variant++) {
+            var body = original.deepCopy();
+            if (variant == 0) body.remove("options");
+            if (variant == 1) body.putNull("options");
+            if (variant == 2) body.putArray("options");
+            if (variant == 3) body.putArray("options").addObject().put("optionId", "1").put("optionName1", " ");
+            mvc.perform(post(URL).param("testMode", "true").contentType(MediaType.APPLICATION_JSON)
+                            .content(mapper.writeValueAsString(body)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.items[0].optionId").value("1"))
+                    .andExpect(jsonPath("$.items[0].purchaseOptions['개당 수량']").value("140매"))
+                    .andExpect(jsonPath("$.items[0].purchaseOptions['수량']").value("12개"));
+        }
+        verifyNoInteractions(ai);
+    }
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper mapper;
     @Autowired com.cware.ai.config.AiUsagePricing usagePricing;
@@ -285,8 +362,8 @@ class PurchaseOptionApiTest {
                 .andExpect(jsonPath("$.items[0].purchaseOptions['화면크기(cm)']").value("109cm"))
                 .andExpect(jsonPath("$.items[0].purchaseOptions['화면크기(in)']").value("43인치"))
                 .andExpect(jsonPath("$.items[0].purchaseOptions['화면크기 (cm/(인치))']").value("109cm(43인치)"))
-                .andExpect(jsonPath("$.items[0].purchaseOptions['설치지원방식']").doesNotExist())
-                .andExpect(jsonPath("$.items[0].purchaseOptions['스탠드/벽걸이 구분']").doesNotExist());
+                .andExpect(jsonPath("$.items[0].purchaseOptions['설치지원방식']").value("자가설치"))
+                .andExpect(jsonPath("$.items[0].purchaseOptions['스탠드/벽걸이 구분']").value("없음"));
         verifyNoInteractions(ai);
     }
 
@@ -308,18 +385,28 @@ class PurchaseOptionApiTest {
                 .andExpect(jsonPath("$.aiUsage[0].total_tokens").value(1200));
     }
 
-    @Test void invalidInternalCategoryFailsBeforeAiInBothModes() throws Exception {
+    @Test void optionalInternalCategoryIsAcceptedInBothModes() throws Exception {
+        when(ai.infer(any())).thenReturn(Fixtures.proposal());
         for (String mode : new String[]{"false", "true"}) {
-            for (String category : new String[]{null, "", " \t\r\n ", "가".repeat(501)}) {
+            for (String category : new String[]{null, "", " \t\r\n "}) {
                 ObjectNode body = mapper.valueToTree(Fixtures.request());
                 body.put("categoryName", category);
                 mvc.perform(post(URL).param("testMode", mode).contentType(MediaType.APPLICATION_JSON)
                                 .content(mapper.writeValueAsString(body)))
-                        .andExpect(status().isBadRequest())
-                        .andExpect(jsonPath("$.errorCode").value("INVALID_REQUEST"));
+                        .andExpect(status().isOk());
             }
             ObjectNode body = mapper.valueToTree(Fixtures.request());
             body.remove("categoryName");
+            mvc.perform(post(URL).param("testMode", mode).contentType(MediaType.APPLICATION_JSON)
+                            .content(mapper.writeValueAsString(body)))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    @Test void oversizedInternalCategoryFailsBeforeAiInBothModes() throws Exception {
+        for (String mode : new String[]{"false", "true"}) {
+            ObjectNode body = mapper.valueToTree(Fixtures.request());
+            body.put("categoryName", "가".repeat(501));
             mvc.perform(post(URL).param("testMode", mode).contentType(MediaType.APPLICATION_JSON)
                             .content(mapper.writeValueAsString(body)))
                     .andExpect(status().isBadRequest())
@@ -328,7 +415,7 @@ class PurchaseOptionApiTest {
         verifyNoInteractions(ai);
     }
 
-    @Test void categoryMaximumLengthIsAcceptedAndSentToAi() throws Exception {
+    @Test void categoryMaximumLengthIsAcceptedAndRetainedForLogging() throws Exception {
         when(ai.infer(any())).thenReturn(Fixtures.proposal());
         ObjectNode body = mapper.valueToTree(Fixtures.request());
         String category = "가".repeat(500);

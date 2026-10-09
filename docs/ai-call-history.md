@@ -30,8 +30,8 @@ Java 17, Spring AI 1.1.8의 `OpenAiChatModel` / Chat Completions를 사용한다
 | 필드 | 의미 |
 | --- | --- |
 | `timestamp` | 기록 시각, 서버 시간대의 ISO-8601 offset 포함 |
-| `goodsId` | 요청 상품 ID |
-| `coupangCategoryId` | 현재 요청 DTO에서 제거된 항목이므로 항상 `null`. 로깅을 위해 API 필드를 복원하지 않음 |
+| `goodsId` | 요청 상품 코드. JSONL과 콘솔에서 모드별 상품 집계에 사용 |
+| `categoryName` | 요청의 내부 / SK스토아 카테고리명. 앞뒤 공백을 제거하며 미입력·빈 값은 `null`. 쿠팡 카테고리 정보가 아님 |
 | `inferenceId` | 한 상품 추론 요청의 UUID. OpenAI request ID가 아님. 기존 재추론의 두 호출에서 동일 |
 | `promptMode` / `model` | 실제 LIGHT/FULL 모드, 응답 모델명. 응답을 얻지 못하면 모델은 `unknown` |
 | `inputTokens` | `response.metadata.usage.getPromptTokens()` |
@@ -84,6 +84,17 @@ Java 17, Spring AI 1.1.8의 `OpenAiChatModel` / Chat Completions를 사용한다
 ```
 
 총 호출, LIGHT/FULL 호출과 비율, 알려진 토큰/캐시/출력/신뢰도/응답시간의 평균, 불확실 호출 수, 기존 재추론 지표와 비용을 집계한다. `null`은 평균에서 제외하고 실제 0은 포함한다. 여러 날짜를 집계할 때는 gzip을 해제하고 필요한 JSONL을 합친 파일을 지정한다.
+
+상품코드별 또는 내부 카테고리별 집계는 `-GroupBy`로 지정한다. 전체 합계를 유지하면서 `groups`에 각 값의 동일한 지표를 추가한다.
+
+```powershell
+.\scripts\measure-ai-failover.ps1 -GroupBy goodsId
+.\scripts\measure-ai-failover.ps1 -GroupBy categoryName
+```
+
+각 그룹의 `uniqueGoods`는 고유 상품코드 수다. 기존 지표 `totalProducts`는 상품 추론 요청 수이며 동일 상품을 여러 번 요청하면 각각 센다. `lightStarts`, `lightSuccessRatePercent`, `failoverRatePercent`, `fullRetrySuccess`, `finalReviewRequired`를 함께 비교해 최초 LIGHT 성공과 FULL 전환 결과를 구분한다. 과거 로그에 카테고리가 없으면 `value=null` 그룹으로 집계하며 과거 값을 추정해 채우지 않는다. 이 집계는 모드 선택을 검토하기 위한 자료이며 자동 라우팅 규칙은 변경하지 않는다.
+
+콘솔 출력이 켜져 있으면 `ai_usage` 뒤에 파일과 동일한 JSON 호출 기록을 한 줄로 출력한다. `goodsId`, `categoryName`, `status`, `validationPassed`, `certain`, `confidence`, `mappingCount`, `elapsedMs`, 재추론 사유, 토큰과 비용을 모두 포함한다. 파일 기록을 꺼도 콘솔 기록은 독립적으로 동작한다. 문자열은 Jackson으로 이스케이프해 줄바꿈이나 따옴표가 로그 행을 깨지 않게 한다.
 
 향후 재추론 기능을 확장할 때는 기존 `inferenceId`, `initialPromptMode`, `finalPromptMode`, `retryCount`, `retryReason`/`retryReasons`를 활용한다. 각 API 호출별 행을 유지해 상품 요청 수와 유료 호출 수를 구분한다.
 

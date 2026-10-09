@@ -65,6 +65,9 @@ th { padding: 0 7px 10px; text-align: left; color: #6e7d90; font-size: 12px; fon
 .presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 10px; }
 .presets .button { padding: 12px; white-space: normal; overflow-wrap: anywhere; line-height: 1.5; text-align: left; }
 .submit-area .primary { flex: none; }
+.submit-buttons { display: flex; align-items: center; gap: 10px; }
+.submit-buttons .primary { flex: 1; }
+#reset-button:disabled { opacity: .6; cursor: wait; }
 .quiet { padding: 9px 12px; background: #e9eef6; color: #3f526a; }
 .primary { padding: 13px 20px; background: #2866d6; color: #fff; box-shadow: 0 5px 15px #2866d62b; font-size: 15px; }
 .primary:hover { background: #1e55bb; }
@@ -124,5 +127,5 @@ summary { width: fit-content; color: #2864ce; font-size: 13px; font-weight: 700;
 pre { max-height: 360px; overflow: auto; margin: 0; padding: 16px; border-radius: 10px; background: #172437; color: #d8e4f4; font: 12px/1.6 Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
 footer { color: #99a5b3; text-align: center; font-size: 12px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
-@media (max-width: 850px) { .three-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); } .section-heading { align-items: flex-start; flex-direction: column; gap: 8px; } .submit-area { align-items: flex-start; flex-direction: column; } .submit-area .primary { width: 100%; } }
+@media (max-width: 850px) { .three-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); } .section-heading { align-items: flex-start; flex-direction: column; gap: 8px; } .submit-area { align-items: flex-start; flex-direction: column; } .submit-area .submit-buttons { width: 100%; } }
 @media (max-width: 600px) { .shell { width: min(100% - 24px, 1280px); padding-top: 28px; } .page-header { flex-direction: column; gap: 14px; } .panel { padding: 21px 16px; } .three-columns, .two-columns, .json-grid { grid-template-columns: 1fr; } .below-table { display: block; margin-left: 0; } }

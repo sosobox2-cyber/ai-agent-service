@@ -58,8 +58,15 @@ public class ResultValidator {
         for (MappingProposal.Entry entry : proposal.mappings())
             byId.computeIfAbsent(entry.optionId(), ignored -> new LinkedHashMap<>())
                     .put(entry.targetPurchaseOptionName(), entry.value());
-        return request.options().stream().map(source -> new PurchaseOptionItem(source.optionId(),
-                Collections.unmodifiableMap(byId.getOrDefault(source.optionId(), Map.of())))).toList();
+        Set<String> configuredUnits = new HashSet<>();
+        request.purchaseOptionUnits().forEach(unit -> configuredUnits.add(unit.purchaseOptionName()));
+        return request.options().stream().map(source -> {
+            Map<String, String> values = new LinkedHashMap<>(byId.getOrDefault(source.optionId(), Map.of()));
+            for (String name : request.allowedPurchaseOptions()) {
+                if (!configuredUnits.contains(name)) values.putIfAbsent(name, "없음");
+            }
+            return new PurchaseOptionItem(source.optionId(), Collections.unmodifiableMap(values));
+        }).toList();
     }
 
     /** 결과 조립 이후에도 ID, 값, 허용 이름 및 단품 조합을 재대조한다. */

@@ -58,7 +58,7 @@ LIGHT는 전체 단품 순회, 허용 이름, 원문 문자열 추출, 임의 �
 | `PromptRoutingTest`, `AiUsageLoggerTest`, `OpenAiTransportTest` | 라우팅·네 단품·usage·로그 검증 |
 | `PromptCostComparisonTest` | 오프라인 추정과 선택 실행 실제 비교 |
 
-`AI_PROMPT_MODE=AUTO`가 기본이며 `AI_PROMPT_MODE=FULL`로 기존 상세 프롬프트만 사용하도록 즉시 되돌릴 수 있다. 계산 요청까지 LIGHT를 강제하는 설정은 제공하지 않는다. 응답의 프롬프트 버전은 `coupang-option-v18`이다.
+`AI_PROMPT_MODE=AUTO`가 기본이며 `AI_PROMPT_MODE=FULL`로 기존 상세 프롬프트만 사용하도록 즉시 되돌릴 수 있다. 계산 요청까지 LIGHT를 강제하는 설정은 제공하지 않는다. 응답의 프롬프트 버전은 `coupang-option-v26`이다.
 
 ## LIGHT → FULL 재추론과 비용 보호
 

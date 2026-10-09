@@ -111,34 +111,45 @@ public final class AiUsageLogger implements AutoCloseable {
                 error == null ? "appender unavailable" : error.getClass().getSimpleName());
     }
 
-    public void recordInference(String inferenceId, String goodsId, PurchaseOptionPromptMode initial,
+    public void recordInference(String inferenceId, String goodsId, String categoryName, PurchaseOptionPromptMode initial,
             PurchaseOptionPromptMode mode, int retryCount, List<AiRetryReason> retryReasons,
             AiInferenceValidationResult validation, String status, ChatResponse response, MappingProposal proposal,
             long elapsedMs) {
         try {
-            record(inferenceId, mode, retryCount + 1, response);
-            if (fileLogger == null) return;
-            if (appender == null || !appender.isStarted()) { reportFailure(null); return; }
+            String category = categoryName == null || categoryName.isBlank() ? null : categoryName.trim();
+            if (!enabled && fileLogger == null) return;
             AiCallUsage usage = measureUsage(mode, retryCount + 1, response);
             var reasons = retryReasons == null ? List.<AiRetryReason>of() : List.copyOf(retryReasons);
-            var row = new AiPurchaseOptionUsageLog(OffsetDateTime.now().toString(), inferenceId, goodsId,
-                    null, mode, usage.model(), usage.input_tokens(), usage.cached_tokens(), usage.output_tokens(),
+            var row = new AiPurchaseOptionUsageLog(OffsetDateTime.now().toString(), inferenceId, goodsId, category,
+                    mode, usage.model(), usage.input_tokens(), usage.cached_tokens(), usage.output_tokens(),
                     usage.total_tokens(), proposal == null ? null : proposal.certain(),
                     proposal == null || !ResultValidator.validConfidence(proposal.confidence()) ? null : proposal.confidence(),
                     proposal == null || proposal.mappings() == null ? null : proposal.mappings().size(),
                     elapsedMs, status, initial, "VALIDATION_ERROR".equals(status) ? PurchaseOptionPromptMode.FULL : mode,
                     retryCount, reasons.isEmpty() ? null : reasons.get(0), reasons,
                     validation == null ? null : validation.valid(), usage.estimated_cost_usd());
-            fileLogger.info(json.writeValueAsString(row));
+            String message = json.writeValueAsString(row);
+            if (enabled) LOG.info("ai_usage {}", message);
+            if (fileLogger == null) return;
+            if (appender == null || !appender.isStarted()) { reportFailure(null); return; }
+            fileLogger.info(message);
         } catch (Exception e) { reportFailure(e); }
     }
 
     public void record(String callId, PurchaseOptionPromptMode mode, int attempt, ChatResponse response) {
+        record(callId, mode, attempt, response, null, null);
+    }
+
+    private void record(String callId, PurchaseOptionPromptMode mode, int attempt, ChatResponse response,
+            String goodsId, String categoryName) {
         if (!enabled) return;
         AiCallUsage usage = measureUsage(mode, attempt, response);
-        LOG.info("ai_usage call_id={} mode={} attempt={} model={} input_tokens={} cached_tokens={} output_tokens={} total_tokens={} estimated_cost_usd={}",
-                callId, usage.mode(), usage.attempt(), usage.model(), usage.input_tokens(), usage.cached_tokens(),
-                usage.output_tokens(), usage.total_tokens(), usage.estimated_cost_usd());
+        try {
+            LOG.info("ai_usage call_id={} goods_id={} category_name={} mode={} attempt={} model={} input_tokens={} cached_tokens={} output_tokens={} total_tokens={} estimated_cost_usd={}",
+                    callId, json.writeValueAsString(goodsId), json.writeValueAsString(categoryName),
+                    usage.mode(), usage.attempt(), usage.model(), usage.input_tokens(), usage.cached_tokens(),
+                    usage.output_tokens(), usage.total_tokens(), usage.estimated_cost_usd());
+        } catch (Exception e) { reportFailure(e); }
     }
 
     public AiCallUsage measureUsage(PurchaseOptionPromptMode mode, int attempt, ChatResponse response) {

@@ -3,6 +3,7 @@ package com.cware.ai.inference;
 import com.cware.ai.dto.InferenceRequest;
 import com.cware.ai.dto.Calculation;
 import com.cware.ai.dto.AiCallUsage;
+import com.cware.ai.dto.AiProductData;
 import com.cware.ai.config.AiRetryProperties;
 import java.util.function.Consumer;
 import com.cware.ai.exception.InferenceException;
@@ -69,7 +70,7 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
     @Override
     public MappingProposal infer(InferenceRequest request, Consumer<AiCallUsage> usage) {
         try {
-            String input = userPrompt + "\n" + mapper.writeValueAsString(Map.of("product", request));
+            String input = userPrompt + "\n" + mapper.writeValueAsString(Map.of("product", AiProductData.from(request)));
             ResponseFormat format = ResponseFormat.builder().type(ResponseFormat.Type.JSON_SCHEMA)
                     .jsonSchema(ResponseFormat.JsonSchema.builder().name("purchase_option_mapping")
                             .strict(true).schema(schema(request)).build()).build();
@@ -108,7 +109,7 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
         try {
             response = model.call(prompt);
         } catch (RuntimeException e) {
-            usageLogger.recordInference(inferenceId, request.goodsId(), initial, mode, retryCount,
+            usageLogger.recordInference(inferenceId, request.goodsId(), request.categoryName(), initial, mode, retryCount,
                     retryReasons, null, "API_ERROR", null, null, (System.nanoTime() - started) / 1_000_000);
             throw e; // Transport errors never trigger prompt failover.
         }
@@ -116,7 +117,7 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
         MappingProposal proposal = null;
         AiInferenceValidationResult validation;
         try {
-            proposal = parse(response);
+            proposal = CountUnitNormalizer.normalize(request, parse(response));
             validation = validator.validate(request, proposal);
         } catch (JsonProcessingException | InferenceException e) {
             validation = new AiInferenceValidationResult(List.of(
@@ -127,7 +128,7 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
                 && retry.enabled() && retry.maxRetries() == 1;
         String status = willRetry ? "VALIDATION_ERROR" : validation.valid() && validator.meetsApplicationConfidence(proposal)
                 ? "SUCCESS" : "REVIEW_REQUIRED";
-        usageLogger.recordInference(inferenceId, request.goodsId(), initial, mode, retryCount,
+        usageLogger.recordInference(inferenceId, request.goodsId(), request.categoryName(), initial, mode, retryCount,
                 retryCount == 0 ? validation.reasons() : retryReasons, validation, status, response, proposal, elapsedMs);
         usage.accept(usageLogger.measureUsage(mode, retryCount + 1, response).withInference(inferenceId,
                 initial, willRetry ? PurchaseOptionPromptMode.FULL : mode, retryCount,

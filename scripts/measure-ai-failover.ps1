@@ -1,4 +1,7 @@
-param([string]$Path = 'logs/ai-usage.jsonl')
+param(
+    [string]$Path = 'logs/ai-usage.jsonl',
+    [ValidateSet('goodsId', 'categoryName')][string]$GroupBy
+)
 $ErrorActionPreference = 'Stop'
 $rows = @(Get-Content -LiteralPath $Path -Encoding UTF8 | Where-Object { $_.Trim() } | ForEach-Object { $_ | ConvertFrom-Json })
 # 기존 JSONL과 새 camelCase JSONL을 함께 집계할 수 있게 정규화한다.
@@ -10,6 +13,7 @@ foreach ($row in $rows) {
         }
     }
 }
+function SummarizeRows([object[]]$rows) {
 function AverageKnown([string]$Field) {
     $known = @($rows | Where-Object { $null -ne $_.$Field })
     if (!$known.Count) { return $null }
@@ -53,4 +57,22 @@ foreach ($row in $rows) { if ($null -ne $row.estimatedCostUsd) { $totalCost += [
     unknownExtraCostCalls = $retries.Count - $knownExtra.Count
     knownTotalEstimatedCostUsd = $totalCost
     unknownTotalCostCalls = @($rows | Where-Object { $null -eq $_.estimatedCostUsd }).Count
-} | ConvertTo-Json
+}
+}
+
+$summary = SummarizeRows $rows
+if ($GroupBy) {
+    $groups = @($rows | Group-Object -Property {
+        $value = [string]$_.$GroupBy
+        if ([string]::IsNullOrWhiteSpace($value)) { '' } else { $value.Trim() }
+    } | Sort-Object Name | ForEach-Object {
+        [pscustomobject]@{
+            value = $(if ($_.Name -eq '') { $null } else { $_.Name })
+            uniqueGoods = @($_.Group | Where-Object { $_.goodsId } | Select-Object -ExpandProperty goodsId -Unique).Count
+            metrics = SummarizeRows $_.Group
+        }
+    })
+    $summary | Add-Member -NotePropertyName groupBy -NotePropertyValue $GroupBy
+    $summary | Add-Member -NotePropertyName groups -NotePropertyValue $groups
+}
+$summary | ConvertTo-Json -Depth 6

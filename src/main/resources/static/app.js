@@ -6,6 +6,7 @@ const resultStatus = document.querySelector('#result-status');
 const resultSummary = document.querySelector('#result-summary');
 const resultDetails = document.querySelector('#result-details');
 const submitButton = document.querySelector('#submit-button');
+const resetButton = document.querySelector('#reset-button');
 const testModeInput = document.querySelector('#test-mode');
 const noticeInput = form.elements.productNoticeText;
 const purchaseOptionRows = document.querySelector('#purchase-option-rows');
@@ -106,6 +107,164 @@ const examples = {
   }
 };
 
+examples.kitchenTowel = {
+  "goodsId": "20041302",
+  "goodsName": "[크리넥스]크리넥스 KLX 안심 클래식 키친타올 140매x12롤",
+  "categoryName": "생활용품>생활/건강/욕실/애완>화장지/각티슈/주방랩키친타올",
+  "productNoticeText": "004:제조자,수입품의 경우 수입자를 함께 표기:유한킴벌리 ,019:품명 및 모델명:크리넥스 키친타올,049:소비자상담 관련 전화번호:유한킴벌리 고객센터 : 080-022-7007,126:법에 의한 인증·허가 등을 받았음을 확인할 수 있는 경우 그에 대한 사항:해당없음,127:제조국 또는 원산지:한국\n",
+  "allowedPurchaseOptions": [
+    "개당 수량",
+    "수량"
+  ],
+  "purchaseOptionUnits": [
+    {
+      "purchaseOptionName": "개당 수량",
+      "defaultUnit": "개",
+      "unitOptions": [
+        "개입",
+        "롤",
+        "매",
+        "매입",
+        "세트"
+      ]
+    },
+    {
+      "purchaseOptionName": "수량",
+      "defaultUnit": "개",
+      "unitOptions": [
+        "개",
+        "박스",
+        "세트"
+      ]
+    }
+  ],
+  "options": [
+    {
+      "optionId": "1",
+      "optionName1": "단일상품"
+    }
+  ]
+};
+
+examples.pillow = {
+  "goodsId": "64512579",
+  "goodsName": "[KoDanZam]코 단잠 초특가 냉감 메밀베개 4개 세트",
+  "categoryName": "가구/침구>침구/인테리어>침구단품/세트베개/베개커버",
+  "productNoticeText": "\"001:제품 소재:[겉커버]\n겉감1:폴리에스터70%,폴리에틸렌30%\n겉감2:폴리에스터100%\n겉감3:폴리에스터100%\n[속통]\n겉감:나일론100%\n충전재:메밀껍질\n,002:색상:화이트, 그레이,003:치수:43*25cm(+-3cm),004:제조자,수입품의 경우 수입자를 함께 표기:(주)단잠코리아\n,005:제조국:대한민국,006:세탁방법 및 취급시 주의사항:- 찬물에서 단독 기계 세탁 가능(건조기 사용 불가, 겉커버를 따로 분리하여 세탁할 것, 속통은 겉감만 따로 분리하여 세탁할 것, 충전재(메밀껍질)는 세탁 불가)\n- 기계 세탁 가능(물 세탁, 세탁망 사용)\n- 개별 단독 세탁 권장, 표백제 사용 금지, 다림질 금지\n- 기계 세탁의 경우 30℃ 이하의 미온수에서 중성 세제로 세탁 가능\n-.탈수는 가,008:품질보증기준:관련 법 및 소비자 분쟁 해결 기준을 따름,009:A/S 책임자와 전화번호:(주)단잠코리아 010-3234-3548 ,013:제품구성:냉감 메밀베개 4개\"\n",
+  "productCompositionText": "\"냉감메밀베개 4개\n\"\n\n",
+  "allowedPurchaseOptions": [
+    "색상",
+    "사이즈",
+    "수량"
+  ],
+  "purchaseOptionUnits": [
+    {
+      "purchaseOptionName": "수량",
+      "defaultUnit": "개",
+      "unitOptions": [
+        "개",
+        "세트"
+      ]
+    }
+  ],
+  "options": [
+    {
+      "optionId": "1",
+      "optionName1": "화이트"
+    },
+    {
+      "optionId": "2",
+      "optionName1": "그레이"
+    }
+  ]
+};
+
+examples.smartboard = {
+  "goodsId": "65462825",
+  "goodsName": "[LG전자]LG 75인치 전자칠판 75TR3DQ 안드로이드 스마트보드 [수도권설치]이동형스탠드(CA-86)",
+  "categoryName": "가전/디지털>영상/주방/생활/계절가전>영상가전LED TV",
+  "productNoticeText": "004:제조자,수입품의 경우 수입자를 함께 표기:LG전자,005:제조국:중국,008:품질보증기준:1년 무상A/S,009:A/S 책임자와 전화번호:1544-7777,011:크기:1709x1031x100mm,019:품명 및 모델명:75TR3DQ,020:KC 인증정보 (「전기용품 및 생활용품 안전관리법」에 따른 안전인증ㆍ안전확인ㆍ공급자적합성확인대상제품 및 「전파법」에 따른 적합인증ㆍ적합등록 대상 기자재에 한함):R-R-LGE-75TR3DJ-B,022:동일모델의 출시년월:2025.03,023:화면사양 (화면크기, 해상도, 화면비율 등):3840x2160 (UHD),029:정격전압, 소비전력:100-240V/50~60Hz /175W~365W,144:에너지 소비효율등급:해당없음,178:추가설치비용:벽걸이 설치의 경우 벽면 수준에 따라 추가금액\n",
+  "allowedPurchaseOptions": [
+    "화면크기 (cm/(인치))",
+    "모델명/품번",
+    "스탠드/벽걸이 구분"
+  ],
+  "options": [
+    {
+      "optionId": "1",
+      "optionName1": "단일상품"
+    }
+  ]
+};
+
+examples.seafood = {
+  "goodsId": "65464903",
+  "goodsName": "[올레마켓]올레마켓 제주 통옥돔 160g*5미(총, 800g)",
+  "categoryName": "식품>신선식품>생선/해산물옥돔",
+  "productNoticeText": "\"049:소비자상담 관련 전화번호:064-762-9531,056:포장단위별 내용물의 용량(중량), 수량:제주 통옥돔 160g*5미(총, 800g)\n(제품 특성상 토막당 중량 표기는 어렵습니다.)\n,057:생산자, 수입품의 경우 수입자를 함께 표기:제조원 : 올레마켓\n,058:「농수산물의 원산지 표시 등에 관한 법률」에 따른 원산지:갈치 100%(국내산)\n,060:농수산물 - 「농수산물 품질관리법」에 따른 유전자변형농수산물 표시, 지리적 표시:해당없음,061:축산물 - 축산법에 따른 등급 표시:해당없음,063:수입 농수축산물에 해당하는 경우 “수입식품안전관리특별법에 따른 수입신고를 필함”의 문구:해당없음,064:상품구성:제주 통옥돔 160g*5미(총, 800g),065:보관방법 또는 취급방법:-18도 이하 냉동보관\n,154:품목 또는 명칭:제주 옥돔,155:제조연월일, 소비기한 또는 품질유지기한:제조년월 : 상시제조 (2026. 6월 이후)\n소비기한 : 제조일로부터 24개월\n,156:소비자 안전을 위한 주의사항 (「식품 등의 표시ㆍ광고에 관한 법률 시행규칙」 제5조 및 [별표 2]에 따른 표시사항을 말함):본 제품은 고등어, 새우, 오징어를 사용한 제품과 동일한 생산시설에서 제조되었습니다.\n\n자연해동 후 가열하여 섭취하기시 바랍니다.\n\n개봉한 제품은 변질되기 쉬우니 바로 드시기 바랍니다.\"\n",
+  "productCompositionText": "제주 통옥돔 160g*5미(총, 800g)\n",
+  "allowedPurchaseOptions": [
+    "수량",
+    "수산물 중량"
+  ],
+  "options": [
+    {
+      "optionId": "1",
+      "optionName1": "단일상품"
+    }
+  ]
+};
+
+examples.cream = {
+  "goodsId": "69358893",
+  "goodsName": "[스와니브][SK단독구성] 특대용량 블랙 캐비어 트러플 영양크림 120g 3통+무료체험 50g 1개+쇼핑백",
+  "categoryName": "뷰티>화장품/헤어/바디>스킨케어크림(영양/탄력/리프팅)",
+  "productNoticeText": "\"005:제조국:한국,008:품질보증기준:본 상품에 이상이 있을 경우, 공정거래위원회 고시 '소비자 분쟁 해결 기준'에 의해 보상해드립니다.,041:내용물의 용량 또는 중량:120g / 50g,042:제품 주요 사양:모든 피부 사용 가능 ,043:사용기한 또는 개봉 후 사용기간:제조일로부터 36개월, 개봉 후 12개월 ,044:사용방법:본품 적당량을 취해 피부에 골고루 펴 바른다.,045:화장품제조업자, 화장품책임판매업자 및 맞춤형 화장품판매업자:화장품제조원/책임판매원 : 주식회사코스엘 / 주식회사코스엘,046:「화장품법」에 따라 기재 표시하여야 하는 모든 성분:상세페이지 참조 ,047:「화장품법」에 따른 기능성 화장품(미백, 주름개선, 자외선 차단제품 등)의 경우 “화장품법에 따른 기능성 화장품 심사(또는 보고)를 필함”의 문구:피부의 미백에 도움을 준다. 피부의 주름개선에 도움을 준다.,048:사용할 때의 주의사항:1. 화장품 사용 시 또는 사용 후 직사광선에 의하여 사용부위가 붉은 반점, 부어오름 또는 가려움증 등의 이상 증상이나 부작용이 있는 경우 전문의 등과 상담할 것\n2. 상처가 있는 부위 등에는 사용을 자제할 것\n3. 보관 및 취급시의 주의사항\n\t   가. 어린이의 손이 닿지 않는 곳에 보관할 것\n\t   나. 직사광선을 피해서 보관할 것,049:소비자상담 관련 전화번호: 031-991-2024\"\n",
+  "productCompositionText": "스와니브 블랙 트러플 캐비어 영양크림 특대용량 120g 3통 + 무료체험분 50g 1통 + 쇼핑백\n",
+  "allowedPurchaseOptions": [
+    "개당 중량",
+    "수량"
+  ],
+  "purchaseOptionUnits": [
+    {
+      "purchaseOptionName": "개당 중량",
+      "defaultUnit": "g",
+      "unitOptions": [
+        "g",
+        "kg"
+      ]
+    },
+    {
+      "purchaseOptionName": "수량",
+      "defaultUnit": "개",
+      "unitOptions": [
+        "개"
+      ]
+    }
+  ],
+  "options": [
+    {
+      "optionId": "1",
+      "optionName1": "단일상품"
+    }
+  ]
+};
+
+examples.toiletPaper = {
+  goodsId: '69356512',
+  goodsName: '[모나리자]모나리자 홈앤코튼 시그니처 22m x 30롤 x 4팩(총 120롤)',
+  categoryName: '생활용품>생활/건강/욕실/애완>화장지/각티슈/주방랩화장지',
+  productNoticeText: '004:제조자,수입품의 경우 수입자를 함께 표기:모나리자,019:품명 및 모델명:모나리자 홈앤코튼 시그니처 22m x 30롤 x 4팩(총 120롤),049:소비자상담 관련 전화번호:080-024-4698,126:법에 의한 인증·허가 등을 받았음을 확인할 수 있는 경우 그에 대한 사항:해당없음,127:제조국 또는 원산지:한국\n',
+  productCompositionText: '모나리자 홈앤코튼 시그니처 22m x 30롤 x 4팩(총 120롤)\n',
+  allowedPurchaseOptions: ['개당 수량', '길이', '수량'],
+  purchaseOptionUnits: [
+    { purchaseOptionName: '개당 수량', defaultUnit: '개', unitOptions: ['개입', '롤', '매', '매입', '세트'] },
+    { purchaseOptionName: '길이', defaultUnit: 'cm', unitOptions: ['cm', 'm', 'mm'] },
+    { purchaseOptionName: '수량', defaultUnit: '개', unitOptions: ['개', '박스', '세트'] }
+  ],
+  options: [{ optionId: '1', optionName1: '단일상품' }]
+};
+
 examples.tv = {
   "goodsId": "50945478",
   "goodsName": "[플럭스][5년무상AS]플럭스 109cm(43인치) 이동형 QLED TV (셀프설치)",
@@ -153,18 +312,33 @@ function addPurchaseOptionRow(option = {}) {
   });
   purchaseOptionRows.append(row);
 }
+function nextOptionId() {
+  let maxId = 0n;
+  rows.querySelectorAll('[data-field="optionId"]').forEach(input => {
+    const value = input.value.trim();
+    if (/^\d+$/.test(value)) {
+      const id = BigInt(value);
+      if (id > maxId) maxId = id;
+    }
+  });
+  return String(maxId + 1n);
+}
+
 function addRow(option = {}) {
   if (rows.children.length >= 200) {
     showMessage('단품은 최대 200개까지 입력할 수 있습니다.');
     return;
   }
   const row = rowTemplate.content.firstElementChild.cloneNode(true);
+  const optionId = option.optionId ?? nextOptionId();
   row.querySelectorAll('[data-field]').forEach(input => {
-    input.value = option[input.dataset.field] ?? '';
+    input.value = input.dataset.field === 'optionId' ? optionId : option[input.dataset.field] ?? '';
   });
   row.querySelector('.remove-row').addEventListener('click', () => {
     if (rows.children.length > 1) row.remove();
-    else row.querySelectorAll('input').forEach(input => { input.value = ''; });
+    else row.querySelectorAll('input').forEach(input => {
+      if (input.dataset.field !== 'optionId') input.value = '';
+    });
   });
   rows.append(row);
 }
@@ -175,7 +349,26 @@ function resizeNoticeInput() {
   noticeInput.style.height = `${noticeInput.scrollHeight + borders}px`;
 }
 
+function resetInputs() {
+  form.reset();
+  testModeInput.checked = false;
+  rows.replaceChildren();
+  purchaseOptionRows.replaceChildren();
+  addRow();
+  addPurchaseOptionRow();
+  document.querySelector('.composition-details').open = true;
+  resultPanel.hidden = true;
+  resultStatus.textContent = '';
+  resultSummary.textContent = '';
+  resultDetails.replaceChildren();
+  for (const selector of ['#request-json', '#response-json', '#copy-json-status']) {
+    document.querySelector(selector).textContent = '';
+  }
+  resizeNoticeInput();
+}
+
 function loadExample(example) {
+  testModeInput.checked = true;
   for (const field of ['goodsId', 'goodsName', 'categoryName', 'productNoticeText', 'productCompositionText']) {
     form.elements[field].value = example[field] ?? '';
   }
@@ -196,9 +389,11 @@ function splitNames(text) {
 
 function makeRequest() {
   const request = {};
-  for (const field of ['goodsId', 'goodsName', 'categoryName']) {
+  for (const field of ['goodsId', 'goodsName']) {
     request[field] = form.elements[field].value.trim();
   }
+  const categoryName = form.elements.categoryName.value.trim();
+  if (categoryName) request.categoryName = categoryName;
   const productNoticeText = form.elements.productNoticeText.value;
   request.productNoticeText = productNoticeText;
   const productCompositionText = form.elements.productCompositionText.value;
@@ -212,7 +407,8 @@ function makeRequest() {
     return values;
   });
   request.allowedPurchaseOptions = purchaseOptions.map(option => option.purchaseOptionName);
-  const units = purchaseOptions.filter(option => option.defaultUnit || option.unitOptions.length);
+  const units = purchaseOptions.filter(option => option.defaultUnit !== '없음'
+    && (option.defaultUnit || option.unitOptions.length));
   if (units.length) request.purchaseOptionUnits = units;
   request.options = [...rows.querySelectorAll('tr')].map(row => {
     const option = {};
@@ -222,11 +418,14 @@ function makeRequest() {
     });
     return option;
   });
+  if (request.options.every(option => !option.optionName1?.trim())) {
+    const optionId = request.options.length === 1 ? request.options[0].optionId : null;
+    request.options = [{ optionId: optionId || '1', optionName1: '단일상품' }];
+  }
   return request;
 }
 
 function validateRequest(request) {
-  if (!request.categoryName?.trim()) return '내부 카테고리를 입력하세요.';
   if (!request.productNoticeText?.trim()) return 'SK스토아 상품정보고시를 입력하세요.';
   if (request.allowedPurchaseOptions.length < 1) return '허용 옵션명을 한 개 이상 입력하세요.';
   if (request.allowedPurchaseOptions.length > 200) return '구매옵션명은 최대 200개입니다.';
@@ -245,6 +444,7 @@ function validateRequest(request) {
   if (request.options.some(option => !option.optionName1?.trim())) {
     return '각 단품의 원본 옵션명을 입력하세요.';
   }
+  if (request.options.some(option => !option.optionId?.trim())) return '각 단품의 ID를 입력하세요.';
   return null;
 }
 
@@ -309,9 +509,13 @@ function aiUsagePanel(response) {
     number(call.total_tokens), cost(call.estimated_cost_usd)];
   const usageRows = calls.map(call => [call.attempt === 1 ? '최초 호출' : `보정 재요청 (${call.attempt}차)`,
     call.mode, call.model, ...values(call)]);
-  usageRows.push(['요청 전체 합계', '—', '—', ...values(summarizeAiUsage(calls))]);
+  if (calls.length > 1) {
+    usageRows.push(['요청 전체 합계', '—', '—', ...values(summarizeAiUsage(calls))]);
+  }
   details.append(table(['호출', '모드', '모델', '입력 토큰', '캐시 입력', '출력 토큰', '총 토큰', '예상 비용 (USD)'], usageRows),
-    element('p', '캐시 입력은 입력 토큰에 포함됩니다. 합계에는 보정 재요청도 포함됩니다. 예상 비용은 지원 모델의 단가로 계산하며, 제공되지 않은 수치는 확인 불가로 표시합니다.', 'usage-note'));
+    element('p', '캐시 입력은 입력 토큰에 포함됩니다. '
+      + (calls.length > 1 ? '합계에는 보정 재요청도 포함됩니다. ' : '')
+      + '예상 비용은 지원 모델의 단가로 계산하며, 제공되지 않은 수치는 확인 불가로 표시합니다.', 'usage-note'));
   return details;
 }
 
@@ -355,14 +559,6 @@ function showResult(request, response, httpStatus) {
     metrics.append(metric);
   }
   diagnostics.append(metrics);
-  if (response?.serverAssessment) {
-    const server = response.serverAssessment;
-    const section = element('section', '', 'assessment');
-    section.append(element('h3', '서버 판정'), element('p', server.reason));
-    const threshold = typeof server.confidenceThreshold === 'number' ? server.confidenceThreshold.toFixed(2) : '—';
-    section.append(element('small', `판정 코드: ${server.decisionCode} · 신뢰도 기준: ${threshold}`));
-    diagnostics.append(section);
-  }
   const ai = response?.aiAssessment;
   if (ai) {
     const section = element('section', '', 'assessment');
@@ -384,6 +580,14 @@ function showResult(request, response, httpStatus) {
     diagnostics.append(section);
   } else if (response?.serverAssessment) {
     diagnostics.append(element('p', simulated ? '테스트 모드이므로 실제 AI 판단 데이터는 없습니다.' : '확인할 수 있는 AI 판단 데이터가 없습니다.', 'result-summary'));
+  }
+  if (response?.serverAssessment) {
+    const server = response.serverAssessment;
+    const section = element('section', '', 'assessment');
+    section.append(element('h3', '서버 판정'), element('p', server.reason));
+    const threshold = typeof server.confidenceThreshold === 'number' ? server.confidenceThreshold.toFixed(2) : '—';
+    section.append(element('small', `판정 코드: ${server.decisionCode} · 신뢰도 기준: ${threshold}`));
+    diagnostics.append(section);
   }
   if (response?.validationErrors?.length) {
     resultDetails.append(element('h3', '확인할 항목'));
@@ -458,6 +662,7 @@ function showMessage(message) {
 }
 
 noticeInput.addEventListener('input', resizeNoticeInput);
+resetButton.addEventListener('click', resetInputs);
 window.addEventListener('resize', resizeNoticeInput);
 document.querySelector('#add-row').addEventListener('click', () => addRow());
 document.querySelector('#add-purchase-option-row').addEventListener('click', () => addPurchaseOptionRow());
@@ -470,6 +675,7 @@ form.addEventListener('submit', async event => {
   const validationError = validateRequest(request);
   if (validationError) { showMessage(validationError); return; }
   submitButton.disabled = true;
+  resetButton.disabled = true;
   submitButton.textContent = '처리 중…';
   try {
     const url = `/api/v1/coupang/purchase-options/infer${testModeInput.checked ? '?testMode=true' : ''}`;
@@ -482,8 +688,9 @@ form.addEventListener('submit', async event => {
     showResult(request, { success: false, reason: '서버에 연결할 수 없거나 응답을 읽지 못했습니다.', errorCode: 'NETWORK_ERROR' }, 0);
   } finally {
     submitButton.disabled = false;
+    resetButton.disabled = false;
     submitButton.textContent = 'AI 매핑 결과 ->';
   }
 });
 
-loadExample(examples.sample);
+resetInputs();

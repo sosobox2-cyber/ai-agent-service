@@ -60,17 +60,19 @@ curl --request POST 'http://127.0.0.1:8081/api/v1/coupang/purchase-options/infer
 
 현재 구현은 승인 시 두 플래그를 모두 true, 그 외에는 모두 false로 반환합니다. `autoApplyCandidate=true`는 후속 시스템의 적용 후보라는 뜻이며 **이 API가 쿠팡 상품을 등록하거나 수정했다는 뜻이 아닙니다.**
 
-허용 목록은 사용할 수 있는 구매옵션의 범위입니다. 모든 허용 구매옵션명이 반환되는 것은 아닙니다. 서버는 단품마다 최소 하나의 매핑을 요구하지만 각 단품에 모든 허용 항목이 있는지까지 검사하지 않습니다. 후속 시스템이 반드시 요구하는 구매옵션은 호출자가 추가로 확인하세요.
+허용 목록은 사용할 수 있는 구매옵션의 범위입니다. 서버는 단품마다 최소 하나의 AI 매핑을 요구합니다. 최종 `items.purchaseOptions`에서는 AI가 매핑하지 않은 항목 중 기본단위 설정이 없는 항목을 `"없음"`으로 채우며, 기본단위가 설정된 누락 항목은 생략합니다. 후속 시스템이 반드시 요구하는 구매옵션은 실제 값이 추출되었는지 호출자가 추가로 확인하세요.
 
 ## 4. Request
 
 상품 객체를 요청 본문으로 직접 보냅니다. `product` 객체로 감싸지 않습니다. 아래에 없는 필드(`brand`, `coupangCategoryId`, `coupangCategoryName`, `promptMode` 등)를 보내면 현재 Jackson 설정에 따라 `INVALID_JSON`이 발생합니다.
 
+`goodsId`와 `categoryName`은 서버에서 요청 식별·로그·집계에 사용하며 실제 AI에는 전송하지 않습니다. LIGHT, FULL, 추가 FULL 재추론 모두 동일합니다. AI에는 상품명, 허용 구매옵션, 단위 설정, 정보고시, 구성, 단품 ID와 원본 옵션명만 전달합니다. 최종 응답의 상품 ID와 로그의 상품·카테고리 정보는 유지합니다.
+
 | 필드 | 타입 | 필수 | 제한·설명 |
 | --- | --- | --- | --- |
 | `goodsId` | string | 예 | 상품 ID, 공백뿐인 값 불가, 최대 100자 |
 | `goodsName` | string | 예 | 상품명, 공백뿐인 값 불가, 최대 500자 |
-| `categoryName` | string | 예 | 내부 / SK스토아 카테고리명, 공백뿐인 값 불가, 최대 500자 |
+| `categoryName` | string | 아니요 | 내부 / SK스토아 카테고리명, 누락·null·빈 문자열·공백 허용, 최대 500자 |
 | `allowedPurchaseOptions` | string[] | 예 | 1~200개, 각 이름 공백뿐인 값 불가·최대 100자, 중복 불가 |
 | `options` | object[] | 예 | 단품 1~200개, null 항목 불가 |
 | `productNoticeText` | string | 예 | SK스토아 상품정보고시 원문, 공백뿐인 값 불가, 최대 20,000자 |
@@ -185,16 +187,22 @@ curl --request POST 'http://127.0.0.1:8081/api/v1/coupang/purchase-options/infer
 
 ### items 항목
 
+기본단위 `defaultUnit`이 `"없음"`이면 해당 구매옵션의 단위 설정 전체를 미입력으로 처리합니다. 앞뒤 공백은 제거해 비교하며 단위 선택지가 함께 있어도 설정을 적용하지 않습니다. 이 경우 원문에서 판단한 단위를 그대로 반환하고, 값이 추출되지 않으면 최종 결과에 `"없음"`을 넣습니다.
+
 | 필드 | 타입 | 설명 |
 | --- | --- | --- |
 | `optionId` | string | 요청 단품 ID |
 | `purchaseOptions` | object | 구매옵션명 → 추출 값. 키와 값은 모두 문자열 |
+
+AI가 매핑하지 않은 허용 구매옵션 중 기본단위 설정이 없는 항목은 최종 `items.purchaseOptions`에서 `"없음"`으로 채웁니다. 단품별로 적용하며, 기본단위가 설정된 누락 항목은 기존처럼 생략합니다. 예를 들어 길이·수량·색상을 요청했는데 수량만 추출했고 길이·색상에 기본단위 설정이 없다면 `{"길이":"없음","수량":"10개","색상":"없음"}`을 반환합니다. `"없음"`은 값이 추출되지 않았다는 표시입니다. `optionMappings`와 `aiAssessment.mappings`에는 AI가 실제 반환한 매핑만 포함되므로 서버가 채운 항목의 신뢰도나 근거를 만들지 않습니다. 검토·오류 응답은 기존처럼 빈 `items`를 반환합니다.
 
 ```json
 {"optionId": "1", "purchaseOptions": {"색상": "블랙", "패션의류/잡화 사이즈": "90"}}
 ```
 
 ### optionMappings 항목
+
+길이에 기본단위 설정이 없으면 `88 X 110 X 12mm` 같은 복합 치수는 전체를 하나의 길이 규격 문자열로 반환하도록 AI에 지시합니다. 숫자 하나로 축약하거나 합산하지 않습니다. 단품이 하나이고 정보고시의 제품 치수가 해당 단품에 적용되는 경우 그 치수를 근거로 사용할 수 있습니다. 여러 단품의 공통 치수는 각 단품과의 대응이 명확할 때만 사용합니다. 원문끼리 충돌하거나 치수가 불명확하면 기존 검토 규칙을 따릅니다. 이 규칙은 실제 AI 모드에 적용되며 테스트 모드는 복합 치수를 추출하지 않습니다.
 
 | 필드 | 타입 | 설명 |
 | --- | --- | --- |
@@ -222,6 +230,12 @@ curl --request POST 'http://127.0.0.1:8081/api/v1/coupang/purchase-options/infer
 최종 AI 검증 실패 시 추론 어댑터가 `certain=false`와 검토 사유로 제안을 바꿀 수 있습니다. 따라서 `aiAssessment`는 AI 응답 원문 그대로라고 가정하면 안 됩니다. 파싱하지 못한 응답은 빈 제안 목록으로 나타날 수 있습니다. 낮은 신뢰도로 보류한 경우에는 `aiAssessment.certain=true`가 남아 있을 수도 있습니다.
 
 ### calculation
+
+`키친타올 140매x12롤`은 개당 수량 `140매`, 판매 롤 수 `12롤`로 구분합니다. 개당 수량 선택지에 `매`가 있고 수량 선택지에 `롤`이 없으며 기본단위가 `개`이면 `140매`와 `12개`로 반환하도록 AI에 지시합니다. 테스트 모드도 단품 하나의 명시된 매수×롤수 패턴을 지원합니다. 추가 팩 수가 있는 다층 구성은 이 단순 패턴으로 추정하지 않습니다.
+
+`22m x 30롤 x 4팩(총 120롤)`처럼 길이·포장당 개수·판매 포장 수가 함께 있는 원문은 서로 다른 값을 구분하도록 AI에 지시합니다. 개당 수량 단위 선택지에 `롤`이 있으면 `30롤`, 길이 선택지에 `m`이 있으면 `22m`, 수량 선택지에 `팩`이 없고 기본단위가 `개`이면 `4개`를 반환합니다. `총 120롤`은 전체 롤 수이며 길이 `120m`나 포장당 수량을 뜻하지 않습니다. 단일상품이라는 옵션명도 수량 `1`의 근거가 아닙니다.
+
+테스트 모드도 단품 하나의 옵션명이 `단일상품` 또는 `단품`이고 `길이 × 포장당 롤 수 × 판매 포장 수`가 명시된 패턴을 지원합니다. 단위 선택지·기본단위를 적용하고 원문 단위를 계산 근거에 보존합니다. 여러 단품에 공통 구성을 임의 적용하거나 자료 간 충돌·전체 롤 수 불일치를 추정해 해결하지 않습니다. 결과는 `TEST_MODE`, `success=false`, `autoApplyCandidate=false`이며 실제 AI 호출 사용량은 없습니다.
 
 | 필드 | 타입 | 설명 |
 | --- | --- | --- |
@@ -304,7 +318,7 @@ API 호출 중 예외가 발생하면 응답은 `aiUsage=[]`입니다. 첫 번�
   "validationErrors": [],
   "errorCode": null,
   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-  "promptVersion": "coupang-option-v18",
+  "promptVersion": "coupang-option-v26",
   "inferenceSource": "AI",
   "aiAssessment": {
     "certain": true,
@@ -505,7 +519,7 @@ AI가 돌려준 JSON을 파싱하지 못하거나 응답이 완료되지 않았�
   "reason": "입력 데이터를 확인하세요.",
   "validationErrors": ["optionId는 중복될 수 없습니다."],
   "errorCode": "INVALID_REQUEST", "inputHash": null,
-  "promptVersion": "coupang-option-v18", "inferenceSource": "NONE",
+  "promptVersion": "coupang-option-v26", "inferenceSource": "NONE",
   "aiAssessment": null,
   "serverAssessment": {"decisionCode": "INVALID_REQUEST", "reason": "입력 데이터를 확인하세요.", "confidenceThreshold": 0.8},
   "aiUsage": []
@@ -520,7 +534,7 @@ AI가 돌려준 JSON을 파싱하지 못하거나 응답이 완료되지 않았�
 
 모의 결과 검증을 통과하면 `errorCode=TEST_MODE`, `inferenceSource=TEST`, `success=false`, `autoApplyCandidate=false`, `confidence=0`, `aiAssessment=null`, `aiUsage=[]`입니다. 이 경우에만 모의 `items`와 `optionMappings`가 제공됩니다.
 
-검증에 실패하면 HTTP 200의 `RESULT_VALIDATION_FAILED`와 빈 최종 목록을 반환합니다. 요청이 잘못된 경우에는 실제 AI 모드와 마찬가지로 HTTP 400입니다. 모의 모드에서도 필수 상품정보고시·내부 카테고리를 보내세요.
+검증에 실패하면 HTTP 200의 `RESULT_VALIDATION_FAILED`와 빈 최종 목록을 반환합니다. 요청이 잘못된 경우에는 실제 AI 모드와 마찬가지로 HTTP 400입니다. 모의 모드에서도 필수 상품정보고시를 보내세요. 내부 카테고리는 선택 입력입니다.
 
 ## 10. 결과 처리 예제
 

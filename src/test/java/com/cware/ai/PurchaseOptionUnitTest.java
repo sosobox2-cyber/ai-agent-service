@@ -10,6 +10,21 @@ import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 
 class PurchaseOptionUnitTest {
+    @Test void noneDefaultIsEquivalentToNoUnitSettingEvenWithChoices() {
+        var hashes = new InputHashService(new ObjectMapper());
+        for (String defaultUnit : List.of("없음", " 없음 ")) {
+            for (List<String> choices : List.of(List.<String>of(), List.of("개", "박스"))) {
+                var normalized = request(List.of(new PurchaseOptionUnit("수량", defaultUnit, choices)), "6병");
+                assertThat(normalized.purchaseOptionUnits()).isEmpty();
+                new RequestValidator().validate(normalized);
+                try (var factory = Validation.buildDefaultValidatorFactory()) {
+                    assertThat(factory.getValidator().validate(normalized)).isEmpty();
+                }
+                assertThat(hashes.hash(normalized)).isEqualTo(hashes.hash(request(List.of(), "6병")));
+                assertThat(new ResultValidator().validateProposal(normalized, proposal("6병", null))).isEmpty();
+            }
+        }
+    }
     private final PurchaseOptionUnit units = new PurchaseOptionUnit("수량", "개", List.of("개", "박스", "세트"));
     private InferenceRequest request(List<PurchaseOptionUnit> settings, String source) {
         return new InferenceRequest("unit-test", "테스트 상품", "테스트",

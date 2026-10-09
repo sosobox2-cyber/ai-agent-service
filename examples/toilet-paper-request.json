@@ -1,0 +1,14 @@
+{
+  "goodsId": "69356512",
+  "goodsName": "[모나리자]모나리자 홈앤코튼 시그니처 22m x 30롤 x 4팩(총 120롤)",
+  "categoryName": "생활용품>생활/건강/욕실/애완>화장지/각티슈/주방랩화장지",
+  "productNoticeText": "004:제조자,수입품의 경우 수입자를 함께 표기:모나리자,019:품명 및 모델명:모나리자 홈앤코튼 시그니처 22m x 30롤 x 4팩(총 120롤),049:소비자상담 관련 전화번호:080-024-4698,126:법에 의한 인증·허가 등을 받았음을 확인할 수 있는 경우 그에 대한 사항:해당없음,127:제조국 또는 원산지:한국\n",
+  "productCompositionText": "모나리자 홈앤코튼 시그니처 22m x 30롤 x 4팩(총 120롤)\n",
+  "allowedPurchaseOptions": ["개당 수량", "길이", "수량"],
+  "purchaseOptionUnits": [
+    {"purchaseOptionName": "개당 수량", "defaultUnit": "개", "unitOptions": ["개입", "롤", "매", "매입", "세트"]},
+    {"purchaseOptionName": "길이", "defaultUnit": "cm", "unitOptions": ["cm", "m", "mm"]},
+    {"purchaseOptionName": "수량", "defaultUnit": "개", "unitOptions": ["개", "박스", "세트"]}
+  ],
+  "options": [{"optionId": "1", "optionName1": "단일상품"}]
+}

@@ -109,6 +109,12 @@ class AiFailoverTest {
         assertThat(calls.get(1).getInstructions().get(0).getText()).isEqualTo(provider.system(PurchaseOptionPromptMode.FULL));
         assertThat(calls.get(1).getInstructions()).hasSize(2);
         assertThat(calls.get(0).getInstructions().get(1).getText()).isEqualTo(calls.get(1).getInstructions().get(1).getText());
+        String userData = calls.get(1).getInstructions().get(1).getText();
+        var product = mapper.readTree(userData.substring(userData.indexOf('{'))).path("product");
+        assertThat(product.has("goodsId")).isFalse();
+        assertThat(product.has("categoryName")).isFalse();
+        assertThat(product.path("goodsName").asText()).isEqualTo(request.goodsName());
+        assertThat(product.path("options").size()).isEqualTo(request.options().size());
         com.fasterxml.jackson.databind.JsonNode firstOptions = mapper.valueToTree(calls.get(0).getOptions());
         com.fasterxml.jackson.databind.JsonNode fullOptions = mapper.valueToTree(calls.get(1).getOptions());
         assertThat(firstOptions).isEqualTo(fullOptions);
@@ -119,6 +125,10 @@ class AiFailoverTest {
         assertThat(light.path("status").asText()).isEqualTo("VALIDATION_ERROR");
         assertThat(full.path("status").asText()).isEqualTo("SUCCESS");
         assertThat(full.path("inferenceId")).isEqualTo(light.path("inferenceId"));
+        assertThat(light.path("goodsId").asText()).isEqualTo(request.goodsId());
+        assertThat(full.path("goodsId")).isEqualTo(light.path("goodsId"));
+        assertThat(light.path("categoryName").asText()).isEqualTo(request.categoryName());
+        assertThat(full.path("categoryName")).isEqualTo(light.path("categoryName"));
         UUID.fromString(full.path("inferenceId").asText());
         assertThat(full.path("initialPromptMode").asText()).isEqualTo("LIGHT");
         assertThat(full.path("finalPromptMode").asText()).isEqualTo("FULL");

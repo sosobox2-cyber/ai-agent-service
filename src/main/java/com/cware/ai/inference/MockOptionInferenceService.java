@@ -17,8 +17,33 @@ public final class MockOptionInferenceService {
         List<MappingProposal.Entry> entries = new ArrayList<>();
         for (SourceOption option : request.options()) {
             for (String target : request.allowedPurchaseOptions()) {
+                var device = SingleDeviceContext.mockEntry(request, option, target);
+                if (device != null) {
+                    entries.add(device);
+                    continue;
+                }
+                var commonDimension = CommonDimensionContext.mockEntry(request, option, target, COLORS);
+                if (commonDimension != null) {
+                    entries.add(commonDimension);
+                    continue;
+                }
+                var sheetRoll = SheetRollContext.mockEntry(request, option, target);
+                if (sheetRoll != null) {
+                    entries.add(sheetRoll);
+                    continue;
+                }
+                var rollPack = RollPackContext.mockEntry(request, option, target);
+                if (rollPack != null) {
+                    entries.add(rollPack);
+                    continue;
+                }
                 var configured = request.purchaseOptionUnits().stream()
                         .filter(u -> u.purchaseOptionName().equals(target)).findFirst();
+                var packagedWeight = PackagedWeightContext.mockEntry(request, option, target);
+                if (packagedWeight != null) {
+                    entries.add(packagedWeight);
+                    continue;
+                }
                 if (configured.isPresent()) {
                     MappingProposal.Entry entry = UnitSelection.mockEntry(request, option, configured.get());
                     if (entry != null) entries.add(entry);

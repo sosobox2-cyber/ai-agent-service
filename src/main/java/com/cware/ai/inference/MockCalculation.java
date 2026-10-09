@@ -8,6 +8,7 @@ import java.util.List;
 final class MockCalculation {
     private MockCalculation() {}
     static MappingProposal.Entry attach(MappingProposal.Entry entry) {
+        if (entry.calculation() != null) return entry;
         if (entry.evidenceSource() == null || entry.evidenceText() == null) return entry;
         var context = new Calculation.Evidence(entry.evidenceSource(), entry.evidenceText());
         var all = CalculationValidator.operandsFrom(context.source(), context.text());

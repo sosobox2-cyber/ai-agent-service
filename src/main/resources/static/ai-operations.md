@@ -286,7 +286,7 @@ Usage는 ChatResponse.metadata.usage의 실제 입력·출력·전체 값을 읽
 | --- | --- |
 | timestamp | 기록 시각, ISO-8601 offset 포함 |
 | inferenceId / goodsId | 상품 요청 UUID / 상품 ID |
-| coupangCategoryId | 현재 요청 DTO에 없으므로 항상 null |
+| categoryName | 내부 / SK스토아 카테고리명, 앞뒤 공백 제거. 미입력은 null |
 | promptMode / model | 이번 호출 모드 / 응답 모델명 또는 unknown |
 | inputTokens / cachedTokens / outputTokens / totalTokens | 실제 응답 usage, 없으면 null |
 | certain / confidence / mappingCount | 파싱한 제안의 판단·전체 신뢰도·매핑 수, 없으면 null |
@@ -312,7 +312,7 @@ finalPromptMode=FULL인 LIGHT 행은 예정 상태입니다. 프로세스 중단
 ### 설명용 JSONL 한 줄
 
 ```json
-{"timestamp":"2026-10-09T10:00:00.123+09:00","inferenceId":"5d6d0000-0000-4000-8000-000000000001","goodsId":"sample-clothing","coupangCategoryId":null,"promptMode":"LIGHT","model":"gpt-4.1-mini","inputTokens":1000,"cachedTokens":800,"outputTokens":200,"totalTokens":1200,"certain":true,"confidence":0.95,"mappingCount":2,"elapsedMs":823,"status":"SUCCESS","initialPromptMode":"LIGHT","finalPromptMode":"LIGHT","retryCount":0,"retryReason":null,"retryReasons":[],"validationPassed":true,"estimatedCostUsd":0.00048}
+{"timestamp":"2026-10-09T10:00:00.123+09:00","inferenceId":"5d6d0000-0000-4000-8000-000000000001","goodsId":"sample-clothing","categoryName":"패션 > 남성의류","promptMode":"LIGHT","model":"gpt-4.1-mini","inputTokens":1000,"cachedTokens":800,"outputTokens":200,"totalTokens":1200,"certain":true,"confidence":0.95,"mappingCount":2,"elapsedMs":823,"status":"SUCCESS","initialPromptMode":"LIGHT","finalPromptMode":"LIGHT","retryCount":0,"retryReason":null,"retryReasons":[],"validationPassed":true,"estimatedCostUsd":0.00048}
 ```
 
 API 키·Authorization·System/User Prompt 전체·요청/응답 전체·상품 JSON·정보고시·AI reason·검증 메시지 원문을 기록하지 않습니다. 식별자는 Jackson으로 이스케이프합니다. 로그 초기화·파일 쓰기·직렬화 오류는 application logger에 WARN으로 알리고 추론을 계속합니다. 유실 로그의 복구·재전송 기능은 없습니다.

@@ -57,6 +57,8 @@ class AiPurchaseOptionUsageLogTest {
             var lines = Files.readAllLines(path);
             assertThat(lines).hasSize(1);
             var row = mapper.readTree(lines.get(0));
+            assertThat(row.path("goodsId").asText()).isEqualTo(Fixtures.request().goodsId());
+            assertThat(row.path("categoryName").asText()).isEqualTo(Fixtures.request().categoryName());
             assertThat(row.path("promptMode").asText()).isEqualTo(mode);
             assertThat(row.path("status").asText()).isEqualTo("SUCCESS");
             assertThat(row.path("inputTokens").asInt()).isEqualTo(1000);
@@ -67,12 +69,21 @@ class AiPurchaseOptionUsageLogTest {
             assertThat(row.path("certain").asBoolean()).isTrue();
             assertThat(row.path("confidence").asDouble()).isEqualTo(.99);
             assertThat(row.path("mappingCount").asInt()).isEqualTo(Fixtures.proposal().mappings().size());
-            assertThat(row.path("coupangCategoryId").isNull()).isTrue();
+            assertThat(row.has("coupangCategoryId")).isFalse();
             UUID.fromString(row.path("inferenceId").asText());
             java.time.OffsetDateTime.parse(row.path("timestamp").asText());
             assertThat(console.getAll()).doesNotContain(lines.get(0));
             if ("LIGHT".equals(mode)) Files.writeString(Path.of("target/ai-usage-log-example.jsonl"), lines.get(0) + "\n");
-            verify(model).call(any(Prompt.class));
+            var sent = org.mockito.ArgumentCaptor.forClass(Prompt.class);
+            verify(model).call(sent.capture());
+            String userData = sent.getValue().getInstructions().get(1).getText();
+            var product = mapper.readTree(userData.substring(userData.indexOf('{'))).path("product");
+            var expectedProduct = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.valueToTree(Fixtures.request());
+            expectedProduct.remove(List.of("goodsId", "categoryName"));
+            assertThat(product).isEqualTo(expectedProduct);
+            assertThat(product.has("goodsId")).isFalse();
+            assertThat(product.has("categoryName")).isFalse();
+            assertThat(product.path("options").get(0).path("optionId").asText()).isEqualTo("1");
         }
     }
 
@@ -82,12 +93,13 @@ class AiPurchaseOptionUsageLogTest {
         applicationMapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
         try (var logger = new AiUsageLogger(false, path, applicationMapper, new AiUsagePricing(), 30, "1GB")) {
             for (Integer cached : Arrays.asList(null, 0)) {
-                logger.recordInference(UUID.randomUUID().toString(), "goods\nID", PurchaseOptionPromptMode.LIGHT,
+                logger.recordInference(UUID.randomUUID().toString(), "goods\nID", "의류\n상의", PurchaseOptionPromptMode.LIGHT,
                         PurchaseOptionPromptMode.LIGHT, 0, List.of(), null, "SUCCESS", response(cached), Fixtures.proposal(), 7);
             }
         }
         var lines = Files.readAllLines(path);
         assertThat(lines).hasSize(2);
+        assertThat(mapper.readTree(lines.get(0)).path("categoryName").asText()).isEqualTo("의류\n상의");
         assertThat(mapper.readTree(lines.get(0)).path("cachedTokens").isNull()).isTrue();
         assertThat(mapper.readTree(lines.get(1)).path("cachedTokens").intValue()).isZero();
         assertThat(lines.get(0)).doesNotContain("productNoticeText", "Authorization", "reason", "배기핏", "System Prompt");
@@ -105,10 +117,72 @@ class AiPurchaseOptionUsageLogTest {
         assertThat(lines).hasSize(1);
         var row = mapper.readTree(lines.get(0));
         assertThat(row.path("status").asText()).isEqualTo("API_ERROR");
+        assertThat(row.path("goodsId").asText()).isEqualTo(Fixtures.request().goodsId());
+        assertThat(row.path("categoryName").asText()).isEqualTo(Fixtures.request().categoryName());
         assertThat(row.path("inputTokens").isNull()).isTrue();
         assertThat(row.path("mappingCount").isNull()).isTrue();
         assertThat(lines.get(0)).doesNotContain("secret response body");
         verify(model).call(any(Prompt.class));
+    }
+
+    @Test void consoleIncludesProductAndCategoryWithoutBreakingLogLines(CapturedOutput console) throws Exception {
+        Path path = temp.resolve("usage.jsonl");
+        try (var logger = Fixtures.usageLogger(true, path)) {
+            logger.recordInference("console-call", "goods\nID", "의류\n상의", PurchaseOptionPromptMode.FULL,
+                    PurchaseOptionPromptMode.FULL, 0, List.of(), null, "SUCCESS", response(0), Fixtures.proposal(), 7);
+        }
+        var lines = Files.readAllLines(path);
+        assertThat(lines).hasSize(1);
+        assertThat(console.getOut()).contains("ai_usage " + lines.get(0))
+                .contains("\"goodsId\":\"goods\\nID\"", "\"categoryName\":\"의류\\n상의\"", "\"promptMode\":\"FULL\"")
+                .doesNotContain("goods\nID", "의류\n상의", "productNoticeText");
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"SUCCESS", "VALIDATION_ERROR", "REVIEW_REQUIRED", "API_ERROR"})
+    void consoleHasSameFullRecordEvenWithoutFileLogging(String status, CapturedOutput console) throws Exception {
+        var reasons = List.of(AiRetryReason.CERTAIN_FALSE);
+        var validation = new AiInferenceValidationResult(List.of(
+                new AiInferenceValidationResult.ValidationError(AiRetryReason.CERTAIN_FALSE, "불확실")));
+        try (var logger = Fixtures.usageLogger(true, null)) {
+            logger.recordInference("console-only", "product-1", "카테고리", PurchaseOptionPromptMode.LIGHT,
+                    PurchaseOptionPromptMode.FULL, 1, reasons, "API_ERROR".equals(status) ? null : validation,
+                    status, "API_ERROR".equals(status) ? null : response(0),
+                    "API_ERROR".equals(status) ? null : Fixtures.proposal(), 123);
+        }
+        var logLine = console.getOut().lines().filter(line -> line.contains("ai_usage ")).findFirst().orElseThrow();
+        var row = mapper.readTree(logLine.substring(logLine.indexOf("ai_usage ") + "ai_usage ".length()));
+        assertThat(row.path("goodsId").asText()).isEqualTo("product-1");
+        assertThat(row.path("categoryName").asText()).isEqualTo("카테고리");
+        assertThat(row.path("status").asText()).isEqualTo(status);
+        assertThat(row.path("elapsedMs").asLong()).isEqualTo(123);
+        assertThat(row.path("retryCount").asInt()).isEqualTo(1);
+        assertThat(row.path("retryReasons").get(0).asText()).isEqualTo("CERTAIN_FALSE");
+        assertThat(row.has("validationPassed")).isTrue();
+        assertThat(row.has("certain")).isTrue();
+        assertThat(row.has("confidence")).isTrue();
+        assertThat(row.has("mappingCount")).isTrue();
+        assertThat(row.has("inputTokens")).isTrue();
+        assertThat(row.has("estimatedCostUsd")).isTrue();
+    }
+
+    @Test void missingAndBlankCategoriesAreLoggedAsNull() throws Exception {
+        Path path = temp.resolve("usage.jsonl");
+        try (var logger = Fixtures.usageLogger(false, path)) {
+            for (String category : Arrays.asList(null, "", " \t\r\n ")) {
+                var base = Fixtures.request();
+                var request = new InferenceRequest(base.goodsId(), base.goodsName(), category,
+                        base.allowedPurchaseOptions(), base.options(), base.productNoticeText());
+                var model = mock(ChatModel.class);
+                when(model.call(any(Prompt.class))).thenReturn(response(0));
+                assertThat(service(model, logger, "FULL").infer(request)).isEqualTo(Fixtures.proposal());
+            }
+        }
+        var lines = Files.readAllLines(path);
+        assertThat(lines).hasSize(3);
+        for (String line : lines) {
+            assertThat(mapper.readTree(line).path("categoryName").isNull()).isTrue();
+            assertThat(mapper.readTree(line).path("goodsId").asText()).isEqualTo(Fixtures.request().goodsId());
+        }
     }
 
     @Test void filesystemFailureDoesNotChangeInference(CapturedOutput console) throws Exception {
@@ -144,7 +218,7 @@ class AiPurchaseOptionUsageLogTest {
     @Test void dailyRolloverCreatesGzipArchiveWithThirtyDayRetention() throws Exception {
         Path path = temp.resolve("usage.jsonl");
         try (var logger = Fixtures.usageLogger(false, path)) {
-            logger.recordInference("one", "goods", PurchaseOptionPromptMode.LIGHT, PurchaseOptionPromptMode.LIGHT,
+            logger.recordInference("one", "goods", null, PurchaseOptionPromptMode.LIGHT, PurchaseOptionPromptMode.LIGHT,
                     0, List.of(), null, "SUCCESS", response(0), Fixtures.proposal(), 1);
             LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
             RollingFileAppender<ILoggingEvent> sink = null;
@@ -163,7 +237,7 @@ class AiPurchaseOptionUsageLogTest {
             assertThat(policy.getMaxHistory()).isEqualTo(30);
             assertThat(policy.getFileNamePattern()).endsWith(".%d{yyyy-MM-dd}.jsonl.gz");
             policy.getTimeBasedFileNamingAndTriggeringPolicy().setCurrentTime(System.currentTimeMillis() + 86_400_000);
-            logger.recordInference("two", "goods", PurchaseOptionPromptMode.FULL, PurchaseOptionPromptMode.FULL,
+            logger.recordInference("two", "goods", null, PurchaseOptionPromptMode.FULL, PurchaseOptionPromptMode.FULL,
                     0, List.of(), null, "SUCCESS", response(0), Fixtures.proposal(), 2);
             policy.stop(); // 압축 작업 종료를 기다린다.
         }

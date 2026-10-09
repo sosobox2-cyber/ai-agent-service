@@ -28,12 +28,12 @@
 | --- | --- | --- |
 | Endpoint / Method / testMode | PurchaseOptionController | POST /api/v1/coupang/purchase-options/infer, query boolean 기본 false. 본문은 상품 객체 |
 | JSON 계약 | spring.jackson 설정, GlobalExceptionHandler | application/json 호출 예제, 모르는 필드 INVALID_JSON. 일반 MVC·플랫폼 오류까지 같은 HTTP/JSON 계약을 보장하지 않음 |
-| 요청 DTO | InferenceRequest / SourceOption / PurchaseOptionUnit | 필수 6개, 선택 2개. 상품 ID100·상품명/카테고리500·정보고시/구성20,000. 허용 이름/단품/단위설정200, 단위 선택지30 |
+| 요청 DTO | InferenceRequest / SourceOption / PurchaseOptionUnit | 필수 5개, 선택 3개(내부 카테고리·단위 설정·구성 내용). 상품 ID100·상품명/카테고리500·정보고시/구성20,000. 허용 이름/단품/단위설정200, 단위 선택지30 |
 | 업무 검증 | RequestValidator | 정확한 문자열 중복·포함 검사, ID 중복 금지, 단위 앞뒤 공백 금지. 기본단위는 선택지 밖 허용 |
 | success / 후보 | PurchaseOptionInferenceService | 최종 승인 시 둘 다 true. HTTP 성공과 구분. 실제 상품 등록/수정 없음 |
 | items / optionMappings | assemble / optionMappings | 요청 단품 순서의 최종 결과와 원본 포함 상세. 보류·결과 실패 시 빈 목록, TEST_MODE에는 미승인 모의 결과 가능 |
 | AI / 서버 판단 | diagnose / review / assess | AI 제안은 최종 승인과 별개. 어댑터가 certain·reason을 바꿀 수 있음. 검토에는 null/잘못된 제안이 남을 수 있음 |
-| 누락 / 조합 | ResultValidator | 각 ID의 최소 한 매핑, 허용 이름, 중복 매핑·동일 최종 조합 검사. 모든 허용 구매옵션 채움은 요구하지 않음 |
+| 누락 / 조합 | ResultValidator | 각 ID의 최소 한 AI 매핑, 허용 이름, 중복 매핑·동일 최종 조합 검사. 단품별 기본단위 미설정 누락 옵션은 최종 결과에 `없음`으로 표시 |
 | 신뢰도 | assess / AiInferenceValidator | 최저 confidence, 최종 기본0.80와 재추론 옵션0.7을 분리. 자체 평가이고 정답 확률 아님 |
 | LIGHT / FULL | PromptSelector / Provider | 단순 이름 집합·단위설정·단품/단일상품으로 선택. 포괄적인 의미 난도 판별 없음. AUTO/FULL 서버 설정 |
 | Failover | PurchaseOptionAiService / AiRetryProperties | 검증 실패 LIGHT만 설정에 따라 FULL 1회. 통신 장애 재시도 없음. 낮은 신뢰도만으로 기본 재추론하지 않음 |
