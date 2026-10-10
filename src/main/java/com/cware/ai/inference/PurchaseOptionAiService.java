@@ -70,28 +70,39 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
     @Override
     public MappingProposal infer(InferenceRequest request, Consumer<AiCallUsage> usage) {
         try {
+            // 사용자 프롬프트와 상품 JSON을 결합해 최초 호출과 재시도에서 사용할 입력을 구성한다.
             String input = userPrompt + "\n" + mapper.writeValueAsString(Map.of("product", AiProductData.from(request)));
+            // 최초 모드는 한 번만 선택하고, 동일한 추론 ID로 두 호출의 사용량과 로그를 연결한다.
             PurchaseOptionPromptMode initial = prompts.select(request);
             String inferenceId = UUID.randomUUID().toString();
             Attempt first = attempt(request, input, inferenceId, initial, initial, 0, List.of(), usage);
+            // 최초 응답이 검증을 통과하면 추가 호출 없이 결과를 반환한다.
             if (first.validation().valid()) return first.proposal();
-            // One explicit branch: no recursion, loops, or selector invocation on failover.
+            // LIGHT 검증 실패 시 재시도가 활성화되고 최대 횟수가 1일 때만 FULL로 한 번 재시도한다.
+            // 재귀나 반복문을 사용하지 않고, 모드 선택기를 다시 호출하지 않는다.
             if (initial == PurchaseOptionPromptMode.LIGHT && retry.enabled() && retry.maxRetries() == 1) {
+                // 최초 검증 실패 사유를 재시도 기록에 전달한다.
                 Attempt full = attempt(request, input, inferenceId, initial,
                         PurchaseOptionPromptMode.FULL, 1, first.validation().reasons(), usage);
+                // FULL 응답도 검증에 실패하면 수동 검토가 필요한 결과로 반환한다.
                 return full.validation().valid() ? full.proposal() : review(full);
             }
+            // 재시도 조건에 해당하지 않으면 최초 응답을 수동 검토 대상으로 반환한다.
             return review(first);
         } catch (InferenceException e) {
+            // 이미 정의된 추론 오류는 오류 코드와 HTTP 상태를 유지한다.
             throw e;
         } catch (JsonProcessingException e) {
+            // 입력 JSON 직렬화 중 발생한 오류를 공통 JSON 처리 오류로 변환한다.
             throw parseFailure();
         } catch (RuntimeException e) {
+            // 래핑된 원인을 순서대로 확인해 추론 오류를 보존하거나 타임아웃을 504로 변환한다.
             for (Throwable cause = e; cause != null; cause = cause.getCause()) {
                 if (cause instanceof InferenceException safe) throw safe;
                 if (cause instanceof SocketTimeoutException || cause instanceof HttpTimeoutException)
                     throw new InferenceException("AI_TIMEOUT", HttpStatus.GATEWAY_TIMEOUT, "AI 응답 시간이 초과되었습니다.");
             }
+            // 분류되지 않은 런타임 오류는 AI 서비스 호출 실패(502)로 변환한다.
             throw new InferenceException("AI_UPSTREAM_ERROR", HttpStatus.BAD_GATEWAY, "AI 서비스 호출에 실패했습니다.");
         }
     }
@@ -100,39 +111,50 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
             String inferenceId, PurchaseOptionPromptMode initial, PurchaseOptionPromptMode mode,
             int retryCount, List<AiRetryReason> retryReasons, Consumer<AiCallUsage> usage) {
         ChatResponse response;
+        // 현재 요청과 프롬프트 모드에 맞는 JSON Schema를 지정해 응답 구조를 제한한다.
         ResponseFormat format = ResponseFormat.builder().type(ResponseFormat.Type.JSON_SCHEMA)
                 .jsonSchema(ResponseFormat.JsonSchema.builder().name("purchase_option_mapping")
                         .strict(true).schema(schema(request, mode)).build()).build();
+        // 모드별 시스템 지침과 상품 입력을 결합하고, 응답 형식 설정을 함께 전달한다.
         Prompt prompt = new Prompt(List.of(new SystemMessage(prompts.system(mode)), new UserMessage(input)),
                 OpenAiChatOptions.builder().responseFormat(format).build());
+        // 파싱·검증 시간을 제외한 모델 호출 소요 시간을 측정한다.
         long started = System.nanoTime();
         try {
             response = model.call(prompt);
         } catch (RuntimeException e) {
+            // API 호출 실패는 응답·검증 결과 없이 기록하고 상위 예외 처리로 전달한다.
             usageLogger.recordInference(inferenceId, request.goodsId(), request.categoryName(), initial, mode, retryCount,
                     retryReasons, null, "API_ERROR", null, null, (System.nanoTime() - started) / 1_000_000);
-            throw e; // Transport errors never trigger prompt failover.
+            throw e; // 호출 오류는 LIGHT → FULL 프롬프트 재시도 대상이 아니다.
         }
         long elapsedMs = (System.nanoTime() - started) / 1_000_000;
         MappingProposal proposal = null;
         AiInferenceValidationResult validation;
         try {
+            // 응답을 파싱하고 개수 단위를 정규화한 뒤, 요청에 맞는 매핑인지 검증한다.
             proposal = CountUnitNormalizer.normalize(request, parse(response));
             validation = validator.validate(request, proposal);
         } catch (JsonProcessingException | InferenceException e) {
+            // 파싱 실패나 미완료 응답도 검증 실패로 변환해 동일한 재시도 판단을 적용한다.
             validation = new AiInferenceValidationResult(List.of(
                     new AiInferenceValidationResult.ValidationError(AiRetryReason.INVALID_RESPONSE,
                             "AI 응답 형식이 잘못되었거나 응답이 완료되지 않았습니다.")));
         }
+        // LIGHT 검증 실패에 한해, 재시도가 활성화되고 최대 횟수가 1이면 FULL 재시도를 예정한다.
         boolean willRetry = !validation.valid() && mode == PurchaseOptionPromptMode.LIGHT
                 && retry.enabled() && retry.maxRetries() == 1;
+        // 재시도 예정이면 검증 오류, 검증·적용 신뢰도 기준을 모두 충족하면 성공, 나머지는 수동 검토로 기록한다.
         String status = willRetry ? "VALIDATION_ERROR" : validation.valid() && validator.meetsApplicationConfidence(proposal)
                 ? "SUCCESS" : "REVIEW_REQUIRED";
+        // 최초 호출에는 현재 검증 실패 사유를, 재시도 호출에는 재시도를 유발한 최초 사유를 기록한다.
         usageLogger.recordInference(inferenceId, request.goodsId(), request.categoryName(), initial, mode, retryCount,
                 retryCount == 0 ? validation.reasons() : retryReasons, validation, status, response, proposal, elapsedMs);
+        // 이번 호출의 사용량·소요 시간을 전달하고, 재시도 예정이면 최종 모드를 FULL로 표시한다.
         usage.accept(usageLogger.measureUsage(mode, retryCount + 1, response).withInference(inferenceId,
                 initial, willRetry ? PurchaseOptionPromptMode.FULL : mode, retryCount,
                 retryCount == 0 ? validation.reasons() : retryReasons, status).withElapsedMs(elapsedMs));
+        // 상위 흐름에서 재시도 또는 수동 검토 여부를 결정할 수 있도록 제안과 검증 결과를 반환한다.
         return new Attempt(proposal, validation);
     }
 
