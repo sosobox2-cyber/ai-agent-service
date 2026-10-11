@@ -1,6 +1,7 @@
 package com.cware.ai.exception;
 import java.util.List;
 import org.springframework.http.HttpStatus;
+/** 서비스가 공개할 수 있는 오류 코드, HTTP 상태 및 검증 오류 목록을 전달한다. */
 public class InferenceException extends RuntimeException {
     private final String code;
     private final HttpStatus status;

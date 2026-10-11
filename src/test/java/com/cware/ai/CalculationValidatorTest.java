@@ -11,6 +11,7 @@ import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 import static com.cware.ai.dto.Calculation.Operation.*;
 
+/** 계산 유틸리티의 근거 대조·환산·합산과 서비스에서 AI 제안을 보존하는 동작을 검증한다. */
 class CalculationValidatorTest {
     private final ObjectMapper mapper = new ObjectMapper();
     private InferenceRequest example(String name) throws Exception {

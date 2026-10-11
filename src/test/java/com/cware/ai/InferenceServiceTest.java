@@ -16,6 +16,7 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+/** 검증·확실 판정·최저 신뢰도에 따른 적용 또는 보류와 테스트 모드의 반환 계약을 검증한다. */
 class InferenceServiceTest {
     final OptionInferenceGateway ai = mock(OptionInferenceGateway.class);
     final PurchaseOptionInferenceService service = new PurchaseOptionInferenceService(new RequestValidator(),

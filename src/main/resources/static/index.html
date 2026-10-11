@@ -23,6 +23,7 @@
       </div>
     </header>
 
+    <!-- app.js가 이 폼의 상품 원문과 반복 행을 추론 API 요청으로 변환한다. -->
     <form id="inference-form">
       <section class="panel" aria-labelledby="product-heading">
         <div class="section-heading">
@@ -102,6 +103,7 @@
       </div>
     </form>
 
+    <!-- 요청 이후 단품 결과·사용량·진단·JSON을 갱신하며 최초 로드에서는 숨긴다. -->
     <section class="panel result-panel" id="result-panel" aria-labelledby="result-heading" hidden>
       <div class="section-heading">
         <div><span class="step">04</span><h2 id="result-heading">추론 결과</h2></div>
@@ -129,6 +131,7 @@
     </section>
     <footer>이 화면은 API 테스트용입니다. 입력한 데이터는 현재 서버의 추론 API로 전송됩니다.</footer>
   </main>
+  <!-- 단품 추가 시 복제하는 행이며 원본 ID와 옵션 문자열을 함께 보관한다. -->
   <template id="option-row-template">
     <tr>
       <td><input data-field="optionId" maxlength="100" aria-label="단품 ID"></td>
@@ -136,6 +139,7 @@
       <td><button type="button" class="remove-row" aria-label="단품 삭제" title="단품 삭제">×</button></td>
     </tr>
   </template>
+  <!-- 구매옵션명과 그 이름에 연결되는 기본단위·선택지를 같은 행으로 관리한다. -->
   <template id="purchase-option-row-template">
     <tr>
       <td><input data-purchase-field="purchaseOptionName" required maxlength="100" aria-label="구매옵션명" placeholder="예: 색상"></td>

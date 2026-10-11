@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** 수산물의 개별 중량과 판매 마릿수를 추출하고 충돌하는 총중량을 거부하는 규칙을 검증한다. */
 class SeafoodPromptTest {
     @Test void seafoodExampleUsesIndividualWeightAndRejectsConflictingTotal() throws Exception {
         var mapper = new com.fasterxml.jackson.databind.ObjectMapper();

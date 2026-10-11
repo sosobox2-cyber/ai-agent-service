@@ -6,6 +6,7 @@ import com.cware.ai.inference.MappingProposal;
 import java.time.Duration;
 import java.util.List;
 
+/** 회귀 테스트에서 공유하는 상품 요청, 정상·불확실 제안과 추론 설정을 생성한다. */
 final class Fixtures {
     static com.cware.ai.inference.AiUsageLogger usageLogger(boolean enabled, java.nio.file.Path path) {
         var pricing = new com.cware.ai.config.AiUsagePricing();

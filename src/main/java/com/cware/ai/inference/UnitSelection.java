@@ -13,6 +13,7 @@ public final class UnitSelection {
     private UnitSelection() {}
 
     public static String selectedUnit(String value, PurchaseOptionUnit units) {
+        // 긴 단위부터 비교해 접미사가 겹치는 단위도 숫자+단위 전체 형식으로 확인한다.
         return Stream.concat(units.unitOptions().stream(), Stream.of(units.defaultUnit()))
                 .distinct().sorted(Comparator.comparingInt(String::length).reversed())
                 .filter(unit -> value.matches(NUMBER + Pattern.quote(unit))).findFirst().orElse(null);
@@ -32,6 +33,7 @@ public final class UnitSelection {
                 }
             }
         }
+        // 숫자만 있으면 기본단위를 붙이고, 원문 단위가 선택지에 있으면 그 단위를 유지한다.
         String text = option.optionName1().strip();
         String value = null;
         if (text.matches(NUMBER)) value = text + units.defaultUnit();
@@ -48,6 +50,7 @@ public final class UnitSelection {
             if (text.equals("단일상품") && request.options().size() == 1 && units.purchaseOptionName().equals("수량"))
                 source = request.goodsName() + "\n" + (request.productNoticeText() == null ? "" : request.productNoticeText());
             var matcher = pattern.matcher(source);
+            // 후보 값이 둘 이상이고 서로 다르면 하나를 임의로 선택하지 않는다.
             while (matcher.find()) {
                 String candidate = matcher.group(1) + matcher.group(2);
                 if (value != null && !value.equals(candidate)) return null;

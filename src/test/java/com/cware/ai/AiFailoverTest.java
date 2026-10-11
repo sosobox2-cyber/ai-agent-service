@@ -26,6 +26,7 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+/** LIGHT 검증 실패의 1회 FULL 전환과 추가 호출을 막는 조건·재시도 사유를 검증한다. */
 class AiFailoverTest {
     @TempDir Path temp;
     final List<AiUsageLogger> loggers = new ArrayList<>();

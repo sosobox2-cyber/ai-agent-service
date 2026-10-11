@@ -7,6 +7,7 @@ import jakarta.validation.Validation;
 import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 
+/** 허용 옵션명 개수·중복, 원본 단품 ID·필수 값 및 Bean Validation 조건을 검증한다. */
 class RequestValidationTest {
     private final RequestValidator validator = new RequestValidator();
 

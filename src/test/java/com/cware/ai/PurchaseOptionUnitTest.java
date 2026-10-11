@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 
+/** 옵션별 단위 선택·기본단위 처리와 요청 관계 검증, 응답 단위 형식 및 입력 해시를 검증한다. */
 class PurchaseOptionUnitTest {
     @Test void noneDefaultIsEquivalentToNoUnitSettingEvenWithChoices() {
         var hashes = new InputHashService(new ObjectMapper());

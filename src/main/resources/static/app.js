@@ -1,3 +1,4 @@
+// 입력 폼·반복 행·결과 영역을 연결해 구매옵션 추론 요청과 화면 표시를 관리한다.
 const form = document.querySelector('#inference-form');
 const rows = document.querySelector('#option-rows');
 const rowTemplate = document.querySelector('#option-row-template');
@@ -12,6 +13,7 @@ const noticeInput = form.elements.productNoticeText;
 const purchaseOptionRows = document.querySelector('#purchase-option-rows');
 const purchaseOptionRowTemplate = document.querySelector('#purchase-option-row-template');
 
+// 예제 데이터는 입력 채우기에만 사용하며, 불러올 때 실제 호출 대신 테스트 모드를 켠다.
 const examples = {
   "sample": {
     "goodsId": "68535109",
@@ -296,6 +298,7 @@ examples.weight.purchaseOptionUnits = [
   { purchaseOptionName: '개당 중량', defaultUnit: 'kg', unitOptions: ['kg', 'g', 'mg'] }
 ];
 
+// 구매옵션명과 해당 옵션의 단위 설정을 같은 행에 묶고 최소 한 행을 유지한다.
 function addPurchaseOptionRow(option = {}) {
   if (purchaseOptionRows.children.length >= 200) {
     showMessage('구매옵션은 최대 200개까지 입력할 수 있습니다.');
@@ -312,6 +315,7 @@ function addPurchaseOptionRow(option = {}) {
   });
   purchaseOptionRows.append(row);
 }
+// 숫자 ID의 최댓값 다음 번호를 만들며 큰 ID도 정확히 처리하도록 BigInt를 사용한다.
 function nextOptionId() {
   let maxId = 0n;
   rows.querySelectorAll('[data-field="optionId"]').forEach(input => {
@@ -324,6 +328,7 @@ function nextOptionId() {
   return String(maxId + 1n);
 }
 
+// 단품 행을 템플릿에서 복제하고 새 행에는 사용 중인 숫자 ID 다음 번호를 지정한다.
 function addRow(option = {}) {
   if (rows.children.length >= 200) {
     showMessage('단품은 최대 200개까지 입력할 수 있습니다.');
@@ -343,12 +348,14 @@ function addRow(option = {}) {
   rows.append(row);
 }
 
+// 정보고시의 전체 내용이 보이도록 높이를 재측정하고 테두리 두께를 포함한다.
 function resizeNoticeInput() {
   noticeInput.style.height = '0px';
   const borders = noticeInput.offsetHeight - noticeInput.clientHeight;
   noticeInput.style.height = `${noticeInput.scrollHeight + borders}px`;
 }
 
+// 입력·결과·복사 상태를 초기화하고 빈 단품과 구매옵션 행을 하나씩 만든다.
 function resetInputs() {
   form.reset();
   testModeInput.checked = false;
@@ -367,6 +374,7 @@ function resetInputs() {
   resizeNoticeInput();
 }
 
+// 예제의 옵션명에 단위 설정을 연결한 뒤 폼을 채우고 모의 테스트를 선택한다.
 function loadExample(example) {
   testModeInput.checked = true;
   for (const field of ['goodsId', 'goodsName', 'categoryName', 'productNoticeText', 'productCompositionText']) {
@@ -383,10 +391,12 @@ function loadExample(example) {
   resizeNoticeInput();
 }
 
+// 쉼표 또는 줄바꿈으로 입력한 단위 선택지를 공백 없는 항목 목록으로 만든다.
 function splitNames(text) {
   return text.split(/[,\r\n]+/).map(name => name.trim()).filter(Boolean);
 }
 
+// 화면의 반복 행을 API 계약으로 변환하며 원문 정보고시·구성·옵션명 내용은 보존한다.
 function makeRequest() {
   const request = {};
   for (const field of ['goodsId', 'goodsName']) {
@@ -407,6 +417,7 @@ function makeRequest() {
     return values;
   });
   request.allowedPurchaseOptions = purchaseOptions.map(option => option.purchaseOptionName);
+  // '없음'은 단위 미설정으로 보내고 기본단위나 선택지를 입력한 행만 단위 설정에 포함한다.
   const units = purchaseOptions.filter(option => option.defaultUnit !== '없음'
     && (option.defaultUnit || option.unitOptions.length));
   if (units.length) request.purchaseOptionUnits = units;
@@ -418,6 +429,7 @@ function makeRequest() {
     });
     return option;
   });
+  // 모든 원본 옵션명이 비어 있으면 서버와 같은 단일상품 규칙을 적용한다.
   if (request.options.every(option => !option.optionName1?.trim())) {
     const optionId = request.options.length === 1 ? request.options[0].optionId : null;
     request.options = [{ optionId: optionId || '1', optionName1: '단일상품' }];
@@ -425,6 +437,7 @@ function makeRequest() {
   return request;
 }
 
+// 요청 전에 기본 입력 오류를 알려 주며 서버에서도 별도로 전체 검증을 수행한다.
 function validateRequest(request) {
   if (!request.productNoticeText?.trim()) return 'SK스토아 상품정보고시를 입력하세요.';
   if (request.allowedPurchaseOptions.length < 1) return '허용 옵션명을 한 개 이상 입력하세요.';
@@ -448,6 +461,7 @@ function validateRequest(request) {
   return null;
 }
 
+// 서버 값은 textContent로 넣어 결과 문자열을 HTML로 실행하지 않는다.
 function element(tag, value, className) {
   const node = document.createElement(tag);
   node.textContent = value ?? '';
@@ -455,6 +469,7 @@ function element(tag, value, className) {
   return node;
 }
 
+// 동일한 표 구조와 가로 스크롤을 사용량·진단 결과 표시에서 재사용한다.
 function table(headers, rowsData) {
   const wrapper = element('div', '', 'table-scroll');
   const tableNode = element('table', '', 'result-table');
@@ -473,6 +488,7 @@ function table(headers, rowsData) {
   return wrapper;
 }
 
+// AI 또는 모의 추출기의 계산 설명을 읽기 쉬운 연산·피연산자·근거 문자열로 표시한다.
 function calculationText(calculation) {
   if (!calculation) return '원문 추출';
   const names = { DIRECT: '직접 추출', CONVERT: '단위 환산', SUM: '합산', PACK_COUNT: '판매 묶음 수', PACK_CONTENT: '묶음 내 수량' };
@@ -483,6 +499,7 @@ function calculationText(calculation) {
     + (context?.text ? ` · ${source}: ${context.text}` : '');
 }
 
+// 모든 호출에서 값이 확인된 항목만 합산해 미측정 비용·사용량을 0으로 표시하지 않는다.
 function summarizeAiUsage(calls) {
   const summary = {};
   for (const field of ['input_tokens', 'cached_tokens', 'output_tokens', 'total_tokens', 'elapsedMs', 'estimated_cost_usd']) {
@@ -492,6 +509,7 @@ function summarizeAiUsage(calls) {
   return summary;
 }
 
+// 최초·재시도별 사용량과 합계를 보여 주고 캐시 입력이 전체 입력의 일부임을 안내한다.
 function aiUsagePanel(response) {
   const calls = Array.isArray(response?.aiUsage) ? response.aiUsage : [];
   const details = element('details', '', 'usage-details');
@@ -527,6 +545,7 @@ function aiUsagePanel(response) {
   return details;
 }
 
+// AI의 확실 판정과 신뢰도를 요약하며 모의 테스트는 실제 AI 판단으로 표시하지 않는다.
 function aiJudgmentText(response) {
   const ai = response?.aiAssessment;
   if (!ai) return response?.inferenceSource === 'TEST' ? 'AI 판단: 모의 테스트 · 측정 안 함' : 'AI 판단: 확인 불가';
@@ -535,6 +554,7 @@ function aiJudgmentText(response) {
   return `AI 판단: ${certainty} · confidence ${confidence}`;
 }
 
+// 승인·모의 결과는 반환 매핑을, 보류 결과는 AI 제안을 원본 단품 순서로 묶는다.
 function unitMappingData(request, response) {
   const options = request?.product?.options || request?.options || [];
   const approved = Array.isArray(response?.optionMappings) ? response.optionMappings : [];
@@ -556,6 +576,7 @@ function unitMappingData(request, response) {
   };
 }
 
+// 각 원본 단품의 매핑과 누락을 표시하고 원본에 없는 ID는 별도 경고로 보여 준다.
 function unitResultsPanel(request, response) {
   const data = unitMappingData(request, response);
   const simulated = response?.inferenceSource === 'TEST';
@@ -603,6 +624,7 @@ function unitResultsPanel(request, response) {
   return panel;
 }
 
+// HTTP 오류·검토·승인·모의 상태를 구분해 단품 결과, 사용량, AI·서버 판단과 JSON을 갱신한다.
 function showResult(request, response, httpStatus) {
   resultPanel.hidden = false;
   resultDetails.replaceChildren();
@@ -687,6 +709,7 @@ function showResult(request, response, httpStatus) {
   resultPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// Clipboard API가 실패하면 임시 textarea 복사를 시도하고 기존 포커스를 복원한다.
 async function copyJson(button) {
   const status = document.querySelector('#copy-json-status');
   const value = document.querySelector(`#${button.dataset.copyTarget}`).textContent;
@@ -741,6 +764,7 @@ document.querySelector('#add-purchase-option-row').addEventListener('click', () 
 document.querySelectorAll('[data-example]').forEach(button => {
   button.addEventListener('click', () => loadExample(examples[button.dataset.example]));
 });
+// 입력 검증 후 JSON을 전송하며 중복 제출을 막고 성공·실패와 관계없이 버튼 상태를 복원한다.
 form.addEventListener('submit', async event => {
   event.preventDefault();
   const request = makeRequest();

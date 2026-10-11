@@ -14,12 +14,14 @@ public final class NamedSetContext {
     private NamedSetContext() {}
 
     private static String mainText(String source) {
+        // 사은품 이후의 숫자가 본품 세트 내용물 수로 섞이지 않도록 원문 범위를 제한한다.
         if (source == null) return "";
         var bonus = BONUS.matcher(source);
         return bonus.find() ? source.substring(0, bonus.start()) : source;
     }
 
     private static SetInfo find(InferenceRequest request) {
+        // 각 원문에서 세트당 내용물 수를 찾고 판매 세트 수나 내용물 수가 충돌하면 추출하지 않는다.
         if (!QuantityContext.eligible(request)) return null;
         SetInfo found = null;
         for (String source : new String[]{"goodsName", "productNoticeText", "productCompositionText"}) {
@@ -46,6 +48,7 @@ public final class NamedSetContext {
     public static boolean hasSet(InferenceRequest request) { return find(request) != null; }
 
     public static boolean valid(InferenceRequest request, MappingProposal.Entry entry) {
+        // 근거 출처·문구와 세트 내용을 대조하고 판매 수량과 세트당 수량을 따로 확인한다.
         SetInfo set = find(request);
         if (set == null || entry.evidenceText() == null || entry.evidenceText().length() > 500) return false;
         String source = switch (entry.evidenceSource() == null ? "" : entry.evidenceSource()) {
@@ -65,6 +68,7 @@ public final class NamedSetContext {
     }
 
     public static MappingProposal.Entry mockEntry(InferenceRequest request, String target) {
+        // '수량'은 1세트, '개당 수량'은 확인된 내용물 수를 사용해 서로 구분한다.
         SetInfo set = find(request);
         if (set == null) return null;
         String value = switch (target) {

@@ -17,10 +17,12 @@ final class PackagedWeightContext {
     private PackagedWeightContext() {}
 
     static MappingProposal.Entry mockEntry(InferenceRequest request, SourceOption option, String target) {
+        // 단일상품의 개별 중량과 판매 수량을 명시한 포장 구성만 처리한다.
         if (request.options().size() != 1 || !Set.of("단일상품", "단품").contains(option.optionName1().strip())
                 || !Set.of("개당 중량", "수산물 중량", "수량").contains(target)) return null;
         List<String> composition = null;
         Calculation.Evidence evidence = null;
+        // 기술서·상품명·정보고시에서 찾은 본품 구성이 서로 같아야 모의 추출한다.
         for (String sourceName : List.of("productCompositionText", "goodsName", "productNoticeText")) {
             String text = switch (sourceName) {
                 case "goodsName" -> request.goodsName();
@@ -39,6 +41,7 @@ final class PackagedWeightContext {
                 if (new BigDecimal(match.group(1)).signum() <= 0) return null;
                 var candidate = List.of(new BigDecimal(match.group(1)).stripTrailingZeros().toPlainString(),
                         match.group(2).toLowerCase(Locale.ROOT), match.group(3), match.group(4));
+                // 수산물은 총중량이 함께 적혀 있으면 개별 중량 × 마릿수와 대조한다.
                 if (Set.of("미", "마리").contains(candidate.get(3))) {
                     var total = Pattern.compile("총\\s*,?\\s*([0-9]+(?:\\.[0-9]+)?)\\s*(kg|g)", Pattern.CASE_INSENSITIVE).matcher(text);
                     var expected = new BigDecimal(candidate.get(0)).multiply(new BigDecimal(candidate.get(2)))
@@ -57,6 +60,7 @@ final class PackagedWeightContext {
             } while (match.find());
         }
         if (composition == null) return null;
+        // 중량 옵션에는 개별 중량을, 수량 옵션에는 판매 개수를 선택해 단위 설정을 적용한다.
         boolean weight = !target.equals("수량");
         String amount = composition.get(weight ? 0 : 2);
         String rawUnit = composition.get(weight ? 1 : 3);

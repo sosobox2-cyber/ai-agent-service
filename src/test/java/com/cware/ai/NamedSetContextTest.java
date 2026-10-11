@@ -10,6 +10,7 @@ import java.nio.file.*;
 import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 
+/** 세트의 판매 수량과 내용물 수를 구분하고 잘못된 출처·내용·사은품 근거를 거부하는지 검증한다. */
 class NamedSetContextTest {
     private final ObjectMapper mapper = new ObjectMapper();
     private InferenceRequest request() throws Exception {

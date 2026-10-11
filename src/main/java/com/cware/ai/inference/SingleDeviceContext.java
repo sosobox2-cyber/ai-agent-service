@@ -7,11 +7,13 @@ import java.util.regex.Pattern;
 /** 테스트용 단일 본체의 명시된 모델, 인치 크기, 판매 설치 구성 추출. */
 final class SingleDeviceContext {
     static MappingProposal.Entry mockEntry(InferenceRequest request, SourceOption option, String target) {
+        // 단위가 설정되지 않은 단일 본체의 명시적 모델·화면·설치 구성만 처리한다.
         if (request.options().size() != 1 || !List.of("단일상품", "단품").contains(option.optionName1().strip())
                 || request.purchaseOptionUnits().stream().anyMatch(u -> target.equals(u.purchaseOptionName()))) return null;
         String text = request.goodsName(), source = "goodsName", value;
         switch (target) {
             case "모델명/품번" -> {
+                // 정보고시의 유일한 모델명이 상품명에도 있는 경우에만 본체 모델로 사용한다.
                 if (request.productNoticeText() == null) return null;
                 text = request.productNoticeText(); source = "productNoticeText";
                 var match = Pattern.compile("품명 및 모델명\\s*:\\s*([A-Za-z0-9][A-Za-z0-9-]*)\\s*(?=,|$)").matcher(text);
@@ -29,11 +31,13 @@ final class SingleDeviceContext {
                 if (match.find()) return null;
             }
             case "스탠드/벽걸이 구분" -> {
+                // 스탠드와 벽걸이가 함께 있거나 모두 없으면 한 가지 유형으로 확정하지 않는다.
                 boolean stand = text.contains("스탠드"), wall = text.contains("벽걸이");
                 if (stand == wall) return null;
                 value = stand ? "스탠드" : "벽걸이";
             }
             case "설치지원방식" -> {
+                // 제외·선택 조건이 없는 긍정적인 설치 문구가 한 종류일 때만 값을 반환한다.
                 if (request.productCompositionText() != null) text += "\n" + request.productCompositionText();
                 if (Pattern.compile("불가|불포함|미포함|제외|별도|경우|선택").matcher(text).find()) return null;
                 boolean visit = Pattern.compile("방문\\s*설치|기사\\s*설치|설치\\s*포함").matcher(text).find();

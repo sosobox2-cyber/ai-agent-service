@@ -15,6 +15,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+/** 선택적인 기술서 구성의 길이 제한, 입력 해시·AI 전달과 모의 본품 추출 반영을 검증한다. */
 class ProductCompositionTest {
     private final ObjectMapper mapper = new ObjectMapper();
 

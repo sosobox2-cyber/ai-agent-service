@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.regex.Pattern;
 
-/** 상품별 문구 대신 원문 숫자, 단위 차원 및 공통 연산을 검증한다. */
+/** 원문 숫자·단위·연산을 대조하는 계산 유틸리티. 최종 승인 흐름에서는 evaluate를 호출하지 않는다. */
 public final class CalculationValidator {
     private static final String NUMBER = "(?:\\d{1,3}(?:,\\d{3})+|\\d{1,9})(?:\\.\\d{1,6})?";
     private static final Pattern MEASURE = Pattern.compile("(?<![\\d.,-])(" + NUMBER
@@ -22,6 +22,7 @@ public final class CalculationValidator {
     private CalculationValidator() {}
 
     private static Map<String, Unit> units() {
+        // 중량은 g, 용량은 ml를 기준으로 환산 계수를 두고 개수와 포장 단위를 구분한다.
         var units = new LinkedHashMap<String, Unit>();
         units.put("kg", new Unit("kg", "mass", new BigDecimal("1000")));
         units.put("g", new Unit("g", "mass", BigDecimal.ONE));
@@ -36,6 +37,7 @@ public final class CalculationValidator {
     }
     public static List<String> supportedUnits() { return UNITS.values().stream().map(Unit::name).toList(); }
     public static List<Calculation.Operand> operandsFrom(String source, String text) {
+        // 원문에서 숫자와 단위를 함께 찾고 일치한 문구를 피연산자의 근거로 붙인다.
         var result = new ArrayList<Calculation.Operand>();
         var matcher = MEASURE.matcher(text);
         while (matcher.find()) result.add(new Calculation.Operand(matcher.group(1), unit(matcher.group(2)).name(),
@@ -56,6 +58,7 @@ public final class CalculationValidator {
     }
     private static String compact(String text) { return text.replaceAll("[\\s\\u00a0]+", ""); }
     private static boolean containsEvidence(String source, String text) {
+        // 공백 차이는 허용하되 큰 숫자의 일부나 '개입'의 '개'만 근거로 일치시키지 않는다.
         String haystack = compact(source), needle = compact(text);
         for (int start = haystack.indexOf(needle); start >= 0; start = haystack.indexOf(needle, start + 1)) {
             int end = start + needle.length();
@@ -86,6 +89,7 @@ public final class CalculationValidator {
             sources.put("productNoticeText", request.productNoticeText());
             sources.put("productCompositionText", request.productCompositionText());
         }
+        // 제출한 출처를 먼저 확인하고, 단일상품이면 다른 상품 원문에서도 근거를 찾는다.
         List<String> order = new ArrayList<>(sources.keySet());
         if (order.remove(evidence.source())) order.add(0, evidence.source());
         for (String source : order) {
@@ -126,6 +130,7 @@ public final class CalculationValidator {
     }
 
     public static Result evaluate(InferenceRequest request, MappingProposal.Entry entry) {
+        // 계산 설명을 명시적으로 평가할 때만 원문 근거와 단위 호환성을 대조하고 재계산한다.
         try {
             Calculation calc = entry.calculation();
             if (calc == null || calc.operation() == null || calc.operands() == null || calc.operands().size() > 20)
@@ -138,6 +143,7 @@ public final class CalculationValidator {
             BigDecimal sum = BigDecimal.ZERO;
             Set<String> seen = new HashSet<>();
             var operandMeasures = new ArrayList<String>();
+            // 양수·정수 조건, 근거 중복, 구성 범위를 확인한 피연산자를 기준 단위로 합산한다.
             for (Calculation.Operand operand : calc.operands()) {
                 if (operand == null) throw new IllegalArgumentException("피연산자가 누락되었습니다.");
                 BigDecimal amount = number(operand.amount());
@@ -177,6 +183,7 @@ public final class CalculationValidator {
                     value = sum.divide(output.factor());
                 }
                 case SUM -> {
+                    // 합산은 모호하지 않은 본품 구성의 모든 측정값을 빠짐없이 포함해야 한다.
                     if (operands.size() < 2 || context == null || AMBIGUOUS.matcher(context.text()).find()
                             || !(context.text().contains("+") || context.text().contains("구성")))
                         throw new IllegalArgumentException("합산에는 두 개 이상 본품과 명확한 구성 근거가 필요합니다.");
@@ -196,6 +203,7 @@ public final class CalculationValidator {
                     value = sum.divide(output.factor());
                 }
                 case PACK_COUNT -> {
+                    // 판매 묶음 수와 묶음 안의 내용물 수를 구분하고 임의로 1묶음을 만들지 않는다.
                     if (!entry.targetPurchaseOptionName().equals("수량") || !output.dimension().equals("pack")
                             || context == null || AMBIGUOUS.matcher(context.text()).find())
                         throw new IllegalArgumentException("판매 묶음 수에는 원문의 포장 단위와 구성 근거가 필요합니다.");
@@ -235,6 +243,7 @@ public final class CalculationValidator {
             }
             if ((output.dimension().equals("count") || output.dimension().equals("pack")) && value.stripTrailingZeros().scale() > 0)
                 throw new IllegalArgumentException("최종 수량은 정수여야 합니다.");
+            // 제출한 값이 재계산한 숫자·출력 단위와 일치할 때만 정규화 결과를 반환한다.
             var claimed = MEASURE.matcher(entry.value() == null ? "" : entry.value().strip());
             if (!claimed.matches() || number(claimed.group(1)).compareTo(value) != 0
                     || !(unit(claimed.group(2)).name().equals(output.name())

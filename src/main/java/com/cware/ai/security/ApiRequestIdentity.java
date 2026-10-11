@@ -8,6 +8,7 @@ public final class ApiRequestIdentity {
     public static final String ATTRIBUTE = ApiRequestIdentity.class.getName() + ".id";
     private ApiRequestIdentity() {}
     public static String currentId() {
+        // HTTP 요청 밖에서 실행된 추론은 내부 호출로 표시한다.
         if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes
                 && attributes.getRequest().getAttribute(ATTRIBUTE) instanceof String id) return id;
         return "internal-call";

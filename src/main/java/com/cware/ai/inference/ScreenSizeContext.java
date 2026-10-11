@@ -12,6 +12,7 @@ final class ScreenSizeContext {
     private ScreenSizeContext() {}
 
     static MappingProposal.Entry mockEntry(InferenceRequest request, SourceOption option, String target) {
+        // 단일상품은 상품명, 여러 단품은 각 옵션명에서 명시된 cm(인치) 쌍을 찾는다.
         boolean single = request.options().size() == 1
                 && List.of("단품", "단일상품").contains(option.optionName1().strip());
         String source = single ? "goodsName" : "optionName1";
@@ -19,6 +20,7 @@ final class ScreenSizeContext {
         var match = SIZE.matcher(text);
         if (!match.find()) return null;
         String cm = match.group(1), inch = match.group(2), evidenceText = match.group();
+        // 크기 쌍이 여러 개면 어느 값이 해당 단품의 화면인지 임의로 선택하지 않는다.
         if (match.find()) return null;
         var evidence = new Calculation.Evidence(source, evidenceText);
         String amount;

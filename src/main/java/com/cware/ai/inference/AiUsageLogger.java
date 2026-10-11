@@ -52,6 +52,7 @@ public final class AiUsageLogger implements AutoCloseable {
             int maxHistory, String totalSizeCap) {
         this.enabled = enabled;
         this.pricing = pricing;
+        // JSONL은 한 호출당 한 줄로 기록하고 미측정 값의 null도 그대로 보존한다.
         ObjectMapper logMapper = mapper.copy().disable(SerializationFeature.INDENT_OUTPUT);
         logMapper.setSerializationInclusion(JsonInclude.Include.ALWAYS);
         this.json = logMapper.writer();
@@ -78,6 +79,7 @@ public final class AiUsageLogger implements AutoCloseable {
                 encoder.setPattern("%msg%n");
                 encoder.start();
                 sink.setEncoder(encoder);
+                // 날짜별 gzip 파일로 회전하며 보관 일수와 전체 용량 상한을 적용한다.
                 TimeBasedRollingPolicy<ILoggingEvent> rolling = new TimeBasedRollingPolicy<>();
                 rolling.setContext(context);
                 rolling.setParent(sink);
@@ -120,6 +122,7 @@ public final class AiUsageLogger implements AutoCloseable {
             if (!enabled && fileLogger == null) return;
             AiCallUsage usage = measureUsage(mode, retryCount + 1, response);
             var reasons = retryReasons == null ? List.<AiRetryReason>of() : List.copyOf(retryReasons);
+            // 최초·재시도 호출을 같은 inferenceId로 묶고 실제 사용량과 검증 상태를 함께 기록한다.
             var row = new AiPurchaseOptionUsageLog(OffsetDateTime.now().toString(), inferenceId, goodsId, category,
                     mode, usage.model(), usage.input_tokens(), usage.cached_tokens(), usage.output_tokens(),
                     usage.total_tokens(), proposal == null ? null : proposal.certain(),
@@ -129,6 +132,7 @@ public final class AiUsageLogger implements AutoCloseable {
                     retryCount, reasons.isEmpty() ? null : reasons.get(0), reasons,
                     validation == null ? null : validation.valid(), usage.estimated_cost_usd(),
                     com.cware.ai.security.ApiRequestIdentity.currentId());
+            // 콘솔과 파일 출력은 독립적으로 켤 수 있으며 기록 오류는 추론을 중단시키지 않는다.
             String message = json.writeValueAsString(row);
             if (enabled) LOG.info("ai_usage {}", message);
             if (fileLogger == null) return;
@@ -154,6 +158,7 @@ public final class AiUsageLogger implements AutoCloseable {
     }
 
     public AiCallUsage measureUsage(PurchaseOptionPromptMode mode, int attempt, ChatResponse response) {
+        // 응답 메타데이터의 실제 토큰 수에 외부 설정 단가를 적용한다.
         AiCallUsage usage = measure(mode, attempt, response);
         return new AiCallUsage(usage.model(), mode, attempt, usage.input_tokens(), usage.cached_tokens(),
                 usage.output_tokens(), usage.total_tokens(),
@@ -161,6 +166,7 @@ public final class AiUsageLogger implements AutoCloseable {
     }
 
     public static AiCallUsage measure(PurchaseOptionPromptMode mode, int attempt, ChatResponse response) {
+        // 응답이나 공급자 사용량이 없으면 미측정 상태를 유지하고 임의의 0을 채우지 않는다.
         var metadata = response == null ? null : response.getMetadata();
         String model = metadata == null ? "unknown" : metadata.getModel();
         if (model == null || !model.matches("(?:gpt-|o[1-9])[a-zA-Z0-9._:-]{1,95}")) model = "unknown";
@@ -175,6 +181,7 @@ public final class AiUsageLogger implements AutoCloseable {
     }
 
     @PreDestroy public void close() {
+        // 종료 시 전용 appender를 분리해 파일 자원과 중복 출력을 정리한다.
         if (appender != null) {
             fileLogger.detachAppender(appender);
             appender.stop();

@@ -1,3 +1,4 @@
+// 실제 화면 함수만 VM에 읽어 호출 합계, 미측정 값, 재시도 표시와 처리시간을 검증한다.
 const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');

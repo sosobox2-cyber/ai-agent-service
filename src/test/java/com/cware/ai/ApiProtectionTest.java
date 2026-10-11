@@ -30,6 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "app.security.api-key-id=internal-test", "app.security.rate-limit.enabled=true",
         "app.security.rate-limit.per-minute=3", "app.ai.usage-jsonl-path=target/security-test-usage.jsonl"})
 @AutoConfigureMockMvc
+/** API 경로 인증, 키별 요청 제한, 동시 요청의 원자적 집계와 안전한 로그 식별자를 검증한다. */
 class ApiProtectionTest {
     static final String URL = "/api/v1/coupang/purchase-options/infer";
     @Autowired MockMvc mvc;

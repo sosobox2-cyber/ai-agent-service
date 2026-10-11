@@ -1,7 +1,5 @@
 # 구매옵션 매핑 API 연동 명세서
 
-현재 저장소의 Java 구현과 `application.yml`을 기준으로 작성했습니다. 상품 데이터와 단품 옵션명을 보내면 구매옵션 분석 결과와 서버의 최종 판단을 반환합니다. 예제의 상품 데이터·신뢰도·사용량·비용은 설명용이며 실제 AI 결과를 보장하지 않습니다.
-
 ## 1. API 개요
 
 SK스토아 상품의 단품 옵션명을 쿠팡 구매옵션별 값으로 구분하는 동기식 API입니다. 한 요청에 상품 하나와 단품 1~200개를 전달합니다. 쿠팡 상품 등록·수정은 수행하지 않습니다.
@@ -15,17 +13,22 @@ SK스토아 상품의 단품 옵션명을 쿠팡 구매옵션별 값으로 구�
 | 메서드 | `POST` |
 | 경로 | `/api/v1/coupang/purchase-options/infer` |
 | 로컬 기본 주소 | `http://127.0.0.1:8081` — 기본 설정, 실행 환경에서 변경 가능 |
-| 기존 안내의 배포 주소 | `https://ai-agent-service-seven.vercel.app` — 저장소의 배포 안내에 기재된 주소이며 현재 가용성·인증·배포 버전은 이번 코드 검토로 확인하지 않음 |
+| 기존 안내의 배포 주소 | `https://ai-agent-service-seven.vercel.app` |
 | 요청 헤더 | `Content-Type: application/json`, 인증 ON일 때 `X-API-Key` |
 | 응답 | JSON, 비스트리밍 |
 | 인코딩 | 요청 JSON 파일은 UTF-8로 저장 |
 | 인증 | 서비스 전용 API Key 인증. 기본 ON, dev 프로필에서는 기본 OFF |
 
-> **중요 — OpenAI API Key는 서버 전용입니다.**
+> **중요 — OpenAI API Key와 서비스 API Key는 서로 다릅니다.**
 >
-> **이 API 요청에 OpenAI Key를 보내지 마세요.** `OPENAI_API_KEY`는 서버 환경변수 또는 Secret으로 설정합니다. 요청의 `X-API-Key`에는 별개의 **서비스 전용 Key**를 전달합니다.
+> 이 API 요청에 OpenAI Key를 보내지 마세요.<br>
+> `OPENAI_API_KEY`는 서버 환경변수 또는 Secret으로 설정합니다.
 >
-> 서버에 `OPENAI_API_KEY`가 없으면 실제 추론은 **HTTP 503 (`AI_NOT_CONFIGURED`)**으로 반환됩니다. 모의 테스트 모드는 OpenAI Key 없이 사용할 수 있지만, **서비스 API Key 인증이 켜져 있으면 테스트 모드도 인증이 필요합니다.**
+> API를 호출할 때는 `X-API-Key` Header에 별도로 발급된 **서비스 전용 API Key**를 전달합니다.
+>
+> 서버에 `OPENAI_API_KEY`가 설정되어 있지 않으면 실제 AI 추론 요청은 **HTTP 503 (`AI_NOT_CONFIGURED`)**으로 반환됩니다.
+>
+> 모의 테스트 모드는 OpenAI를 호출하지 않으므로 `OPENAI_API_KEY` 없이 사용할 수 있습니다. 단, 서비스 API Key 인증이 활성화되어 있다면 모의 테스트 요청에도 `X-API-Key`가 필요합니다.
 
 ### API 인증 및 호출 제한
 

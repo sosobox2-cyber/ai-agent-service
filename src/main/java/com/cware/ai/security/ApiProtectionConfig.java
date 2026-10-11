@@ -30,6 +30,7 @@ public class ApiProtectionConfig {
             @Value("${app.security.rate-limit.enabled:true}") boolean rateEnabled,
             @Value("${app.security.rate-limit.per-minute:30}") int limit,
             ObjectMapper mapper, GlobalExceptionHandler errors) {
+        // 인증을 켠 상태에서는 비밀 키와 로그용 식별자가 유효하게 설정되어야 시작할 수 있다.
         if (enabled && (key.isBlank() || key.equals(id) || !id.matches("[A-Za-z0-9._-]{1,100}")))
             throw new IllegalArgumentException("Service API key and a valid API key ID must be configured");
         byte[] expected = digest(key);
@@ -39,12 +40,14 @@ public class ApiProtectionConfig {
                     throws ServletException, IOException {
                 String path = request.getServletPath();
                 if (path.isEmpty()) path = request.getRequestURI().substring(request.getContextPath().length());
+                // API 경로만 보호하고 정적 화면·문서 요청은 다음 필터로 바로 전달한다.
                 if (!(path.equals("/api") || path.startsWith("/api/") || path.startsWith("/api;"))) {
                     chain.doFilter(request, response);
                     return;
                 }
                 String identity = enabled ? id : "security-disabled";
                 if (enabled) {
+                    // 중복 헤더를 거부하고, 고정 길이 해시를 비교해 키 원문을 직접 비교하지 않는다.
                     var headers = Collections.list(request.getHeaders("X-API-Key"));
                     if (headers.size() != 1 || headers.get(0).isBlank()
                             || !MessageDigest.isEqual(expected, digest(headers.get(0)))) {
@@ -53,6 +56,7 @@ public class ApiProtectionConfig {
                     }
                 }
                 if (rateEnabled) {
+                    // 인증된 식별자별 요청 수를 확인하며 초과 시 재요청까지 남은 초를 전달한다.
                     long retryAfter = limiter.retryAfter(identity);
                     if (retryAfter > 0) {
                         response.setHeader("Retry-After", Long.toString(retryAfter));
@@ -60,6 +64,7 @@ public class ApiProtectionConfig {
                         return;
                     }
                 }
+                // 이후 사용량 로그에서는 클라이언트 키 대신 서버가 지정한 식별자를 사용한다.
                 request.setAttribute(ApiRequestIdentity.ATTRIBUTE, identity);
                 chain.doFilter(request, response);
             }
@@ -73,6 +78,7 @@ public class ApiProtectionConfig {
         };
     }
     @Bean public FilterRegistrationBean<OncePerRequestFilter> apiProtectionFilter() {
+        // 컨트롤러 처리 전에 인증과 요청 제한이 실행되도록 앞선 순서에 등록한다.
         var registration = new FilterRegistrationBean<>(filter);
         registration.setOrder(-100);
         registration.addUrlPatterns("/*");

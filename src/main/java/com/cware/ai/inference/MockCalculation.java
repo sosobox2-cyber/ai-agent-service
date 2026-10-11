@@ -8,6 +8,7 @@ import java.util.List;
 final class MockCalculation {
     private MockCalculation() {}
     static MappingProposal.Entry attach(MappingProposal.Entry entry) {
+        // 기존 계산 설명이 없고 원문 근거와 결과 측정값을 찾을 수 있을 때만 설명을 추가한다.
         if (entry.calculation() != null) return entry;
         if (entry.evidenceSource() == null || entry.evidenceText() == null) return entry;
         var context = new Calculation.Evidence(entry.evidenceSource(), entry.evidenceText());
@@ -17,6 +18,7 @@ final class MockCalculation {
         var result = output.get(0);
         Calculation.Operation operation;
         List<Calculation.Operand> operands;
+        // 판매 묶음·합산 중량·묶음 내 수량을 구분해 모의 결과의 설명용 연산을 선택한다.
         if (entry.value().equals("1세트")) {
             operation = Calculation.Operation.PACK_COUNT;
             operands = List.of();

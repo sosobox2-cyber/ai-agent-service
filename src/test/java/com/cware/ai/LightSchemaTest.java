@@ -16,6 +16,7 @@ import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+/** FULL 스키마 계약과 LIGHT의 null 전용 calculation 및 공통 치수 표현을 검증한다. */
 class LightSchemaTest {
     final ObjectMapper mapper = new ObjectMapper();
     InferenceRequest fixture(String name) throws Exception {

@@ -8,6 +8,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 
+/** 매핑 누락·중복·신뢰도, 단품 조립 값 보존과 최종 구매옵션 조합 중복을 검증한다. */
 class ResultValidatorTest {
     private final ResultValidator validator = new ResultValidator();
 

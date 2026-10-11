@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
 
+/** HTTP 전송에서 엄격한 스키마 직렬화, 공급자 사용량 보존과 안전한 오류 변환을 검증한다. */
 class OpenAiTransportTest {
     @Test void realTransportPreservesNativeCachedTokenUsage() throws Exception {
         RestClient.Builder builder = RestClient.builder();

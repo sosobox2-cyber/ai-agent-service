@@ -1,3 +1,4 @@
+/* 세 문서 화면에서 재사용하는 목차·본문 배치이며 styles.css의 공통 스타일을 확장한다. */
 .guide-shell { max-width: 1280px; }
 .guide-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items: start; }
 .guide-toc { position: sticky; top: 24px; min-width: 0; max-height: calc(100vh - 48px); overflow-y: auto; scrollbar-gutter: stable; margin-bottom: 0; padding: 22px 18px; }
@@ -14,6 +15,7 @@
 .guide-toc a:hover { text-decoration: underline; }
 .guide-toc a:focus-visible { outline: 2px solid #80aaff; outline-offset: 3px; border-radius: 2px; }
 .guide-toc a code, .guide-toc a strong { font: inherit; }
+/* Markdown에서 생성한 제목·표·코드의 긴 문자열이 본문 너비를 벗어나지 않도록 한다. */
 .guide-content { min-width: 0; line-height: 1.85; overflow-wrap: anywhere; }
 .guide-content h1 { font-size: 28px; }
 .guide-content h2 { margin-top: 42px; padding-top: 20px; border-top: 1px solid #e1e8f1; font-size: 23px; scroll-margin-top: 20px; }
@@ -35,5 +37,6 @@
 #guide-content:is([data-source="/api-reference.md"], [data-source="/ai-operations.md"]) pre { white-space: pre; word-break: normal; overflow-wrap: normal; overflow-x: auto; tab-size: 2; }
 #guide-content:not([data-source]) code { font: inherit; }
 #guide-content:not([data-source]) pre { font-family: inherit; font-size: 15px; line-height: 1.85; }
+/* 좁은 화면에서는 고정 목차를 본문 위로 옮기고 화면 크기에 따라 목차 열 수를 줄인다. */
 @media (max-width: 900px) { .guide-layout { grid-template-columns: minmax(0, 1fr); gap: 18px; } .guide-toc { position: static; max-height: none; overflow-y: visible; scrollbar-gutter: auto; } .guide-toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; } }
 @media (max-width: 600px) { .guide-toc ol { grid-template-columns: minmax(0, 1fr); } .guide-content h1 { font-size: 23px; } .guide-content h2 { font-size: 20px; } }

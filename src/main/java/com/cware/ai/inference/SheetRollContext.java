@@ -14,6 +14,7 @@ final class SheetRollContext {
     private SheetRollContext() {}
 
     static MappingProposal.Entry mockEntry(InferenceRequest request, SourceOption option, String target) {
+        // 'N매 × M롤'에서 롤당 매수와 판매 롤 수를 분리하며 여러 원문의 충돌은 거부한다.
         if (request.options().size() != 1 || !Set.of("단일상품", "단품").contains(option.optionName1().strip())
                 || !Set.of("개당 수량", "수량").contains(target)) return null;
         List<String> counts = null;
@@ -38,6 +39,7 @@ final class SheetRollContext {
             }
         }
         if (counts == null) return null;
+        // 개당 수량에는 매수를, 판매 수량에는 롤 수를 사용하고 반환 단위만 요청 설정에 맞춘다.
         boolean contents = target.equals("개당 수량");
         String amount = counts.get(contents ? 0 : 1);
         String rawUnit = contents ? "매" : "롤";

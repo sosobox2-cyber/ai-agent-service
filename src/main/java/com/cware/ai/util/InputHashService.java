@@ -9,6 +9,7 @@ import java.security.*;
 import java.util.*;
 
 @Service
+/** 요청의 값은 보존하고 목록 순서는 정렬한 뒤 SHA-256으로 입력 식별 해시를 생성한다. */
 public class InputHashService {
     private final ObjectMapper mapper;
     public InputHashService(ObjectMapper mapper) { this.mapper = mapper; }
@@ -21,6 +22,7 @@ public class InputHashService {
         canonical.put("categoryName", r.categoryName());
         canonical.put("productNoticeText", r.productNoticeText());
         canonical.put("productCompositionText", r.productCompositionText());
+        // 옵션명·단위·단품의 입력 순서만 달라져도 같은 내용이면 같은 해시를 생성한다.
         canonical.put("allowedPurchaseOptions", r.allowedPurchaseOptions().stream().sorted().toList());
         canonical.put("purchaseOptionUnits", r.purchaseOptionUnits().stream()
                 .sorted(Comparator.comparing(PurchaseOptionUnit::purchaseOptionName))
@@ -35,6 +37,7 @@ public class InputHashService {
         }
         canonical.put("options", options);
         try {
+            // 정규화한 JSON의 UTF-8 바이트를 해싱하고 응답에 사용할 16진 문자열로 반환한다.
             byte[] json = mapper.writeValueAsString(canonical).getBytes(StandardCharsets.UTF_8);
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(json));
         } catch (JsonProcessingException | NoSuchAlgorithmException e) {

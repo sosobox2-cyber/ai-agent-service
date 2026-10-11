@@ -16,6 +16,7 @@ final class RollPackContext {
     private RollPackContext() {}
 
     static MappingProposal.Entry mockEntry(InferenceRequest request, SourceOption option, String target) {
+        // 단일상품의 길이·포장당 롤 수·판매 포장 수를 서로 다른 값으로 추출한다.
         if (request.options().size() != 1 || !Set.of("단일상품", "단품").contains(option.optionName1().strip())
                 || !Set.of("길이", "개당 수량", "수량").contains(target)) return null;
         List<String> dimensions = null;
@@ -33,6 +34,7 @@ final class RollPackContext {
             while (match.find()) {
                 BigDecimal length = new BigDecimal(match.group(1));
                 if (length.signum() <= 0) return null;
+                // 총 롤 수가 있으면 포장당 롤 수 × 판매 포장 수와 일치해야 한다.
                 if (match.group(6) != null && new BigDecimal(match.group(3)).multiply(new BigDecimal(match.group(4)))
                         .compareTo(new BigDecimal(match.group(6))) != 0) return null;
                 var candidate = List.of(length.stripTrailingZeros().toPlainString(), match.group(2).toLowerCase(Locale.ROOT),
@@ -45,6 +47,7 @@ final class RollPackContext {
             }
         }
         if (dimensions == null) return null;
+        // 요청한 구매옵션에 해당하는 구성 요소만 선택하고 원문의 피연산자 단위는 보존한다.
         String amount = switch (target) {
             case "길이" -> dimensions.get(0);
             case "개당 수량" -> dimensions.get(2);

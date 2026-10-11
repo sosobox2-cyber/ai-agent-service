@@ -1,3 +1,4 @@
+// 결과 화면 함수의 단품 순서, 승인·검토 매핑, 누락 및 원본에 없는 ID 표시를 검증한다.
 const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');

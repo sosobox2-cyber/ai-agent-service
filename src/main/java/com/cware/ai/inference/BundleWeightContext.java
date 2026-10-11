@@ -15,6 +15,7 @@ public final class BundleWeightContext {
     private BundleWeightContext() {}
 
     private static BigDecimal total(String text) {
+        // 선택 구성·사은품·배수가 없는 '+' 구성만 kg 기준으로 합산한다.
         if (text == null || text.length() > 500 || AMBIGUOUS.matcher(text).find()) return null;
         String[] parts = text.split("\\+", -1);
         if (parts.length < 2 || parts.length > 10) return null;
@@ -35,6 +36,7 @@ public final class BundleWeightContext {
     }
 
     public static boolean valid(InferenceRequest request, MappingProposal.Entry entry) {
+        // 단일상품의 전체 상품명을 근거로 제출한 1세트 또는 합산 중량만 대조한다.
         if (!QuantityContext.eligible(request) || !"goodsName".equals(entry.evidenceSource())
                 || !request.goodsName().equals(entry.evidenceText())) return false;
         BigDecimal total = total(request.goodsName());
@@ -47,6 +49,7 @@ public final class BundleWeightContext {
     }
 
     public static MappingProposal.Entry mockEntry(InferenceRequest request, String target) {
+        // 명확한 구성일 때만 모의 값을 만들며 신뢰도는 실제 측정값이 아닌 0으로 둔다.
         if (!QuantityContext.eligible(request)) return null;
         BigDecimal total = total(request.goodsName());
         if (total == null) return null;

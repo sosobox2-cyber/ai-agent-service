@@ -4,6 +4,7 @@ import com.cware.ai.inference.*;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
+/** 모의 추출이 원문 개수·중량·길이를 구분하고 충돌하거나 여러 후보가 있으면 추측하지 않는지 검증한다. */
 class MockOptionInferenceTest {
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(strings = {"80매x6롤", "80매 X 6롤", "80매×6롤", "80매*6롤"})

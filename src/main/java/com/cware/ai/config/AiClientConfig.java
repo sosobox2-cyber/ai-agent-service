@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.net.URI;
 
 @Configuration
+/** AI 연결 시간 제한, 모델 옵션 및 외부 오류의 공개 범위를 설정한다. */
 public class AiClientConfig {
     @Bean
     public ChatModel openAiChatModel(InferenceProperties properties,
@@ -21,10 +22,12 @@ public class AiClientConfig {
             @Value("${spring.ai.openai.chat.options.model}") String model,
             @Value("${spring.ai.openai.chat.options.temperature:0}") double temperature,
             @Value("${spring.ai.openai.chat.options.max-tokens:4096}") int maxTokens) {
+        // 키가 없어도 애플리케이션은 시작하되, 실제 AI 호출 시에만 설정 오류를 반환한다.
         if (apiKey == null || apiKey.isBlank()) {
             return prompt -> { throw new InferenceException("AI_NOT_CONFIGURED", HttpStatus.SERVICE_UNAVAILABLE,
                     "AI 추론을 사용하려면 OPENAI_API_KEY를 설정해야 합니다."); };
         }
+        // 연결 대기와 응답 대기의 제한 시간을 각각 HTTP 클라이언트에 적용한다.
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(properties.connectTimeout());
         factory.setReadTimeout(properties.readTimeout());
@@ -37,6 +40,7 @@ public class AiClientConfig {
                 .retryTemplate(RetryTemplate.builder().maxAttempts(1).build()).build();
     }
 
+    /** 공급자 오류를 서비스 오류 코드로 변환해 외부 응답 내용이 노출되지 않도록 한다. */
     public static class SafeErrorHandler implements ResponseErrorHandler {
         @Override
         public boolean hasError(ClientHttpResponse response) throws IOException { return response.getStatusCode().isError(); }

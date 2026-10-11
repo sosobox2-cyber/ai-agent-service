@@ -16,6 +16,7 @@ import java.nio.file.*;
 import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 
+/** 동일한 의류 입력의 LIGHT/FULL 텍스트 토큰과 선택적으로 실제 호출 비용·정확도를 비교한다. */
 class PromptCostComparisonTest {
     final ObjectMapper mapper = new ObjectMapper();
     InferenceRequest request(String name) throws Exception {

@@ -14,6 +14,7 @@ public final class MockOptionInferenceService {
     private MockOptionInferenceService() {}
 
     public static MappingProposal infer(InferenceRequest request) {
+        // 원본 단품 × 허용 구매옵션마다 전용 패턴을 먼저 적용하고 일반 추출로 이어 간다.
         List<MappingProposal.Entry> entries = new ArrayList<>();
         for (SourceOption option : request.options()) {
             for (String target : request.allowedPurchaseOptions()) {
@@ -44,6 +45,7 @@ public final class MockOptionInferenceService {
                     entries.add(packagedWeight);
                     continue;
                 }
+                // 단위 설정이 있는 옵션은 전용 단위 추출로 처리하고 일반 문자열 추출로 넘기지 않는다.
                 if (configured.isPresent()) {
                     MappingProposal.Entry entry = UnitSelection.mockEntry(request, option, configured.get());
                     if (entry != null) entries.add(entry);
@@ -62,11 +64,13 @@ public final class MockOptionInferenceService {
                 }
             }
         }
+        // 모의 결과의 confidence는 0으로 두고 화면 확인용 계산 설명을 붙인다.
         return new MappingProposal(true, 0.0, entries.stream().map(MockCalculation::attach).toList(),
                 "테스트 모드의 제한적인 모의 추출 결과입니다. 실제 AI 판단이 아닙니다.");
     }
 
     private static String extract(String source, String target) {
+        // 원본을 공백·슬래시로 나눠 알려진 색상, 숫자 사이즈, '핏' 접미사만 추출한다.
         String name = target.toUpperCase(Locale.ROOT);
         if (name.equals("옵션") || name.equals("상품옵션")) return source;
         String[] tokens = source.strip().split("[\\s/]+");

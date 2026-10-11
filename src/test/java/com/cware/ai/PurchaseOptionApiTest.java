@@ -23,6 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties="spring.ai.openai.api-key=test-placeholder")
 @AutoConfigureMockMvc
+/** HTTP API의 입력 검증, 모의 예제, AI·서버 판단 분리 및 사용량·오류 응답 계약을 검증한다. */
 class PurchaseOptionApiTest {
     @Test void kitchenTowelUsesGoodsNameForSheetAndRollCountsInTestMode() throws Exception {
         mvc.perform(post(URL).param("testMode", "true").contentType(MediaType.APPLICATION_JSON)

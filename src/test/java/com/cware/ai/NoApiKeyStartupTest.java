@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = "spring.ai.openai.api-key=")
 @AutoConfigureMockMvc
+/** AI 키가 없어도 서버와 모의 테스트는 동작하고 실제 AI 요청에는 설정 오류가 반환되는지 검증한다. */
 class NoApiKeyStartupTest {
     private static final String URL = "/api/v1/coupang/purchase-options/infer";
 

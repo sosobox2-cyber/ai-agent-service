@@ -16,6 +16,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import org.mockito.ArgumentCaptor;
 
+/** 단순 색상·사이즈의 LIGHT 선택과 단위·단일상품의 FULL 선택 및 프롬프트 전달을 검증한다. */
 class PromptRoutingTest {
     final ObjectMapper mapper = new ObjectMapper();
     final PurchaseOptionPromptSelector selector = new PurchaseOptionPromptSelector();

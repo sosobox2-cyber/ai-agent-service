@@ -10,6 +10,7 @@ import java.nio.file.*;
 import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 
+/** 명확한 본품 중량 구성의 합산과 사은품·선택·배수 등 모호한 구성의 거부를 검증한다. */
 class BundleWeightContextTest {
     private final ObjectMapper mapper = new ObjectMapper();
 

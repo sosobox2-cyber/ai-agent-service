@@ -1,3 +1,4 @@
+# 호출 JSONL에서 모드·재시도·비용을 집계하고 선택적으로 상품 또는 카테고리별 통계를 제공한다.
 param(
     [string]$Path = 'logs/ai-usage.jsonl',
     [ValidateSet('goodsId', 'categoryName')][string]$GroupBy
@@ -14,11 +15,13 @@ foreach ($row in $rows) {
     }
 }
 function SummarizeRows([object[]]$rows) {
+# 미측정(null) 값은 평균에서 제외해 사용량이 없는 호출을 0으로 계산하지 않는다.
 function AverageKnown([string]$Field) {
     $known = @($rows | Where-Object { $null -ne $_.$Field })
     if (!$known.Count) { return $null }
     return ($known | Measure-Object -Property $Field -Average).Average
 }
+# 동일한 추론 ID를 묶고 재시도 횟수로 최초 호출과 최종 상태를 구분한다.
 $requests = @($rows | Group-Object inferenceId)
 $initial = @($requests | ForEach-Object { $_.Group | Sort-Object retryCount | Select-Object -First 1 })
 $final = @($requests | ForEach-Object { $_.Group | Sort-Object retryCount | Select-Object -Last 1 })
@@ -26,6 +29,7 @@ $light = @($initial | Where-Object { $_.initialPromptMode -eq 'LIGHT' })
 $retries = @($rows | Where-Object { $_.retryCount -eq 1 })
 $lightSuccess = @($light | Where-Object { $_.status -eq 'SUCCESS' })
 $knownExtra = @($retries | Where-Object { $null -ne $_.estimatedCostUsd })
+# 알려진 비용만 합산하며 미측정 비용의 호출 수는 결과에 별도로 포함한다.
 [decimal]$extraCost = 0
 foreach ($row in $knownExtra) { $extraCost += [decimal]$row.estimatedCostUsd }
 [decimal]$totalCost = 0
@@ -62,6 +66,7 @@ foreach ($row in $rows) { if ($null -ne $row.estimatedCostUsd) { $totalCost += [
 
 $summary = SummarizeRows $rows
 if ($GroupBy) {
+    # 빈 그룹명은 null로 표시하고 각 그룹에도 전체 집계와 동일한 지표를 적용한다.
     $groups = @($rows | Group-Object -Property {
         $value = [string]$_.$GroupBy
         if ([string]::IsNullOrWhiteSpace($value)) { '' } else { $value.Trim() }

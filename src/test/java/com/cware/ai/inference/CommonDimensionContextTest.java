@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** 색상만 다른 단품의 공통 치수·허용오차·개수 모의 추출과 프롬프트 지침을 검증한다. */
 class CommonDimensionContextTest {
     @Test void pillowKeepsToleranceForBothColorsAndCounts() throws Exception {
         var request = new com.fasterxml.jackson.databind.ObjectMapper().readValue(

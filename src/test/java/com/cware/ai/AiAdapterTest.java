@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import org.mockito.ArgumentCaptor;
 
+/** 구조화 응답 파싱, 프롬프트 입력, 재시도와 사용량 전달 및 오류 변환을 검증한다. */
 class AiAdapterTest {
     ChatModel model;
     PurchaseOptionAiService ai;
@@ -267,7 +268,7 @@ class AiAdapterTest {
         var product = new ObjectMapper().readTree(input.substring(input.indexOf('{'))).path("product");
         assertThat(product.path("productNoticeText").asText()).isEqualTo(notice);
         assertThat(captured.getValue().getInstructions().get(0).getText())
-                .contains("원본 옵션명에 없는 값을 정보고시에서 가져와 채우지 않는다");
+                .contains("optionName1에 없는 값을 상품명이나 정보고시에서 가져와 생성하거나 대체하지 않는다");
     }
     @Test void sendsCallerUnitSettingsAndDefaultRulesToModel() throws Exception {
         var mapper = new ObjectMapper();

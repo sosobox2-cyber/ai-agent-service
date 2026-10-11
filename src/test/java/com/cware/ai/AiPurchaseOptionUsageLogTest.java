@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(OutputCaptureExtension.class)
+/** 호출별 JSONL 기록, 미측정 값 보존, 로그 실패 시 추론 지속 및 일별 파일 회전을 검증한다. */
 class AiPurchaseOptionUsageLogTest {
     @TempDir Path temp;
     final ObjectMapper mapper = new ObjectMapper();

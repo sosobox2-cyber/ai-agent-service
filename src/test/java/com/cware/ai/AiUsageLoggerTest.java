@@ -11,6 +11,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 
 @ExtendWith(OutputCaptureExtension.class)
+/** 캐시 입력을 포함한 실제 토큰 집계와 외부 단가 계산 및 제한된 로그 출력을 검증한다. */
 class AiUsageLoggerTest {
     ChatResponse response(String model, Integer cached) {
         var nativeUsage = new OpenAiApi.Usage(200, 1000, 1200,

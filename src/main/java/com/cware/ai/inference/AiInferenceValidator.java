@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import static com.cware.ai.inference.AiRetryReason.*;
 
 @Component
+/** 검증 실패를 재시도 사유로 변환하고 최종 적용 신뢰도 충족 여부도 제공한다. */
 public class AiInferenceValidator {
     private final ResultValidator results;
     private final AiRetryProperties retry;
@@ -27,6 +28,7 @@ public class AiInferenceValidator {
     }
 
     public AiInferenceValidationResult validate(InferenceRequest request, MappingProposal proposal) {
+        // 단품 누락·중복과 허용되지 않은 이름을 재시도 사유별로 수집한다.
         var errors = new ArrayList<AiInferenceValidationResult.ValidationError>();
         if (proposal == null) {
             errors.add(error(INVALID_RESPONSE, "AI 응답이 없습니다."));
@@ -51,11 +53,12 @@ public class AiInferenceValidator {
         }
         ids.stream().filter(id -> !returned.contains(id)).sorted()
                 .forEach(id -> errors.add(error(MISSING_OPTION_MAPPING, "누락된 optionId: " + id)));
-        // Reuse all existing structural/unit validation, including assembled option combinations.
+        // 기존 구조·단위 검증을 재사용하고, 구조가 유효하면 조립한 단품 조합도 확인한다.
         List<String> structural = results.validateProposal(request, proposal);
         structural.forEach(message -> errors.add(error(INVALID_RESPONSE, message)));
         if (structural.isEmpty()) results.validateItems(request, proposal, results.assemble(request, proposal))
                 .forEach(message -> errors.add(error(INVALID_RESPONSE, message)));
+        // 선택적으로 켠 재추론 신뢰도 기준은 최종 자동 적용 신뢰도 기준과 별도로 평가한다.
         if (retry.confidenceThresholdEnabled() && ResultValidator.validConfidence(proposal.confidence())) {
             double minimum = proposal.confidence();
             if (proposal.mappings() != null) for (var entry : proposal.mappings())
@@ -66,7 +69,7 @@ public class AiInferenceValidator {
     }
 
     private static boolean blank(String value) { return value == null || value.isBlank(); }
-    /** Final approval remains separate from validation failover, so low confidence does not add a call. */
+    /** 최종 적용 신뢰도를 확인한다. 이 검사 자체가 추가 AI 호출을 발생시키지는 않는다. */
     public boolean meetsApplicationConfidence(MappingProposal proposal) {
         return proposal != null && ResultValidator.validConfidence(proposal.confidence())
                 && proposal.confidence() >= applicationConfidenceThreshold && proposal.mappings() != null

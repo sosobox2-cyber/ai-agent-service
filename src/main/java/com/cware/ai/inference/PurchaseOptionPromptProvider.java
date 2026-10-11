@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 @Component
+/** 시작 시 두 시스템 프롬프트를 읽고 AUTO 선택 또는 FULL 강제 설정을 적용한다. */
 public final class PurchaseOptionPromptProvider {
     private final String full;
     private final String light;
@@ -22,6 +23,7 @@ public final class PurchaseOptionPromptProvider {
     }
 
     public PurchaseOptionPromptMode select(InferenceRequest request) {
+        // FULL 강제 설정이면 요청 종류와 관계없이 전체 프롬프트를 사용한다.
         return forceFull ? PurchaseOptionPromptMode.FULL : selector.select(request);
     }
 

@@ -6,6 +6,7 @@ import java.util.List;
 public record AiProductData(String goodsName, List<String> allowedPurchaseOptions, List<SourceOption> options,
         String productNoticeText, List<PurchaseOptionUnit> purchaseOptionUnits, String productCompositionText) {
     public static AiProductData from(InferenceRequest request) {
+        // 식별·집계용 필드를 제외해 모델에 전달되는 상품 데이터의 범위를 고정한다.
         return new AiProductData(request.goodsName(), request.allowedPurchaseOptions(), request.options(),
                 request.productNoticeText(), request.purchaseOptionUnits(), request.productCompositionText());
     }

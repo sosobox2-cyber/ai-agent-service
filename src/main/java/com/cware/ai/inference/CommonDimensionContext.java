@@ -8,6 +8,7 @@ import java.util.regex.Pattern;
 final class CommonDimensionContext {
     private static final Pattern SIZE = Pattern.compile("(?:치수|크기|규격)\\s*:\\s*(\\d+(?:\\.\\d+)?\\s*[xX×*]\\s*\\d+(?:\\.\\d+)?(?:\\s*[xX×*]\\s*\\d+(?:\\.\\d+)?)?\\s*(?:cm|mm)(?:\\s*\\([^()\\r\\n]*\\))?)\\s*(?=,\\s*\\d{3}:|$)");
     static MappingProposal.Entry mockEntry(InferenceRequest request, SourceOption option, String target, Set<String> colors) {
+        // 모든 단품이 색상명일 때만 하나의 정보고시 치수를 공통 사이즈로 적용한다.
         if (request.productNoticeText() == null || request.options().stream()
                 .anyMatch(o -> !colors.contains(o.optionName1().strip()))) return null;
         var matcher = SIZE.matcher(request.productNoticeText().strip().replaceAll("^\"|\"$", ""));
@@ -18,6 +19,7 @@ final class CommonDimensionContext {
                 .noneMatch(u -> target.equals(u.purchaseOptionName())))
             return new MappingProposal.Entry(option.optionId(), target, dimension, 0.0,
                     "productNoticeText", dimension, null);
+        // 공통 수량은 기술서에 명시된 하나의 'N개' 구성이 있어야 추출한다.
         if (!"수량".equals(target) || request.productCompositionText() == null) return null;
         var count = Pattern.compile("^[\\s\"]*[^\\d+\\r\\n]+\\s+([1-9]\\d*)개[\\s\"]*$")
                 .matcher(request.productCompositionText());

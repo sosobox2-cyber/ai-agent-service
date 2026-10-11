@@ -10,6 +10,7 @@ import java.nio.file.*;
 import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 
+/** 단일상품의 판매 개수·포장당 수량·용량 패턴과 서비스의 AI 근거 보존 동작을 검증한다. */
 class QuantityContextTest {
     private final ObjectMapper mapper = new ObjectMapper();
     private final ResultValidator validator = new ResultValidator();

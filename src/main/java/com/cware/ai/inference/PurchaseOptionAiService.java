@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @Service
+/** 구조화된 AI 응답을 검증하고 LIGHT 실패 시 한 번의 FULL 재시도와 사용량 기록을 수행한다. */
 public class PurchaseOptionAiService implements OptionInferenceGateway {
     private final ChatModel model;
     private final ObjectMapper mapper;
@@ -54,6 +55,7 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
         this.validator = validator;
         this.prompts = prompts;
         this.usageLogger = usageLogger;
+        // AI 응답에는 미정의 필드, 중복 키, 뒤따르는 JSON 및 타입 강제 변환을 허용하지 않는다.
         this.mapper = mapper.copy().enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                 .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
                 .disable(DeserializationFeature.ACCEPT_FLOAT_AS_INT)
@@ -159,6 +161,7 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
     }
 
     private MappingProposal parse(ChatResponse response) throws JsonProcessingException {
+        // 정상 종료된 응답만 받아 크기와 빈 본문을 확인한 뒤 엄격한 JSON 파싱을 수행한다.
         if (response == null || response.getResult() == null || response.getResult().getOutput() == null)
             throw parseFailure();
         String finish = response.getResult().getMetadata().getFinishReason();
@@ -171,6 +174,7 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
     }
 
     private static MappingProposal review(Attempt attempt) {
+        // 검증 실패 사유와 남아 있는 제안을 보존하되 certain=false로 수동 검토를 요청한다.
         MappingProposal proposal = attempt.proposal();
         String reason = "REVIEW_REQUIRED: " + attempt.validation().reasons() + "; "
                 + String.join("; ", attempt.validation().errors().stream()
@@ -190,6 +194,7 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
     }
 
     public static Map<String,Object> schema(InferenceRequest request, PurchaseOptionPromptMode mode) {
+        // 요청의 단품 ID·허용 옵션명으로 enum을 구성하고 LIGHT의 calculation은 null로 제한한다.
         var evidence = object(Map.of("source", Map.of("type", "string", "enum",
                 List.of("goodsName", "productNoticeText", "productCompositionText", "optionName1")), "text", Map.of("type", "string")));
         var operand = object(Map.of("amount", Map.of("type", "string", "description", "양수 숫자 문자열"),

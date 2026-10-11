@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** 판매 용기 단위만 정규화하고 불확실 판정·원문 근거·허용 단위·불일치 피연산자는 보존하는지 검증한다. */
 class CountUnitNormalizerTest {
     private InferenceRequest request() throws Exception {
         return new com.fasterxml.jackson.databind.ObjectMapper().readValue(

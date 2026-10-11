@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 
+/** 입력 순서는 해시에 영향을 주지 않고 상품·카테고리·정보고시 값 변경은 반영되는지 검증한다. */
 class InputHashTest {
     final InputHashService hashes=new InputHashService(new ObjectMapper());
     @Test void ignoresOrderingButPreservesValues() {

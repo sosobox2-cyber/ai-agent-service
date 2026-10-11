@@ -1,3 +1,4 @@
+# 서버 주소·포트는 환경 변수로 재정의하며 기본값은 로컬 접속만 허용한다.
 server:
   port: ${PORT:8081}
   address: ${SERVER_ADDRESS:127.0.0.1}
@@ -8,6 +9,7 @@ spring:
     deserialization:
       fail-on-unknown-properties: true
   ai:
+    # 실제 AI 호출의 키·모델과 응답 생성 옵션을 설정한다.
     openai:
       api-key: ${OPENAI_API_KEY:}
       chat:
@@ -15,6 +17,7 @@ spring:
           model: ${OPENAI_MODEL:gpt-4.1-mini}
           temperature: 0
           max-tokens: 4096
+# 서비스 API 인증·호출 제한은 OpenAI 키와 별개의 설정이다.
 app:
   security:
     enabled: ${AI_AGENT_SECURITY_ENABLED:true}
@@ -23,15 +26,18 @@ app:
     rate-limit:
       enabled: ${AI_AGENT_RATE_LIMIT_ENABLED:true}
       per-minute: ${AI_AGENT_RATE_LIMIT_PER_MINUTE:30}
+  # 최종 자동 적용 기준과 공급자 HTTP 연결·읽기 제한 시간을 설정한다.
   inference:
     confidence-threshold: 0.80
     prompt-version: coupang-option-v27
     connect-timeout: 5s
     read-timeout: 30s
   ai:
+    # AUTO는 요청별 LIGHT/FULL 선택, FULL은 전체 프롬프트 강제 사용이다.
     prompt-mode: ${AI_PROMPT_MODE:AUTO}
     usage-log-enabled: ${AI_USAGE_LOG_ENABLED:true}
     usage-jsonl-enabled: ${AI_USAGE_JSONL_ENABLED:true}
+    # 호출 이력을 일별 회전 파일로 기록하며 보관 기간·총용량을 제한한다.
     usage-jsonl-path: ${AI_USAGE_JSONL_PATH:logs/ai-usage.jsonl}
     usage-jsonl-max-history: ${AI_USAGE_JSONL_MAX_HISTORY:30}
     usage-jsonl-total-size-cap: ${AI_USAGE_JSONL_TOTAL_SIZE_CAP:1GB}
@@ -46,6 +52,7 @@ app:
           input-per-million: ${AI_PRICE_INPUT_PER_MILLION:0.40}
           cached-per-million: ${AI_PRICE_CACHED_PER_MILLION:0.10}
           output-per-million: ${AI_PRICE_OUTPUT_PER_MILLION:1.60}
+# LIGHT 검증 실패만 FULL로 한 번 재시도하며 신뢰도에 의한 재시도 기준은 기본 비활성이다.
 purchase-option:
   ai:
     retry:
@@ -53,6 +60,7 @@ purchase-option:
       max-retries: 1
       confidence-threshold-enabled: false
       confidence-threshold: 0.7
+# 공급자·HTTP 라이브러리의 상세 로그를 줄이고 사용량은 전용 로거에서 기록한다.
 logging:
   level:
     org.springframework.ai: ERROR

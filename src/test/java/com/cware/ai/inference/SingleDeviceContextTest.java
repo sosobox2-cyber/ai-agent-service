@@ -6,6 +6,7 @@ import java.nio.file.*;
 import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** 단일 본체의 화면 크기·모델·설치 구성 추출과 옵션별 중복 없는 매핑을 검증한다. */
 class SingleDeviceContextTest {
     @Test void inchIsMappedSeparatelyAndInstallationNeedsAffirmativeEvidence() throws Exception {
         var mapper = new com.fasterxml.jackson.databind.ObjectMapper();

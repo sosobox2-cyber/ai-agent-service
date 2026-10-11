@@ -3,7 +3,7 @@ package com.cware.ai.inference;
 import com.cware.ai.dto.InferenceRequest;
 import java.util.regex.Pattern;
 
-/** 단일상품의 수량, 개당 수량·용량에 한해 상품 원문 근거를 검사한다. */
+/** 단일상품의 모의 수량·용량 추출과 명시된 원문 근거 대조에 사용하는 패턴 유틸리티다. */
 public final class QuantityContext {
     private static final String PACKAGE = "(?:박스|팩|봉|통|세트|상자|병|튜브|개(?!입))";
     private static final String PIECE = "(?:패치|피스|개입|개|매)";
@@ -19,10 +19,12 @@ public final class QuantityContext {
     private QuantityContext() {}
 
     public static boolean eligible(InferenceRequest request) {
+        // 여러 단품에 상품 공통 수량을 임의로 적용하지 않도록 단일상품 표시만 허용한다.
         return request.options().size() == 1 && request.options().get(0).optionName1().strip().equals("단일상품");
     }
 
     public static boolean valid(InferenceRequest request, MappingProposal.Entry entry) {
+        // 명시적 세트·중량 구성은 전용 검사에 맡기고 나머지는 값의 숫자·단위를 근거와 대조한다.
         if (!eligible(request)) return false;
         if (NamedSetContext.hasSet(request) && (entry.targetPurchaseOptionName().equals("수량")
                 || entry.targetPurchaseOptionName().equals("개당 수량")))
@@ -70,6 +72,7 @@ public final class QuantityContext {
             return NamedSetContext.mockEntry(request, target);
         var bundle = BundleWeightContext.mockEntry(request, target);
         if (bundle != null) return bundle;
+        // 상품명부터 원문을 순서대로 확인하고 본품 범위에서 유효한 첫 패턴만 반환한다.
         String[] sources = {"goodsName", "productNoticeText", "productCompositionText"};
         for (String sourceName : sources) {
             String source = switch (sourceName) {

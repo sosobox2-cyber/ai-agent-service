@@ -23,11 +23,13 @@ public record AiCallUsage(String model, PurchaseOptionPromptMode mode, int attem
         this(model, mode, attempt, input, cached, output, total, cost, null, mode, mode,
                 attempt - 1, List.of(), null);
     }
+    /** 측정한 토큰·비용을 유지하면서 같은 상품 추론의 모드 전환과 재시도 사유를 연결한다. */
     public AiCallUsage withInference(String id, PurchaseOptionPromptMode initial, PurchaseOptionPromptMode finalMode,
             int count, List<AiRetryReason> reasons, String callStatus) {
         return new AiCallUsage(model, mode, attempt, input_tokens, cached_tokens, output_tokens,
                 total_tokens, estimated_cost_usd, id, initial, finalMode, count, List.copyOf(reasons), callStatus, elapsedMs);
     }
+    /** 모델 호출 소요 시간을 밀리초 단위로 추가한 새 사용량 객체를 반환한다. */
     public AiCallUsage withElapsedMs(long elapsed) {
         return new AiCallUsage(model, mode, attempt, input_tokens, cached_tokens, output_tokens,
                 total_tokens, estimated_cost_usd, inferenceId, initialPromptMode, finalPromptMode,

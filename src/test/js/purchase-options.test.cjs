@@ -1,3 +1,4 @@
+// 최소 DOM 대역으로 예제 불러오기, 구매옵션·단위 행, 요청 구성과 초기화 동작을 검증한다.
 const fs = require('node:fs');
 
 function run(source) {
