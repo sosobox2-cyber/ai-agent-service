@@ -202,6 +202,7 @@ API 키가 없어도 대체 `ChatModel`이 등록되므로 서버를 시작하�
 | `responseErrorHandler(new SafeErrorHandler())` | 사용자 정의 처리기 | 외부 HTTP 오류를 프로젝트 오류로 변환 |
 | `RetryTemplate.builder().maxAttempts(1)` | 1회 시도 | API 장애에 대한 클라이언트 자동 재시도 없음. 서버 Validation Failover는 별도 |
 | `confidence-threshold` | `0.80` | 실제 AI 결과의 성공 판단 기준 |
+| `coverage-check-enabled` | `true` | 구매옵션이 일부 단품에만 매핑된 부분 누락을 검증 오류로 올림 |
 | `prompt-version` | `coupang-option-v27` | 응답에 포함할 프롬프트 버전 표식 |
 
 ## 4. 웹 요청 처리 순서
@@ -277,7 +278,9 @@ AI의 응답은 `MappingProposal` 객체로 변환합니다. 응답이 비어 �
 
 ### LIGHT → FULL 전환과 호출별 기록
 
-`AiInferenceValidator.validate()`는 단순 boolean 대신 오류 코드와 메시지를 담은 결과 객체를 반환합니다. `certain=false`, 입력 optionId 누락·미등록, 허용 이름 위반, 동일 매핑 중복, 필수 값의 null·blank를 검사하고 기존 `ResultValidator`의 제안·단위·최종 조합 검증을 재사용합니다. 사유 코드는 `CERTAIN_FALSE`, `MISSING_OPTION_MAPPING`, `UNKNOWN_OPTION_ID`, `INVALID_PURCHASE_OPTION`, `DUPLICATE_MAPPING`, `EMPTY_VALUE`, `INVALID_RESPONSE`입니다.
+`AiInferenceValidator.validate()`는 단순 boolean 대신 오류 코드와 메시지를 담은 결과 객체를 반환합니다. `certain=false`, 입력 optionId 누락·미등록, 허용 이름 위반, 동일 매핑 중복, 필수 값의 null·blank를 검사하고 기존 `ResultValidator`의 제안·단위·최종 조합 검증을 재사용합니다. 사유 코드는 `CERTAIN_FALSE`, `MISSING_OPTION_MAPPING`, `UNKNOWN_OPTION_ID`, `INVALID_PURCHASE_OPTION`, `DUPLICATE_MAPPING`, `EMPTY_VALUE`, `INVALID_RESPONSE`, `INCONSISTENT_OPTION_COVERAGE`입니다.
+
+`INCONSISTENT_OPTION_COVERAGE`는 모든 optionId가 최소 하나의 매핑을 받아 `MISSING_OPTION_MAPPING`을 통과하더라도, 특정 구매옵션이 일부 단품에만 매핑된 부분 누락을 잡습니다. 모든 단품에서 빠진 구매옵션은 원문 근거가 없어 정당할 수 있으므로 검증을 막지 않고 `ai_option_coverage` 로그만 남깁니다. `app.inference.coverage-check-enabled=false`로 끌 수 있고 단품이 하나인 요청에서는 발동하지 않습니다.
 
 PromptSelector는 최초 호출에서 한 번 사용합니다. 실패한 LIGHT만 FULL을 직접 지정하여 같은 User Prompt·상품 JSON·JSON Schema로 새 호출을 수행합니다. 이전 AI 응답과 보정 지시는 붙이지 않습니다. 반복문·재귀가 없고 설정의 `max-retries`도 0~1로 제한합니다. 처음부터 FULL인 요청에는 재추론을 적용하지 않습니다.
 

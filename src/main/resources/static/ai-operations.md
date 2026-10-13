@@ -108,6 +108,9 @@ purchase-option:
 | `EMPTY_VALUE` | null 매핑 또는 필수 ID·구매옵션명·값이 null/blank |
 | `INVALID_RESPONSE` | 응답 파싱·완료 검증 또는 ResultValidator의 구조·단위·최종 조합 검사 실패 |
 | `LOW_CONFIDENCE` | 재추론 신뢰도 기준을 켰을 때 최저 confidence가 기준 미달 |
+| `INCONSISTENT_OPTION_COVERAGE` | 한 구매옵션이 일부 단품에만 매핑됨 |
+
+`INCONSISTENT_OPTION_COVERAGE`는 `MISSING_OPTION_MAPPING`이 잡지 못하는 부분 누락을 보완합니다. 모든 optionId가 최소 하나의 매핑을 받았더라도 특정 구매옵션이 일부 단품에만 있으면 누락으로 판단합니다. 모든 단품에서 빠진 구매옵션은 근거 부재일 수 있어 검증을 막지 않고 `ai_option_coverage` 로그만 남깁니다. `app.inference.coverage-check-enabled=false`로 끌 수 있으며 단품이 하나인 요청에서는 발동하지 않습니다.
 
 한 결과에 여러 코드가 남을 수 있습니다. `retryReasons`를 단일 원인이라고 가정하지 마세요. FULL 호출 행의 retryReasons는 FULL 검증 사유가 아니라 최초 LIGHT의 전환 사유입니다.
 

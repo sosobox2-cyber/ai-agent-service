@@ -58,7 +58,7 @@ class AiAdapterTest {
         var sent = ArgumentCaptor.forClass(Prompt.class);
         verify(model).call(sent.capture());
         assertThat(sent.getValue().getInstructions().get(0).getText()).contains(
-                "한 롤에 140매", "판매 수량 12롤", "상품명만으로도", "12개로 반환");
+                "한 롤에 140매", "판매 수량 12롤", "context와 evidence에는 실제 상품명 원문을 사용한다", "12개로 반환");
     }
     @Test void unconfiguredScreenUnitsAreSentWithoutEnumAndPreservedInFinalResult() throws Exception {
         var request = new com.cware.ai.dto.InferenceRequest("50945478", "플럭스 109cm(43인치) TV",
@@ -83,7 +83,7 @@ class AiAdapterTest {
         var prompt = ArgumentCaptor.forClass(Prompt.class);
         verify(model).call(prompt.capture());
         assertThat(prompt.getValue().getInstructions().get(0).getText())
-                .contains("임의의 기본단위를 적용하지 않고", "109cm", "43인치");
+                .contains("임의의 기본단위를 적용하지 않는다", "109cm", "43인치");
         var unitSchema = new ObjectMapper().valueToTree(PurchaseOptionAiService.schema(request))
                 .at("/properties/mappings/items/properties/calculation/anyOf/0/properties/outputUnit");
         assertThat(unitSchema.path("type").asText()).isEqualTo("string");
@@ -153,7 +153,7 @@ class AiAdapterTest {
         var prompt = ArgumentCaptor.forClass(Prompt.class);
         verify(model).call(prompt.capture());
         assertThat(prompt.getValue().getInstructions().get(0).getText()).contains(
-                "한 팩에 30롤", "길이는 22m", "총 120롤이나 1롤이 아니다", "4개로 반환", "롤도 허용");
+                "한 팩에 30롤", "길이는 22m", "총 120롤이나 1롤이 아니다", "4개로 반환", "개당 수량의 롤처럼 선택지에 있는 단위는 그대로 허용한다");
     }
     @Test void exposesBothAttemptsWithoutConsoleLoggingAndDoesNotLeakAcrossRequests() throws Exception {
         when(model.call(any(Prompt.class))).thenReturn(responseWithUsage(partial(true)),
@@ -284,7 +284,7 @@ class AiAdapterTest {
         assertThat(settings.path("defaultUnit").asText()).isEqualTo("개");
         assertThat(settings.path("unitOptions").toString()).isEqualTo("[\"개\",\"박스\",\"세트\"]");
         assertThat(captured.getValue().getInstructions().get(0).getText())
-                .contains("설정된 옵션에는 아래 단위 규칙을 기존 출력 단위 규칙과 예시보다 우선 적용한다", "certain=false");
+                .contains("설정된 구매옵션에만 아래 규칙을 적용하며", "certain=false");
     }
     @ParameterizedTest @ValueSource(strings={
         "not json","null","{} {}",

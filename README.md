@@ -248,6 +248,7 @@ Vercel은 로컬 `.env`나 `compose.yaml`을 실행 환경 설정으로 사용�
 | `PORT` | `8081` |
 | `SERVER_ADDRESS` | `127.0.0.1` |
 | `app.inference.confidence-threshold` | `0.80` |
+| `app.inference.coverage-check-enabled` | `true` |
 | `app.inference.prompt-version` | `coupang-option-v27` |
 
 신뢰도 기준은 **0.80 이상(0.80 포함)**입니다. AI 전체 신뢰도와 모든 개별 매핑 신뢰도의 최솟값이 기준 이상이고, `certain=true`이며 서버의 응답 형식·단품 검증을 통과하면 `success=true`, `autoApplyCandidate=true`로 반환합니다. 전체 신뢰도가 0.80이어도 개별 매핑이 0.80 미만이거나 다른 검증에 실패하면 반려됩니다. 반려 원인은 `serverAssessment.decisionCode`와 `validationErrors`에서 확인할 수 있습니다.

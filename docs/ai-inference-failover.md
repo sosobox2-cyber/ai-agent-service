@@ -27,8 +27,11 @@ FULL 결과도 같은 검증을 수행하며 실패하면 `errorCode=REVIEW_REQU
 | EMPTY_VALUE | mapping이 null 또는 필수 optionId·targetPurchaseOptionName·value가 null/blank |
 | INVALID_RESPONSE | JSON 해석 실패·응답 미완료, 필수 응답 필드·confidence 형식 오류, 기존 단위 및 단품 조합 검증 실패 |
 | LOW_CONFIDENCE | 선택적 재추론 confidence 기준을 활성화한 경우에만 사용 |
+| INCONSISTENT_OPTION_COVERAGE | 한 구매옵션이 일부 단품에만 매핑됨. `app.inference.coverage-check-enabled=false`로 끌 수 있음 |
 
 기존 `ResultValidator`의 구조·단위·조립 결과 검증도 재사용합니다. allowedPurchaseOptions의 모든 이름을 반환할 필요는 없지만 모든 입력 optionId에 최소 하나의 매핑이 있어야 합니다.
+
+커버리지 검사는 위 optionId 누락 검사가 잡지 못하는 부분 누락을 보완합니다. 어떤 구매옵션이 일부 단품에만 매핑되면 근거 부재가 아니라 누락일 가능성이 높으므로 `INCONSISTENT_OPTION_COVERAGE`로 올립니다. 반대로 모든 단품에서 빠진 구매옵션은 원문에 근거가 없어 정당할 수 있으므로 검증을 막지 않고 `ai_option_coverage` 로그로만 남깁니다. 단품이 하나면 이 검사는 발동하지 않습니다.
 
 timeout, 429, 5xx, 네트워크 오류는 검증 실패로 처리하지 않습니다. 기존 OpenAI 클라이언트의 `maxAttempts=1`도 유지합니다. 반복문·재귀 없이 최초 호출과 조건부 FULL 호출만 있으며, `max-retries`는 0 또는 1만 허용합니다.
 
