@@ -7,6 +7,9 @@ const resultStatus = document.querySelector('#result-status');
 const resultSummary = document.querySelector('#result-summary');
 const resultDetails = document.querySelector('#result-details');
 const submitButton = document.querySelector('#submit-button');
+// 제출 중에는 버튼 내용을 경과 시간으로 바꾸므로 원래 라벨 구조를 미리 보관한다.
+// 테스트 스텁처럼 childNodes가 없는 환경에서도 모듈 평가가 멈추지 않도록 빈 배열로 떨어뜨린다.
+const submitLabel = Array.from(submitButton?.childNodes ?? []);
 const resetButton = document.querySelector('#reset-button');
 const testModeInput = document.querySelector('#test-mode');
 const noticeInput = form.elements.productNoticeText;
@@ -488,13 +491,33 @@ function table(headers, rowsData) {
   return wrapper;
 }
 
+// 근거 출처 라벨은 화면 여러 곳에서 쓰므로 한 곳에서만 정의한다. 키가 빠지면 원문자열이 그대로 노출된다.
+const EVIDENCE_SOURCE_LABELS = {
+  goodsName: '상품명', productNoticeText: '정보고시',
+  productCompositionText: '기술서 구성', optionName1: '원본 옵션명'
+};
+function evidenceSourceLabel(source) {
+  return EVIDENCE_SOURCE_LABELS[source] || source || '원본 옵션명';
+}
+
+// AI의 확실 판정 표기도 화면 전체에서 같은 단어를 쓴다.
+function certaintyLabel(certain) {
+  return certain === true ? '확정' : certain === false ? '검토 필요' : '판정 없음';
+}
+
+// 테스트 모드 판정은 한 곳에서만 계산한다. 모의 결과가 검증에 실패하면 errorCode가 TEST_MODE가 아니므로
+// 두 조건을 다르게 쓰면 같은 응답에 "모의 테스트"와 "검토 필요"가 동시에 표시된다.
+function isSimulated(response) {
+  return response?.inferenceSource === 'TEST';
+}
+
 // AI 또는 모의 추출기의 계산 설명을 읽기 쉬운 연산·피연산자·근거 문자열로 표시한다.
 function calculationText(calculation) {
   if (!calculation) return '원문 추출';
   const names = { DIRECT: '직접 추출', CONVERT: '단위 환산', SUM: '합산', PACK_COUNT: '판매 묶음 수', PACK_CONTENT: '묶음 내 수량' };
   const operands = (calculation.operands || []).map(operand => operand ? `${operand.amount}${operand.unit}` : '누락').join(' + ');
   const context = calculation.context;
-  const source = { goodsName: '상품명', productNoticeText: '정보고시', productCompositionText: '기술서 구성', optionName1: '원본 옵션명' }[context?.source] || context?.source;
+  const source = evidenceSourceLabel(context?.source);
   return `${names[calculation.operation] || calculation.operation} · ${operands || '구성 1묶음'} → ${calculation.outputUnit}`
     + (context?.text ? ` · ${source}: ${context.text}` : '');
 }
@@ -549,7 +572,7 @@ function aiUsagePanel(response) {
 function aiJudgmentText(response) {
   const ai = response?.aiAssessment;
   if (!ai) return response?.inferenceSource === 'TEST' ? 'AI 판단: 모의 테스트 · 측정 안 함' : 'AI 판단: 확인 불가';
-  const certainty = ai.certain === true ? '확정' : ai.certain === false ? '검토 필요' : '판정 없음';
+  const certainty = certaintyLabel(ai.certain);
   const confidence = Number.isFinite(ai.confidence) ? ai.confidence.toFixed(2) : '—';
   return `AI 판단: ${certainty} · confidence ${confidence}`;
 }
@@ -579,7 +602,7 @@ function unitMappingData(request, response) {
 // 각 원본 단품의 매핑과 누락을 표시하고 원본에 없는 ID는 별도 경고로 보여 준다.
 function unitResultsPanel(request, response) {
   const data = unitMappingData(request, response);
-  const simulated = response?.inferenceSource === 'TEST';
+  const simulated = isSimulated(response);
   const panel = element('section', '', `final-result ${simulated ? 'simulated' : data.review ? 'unavailable' : 'approved'}`);
   const heading = element('div', '', 'final-result-heading');
   heading.append(element('h3', simulated ? '단품 결과 · 모의 테스트' : data.review ? '단품 결과 · 검토용 AI 제안' : '최종 단품 결과'),
@@ -630,11 +653,17 @@ function showResult(request, response, httpStatus) {
   resultDetails.replaceChildren();
   document.querySelector('#copy-json-status').textContent = '';
   const success = response?.success === true;
-  const simulated = response?.inferenceSource === 'TEST' && response?.errorCode === 'TEST_MODE';
+  const simulated = isSimulated(response);
+  // 모의 결과가 서버 검증까지 통과했는지 구분한다. 실패하면 모의 표시를 유지하되 사유를 보여준다.
+  const simulationFailed = simulated && response?.errorCode !== 'TEST_MODE';
   resultStatus.className = `status ${simulated ? 'review' : success ? 'success' : httpStatus === 0 || httpStatus >= 400 ? 'error' : 'review'}`;
-  resultStatus.textContent = simulated ? '테스트 결과 · 모의' : success ? '매핑 성공' : httpStatus === 0 ? '연결 오류' : httpStatus >= 400 ? `요청 오류 · HTTP ${httpStatus}` : '검토 필요';
+  resultStatus.textContent = simulationFailed ? '테스트 결과 · 모의 검증 실패'
+    : simulated ? '테스트 결과 · 모의' : success ? '매핑 성공' : httpStatus === 0 ? '연결 오류'
+    : httpStatus >= 400 ? `요청 오류 · HTTP ${httpStatus}` : '검토 필요';
   document.querySelector('#ai-judgment').textContent = aiJudgmentText(response);
-  resultSummary.textContent = simulated ? '모의 추출 결과입니다. 자동 적용할 수 없습니다.'
+  resultSummary.textContent = simulationFailed
+    ? response?.serverAssessment?.reason || response?.reason || '모의 추출 결과가 서버 검증을 통과하지 못했습니다.'
+    : simulated ? '모의 추출 결과입니다. 자동 적용할 수 없습니다.'
     : success ? '단품별 최종 구매옵션을 확인하세요.' : response?.serverAssessment?.reason || response?.reason || '결과를 확인하세요.';
   resultDetails.append(unitResultsPanel(request, response));
   resultDetails.append(aiUsagePanel(response));
@@ -644,7 +673,7 @@ function showResult(request, response, httpStatus) {
   const metrics = element('div', '', 'metrics');
   for (const [label, value] of [
     ['추론 방식', response?.inferenceSource ?? '—'],
-    ['신뢰도', simulated ? '측정 안 함' : typeof response?.confidence === 'number' ? `${(response.confidence * 100).toFixed(1)}%` : '—'],
+    ['신뢰도', simulated ? '측정 안 함' : Number.isFinite(response?.confidence) ? `${(response.confidence * 100).toFixed(1)}%` : '—'],
     ['자동 적용 후보', response?.autoApplyCandidate ? '예' : '아니요'],
     ['오류 코드', response?.errorCode ?? '없음']
   ]) {
@@ -657,15 +686,16 @@ function showResult(request, response, httpStatus) {
   if (ai) {
     const section = element('section', '', 'assessment');
     section.append(element('h3', 'AI 판단 · 서버 승인 전 제안'));
-    const certainty = ai.certain === true ? '확실함' : ai.certain === false ? '불확실함' : '판정 없음';
-    const confidence = typeof ai.confidence === 'number' ? ai.confidence.toFixed(2) : '—';
+    const certainty = certaintyLabel(ai.certain);
+    // NaN·Infinity는 숫자 타입이지만 표시할 수 없으므로 Number.isFinite로 거른다.
+    const confidence = Number.isFinite(ai.confidence) ? ai.confidence.toFixed(2) : '—';
     section.append(element('small', `AI 확실 판정: ${certainty} · AI 전체 신뢰도: ${confidence}`));
     section.append(element('p', ai.reason || 'AI 판단 사유가 없습니다.', 'ai-reason'));
     if (!success) section.append(element('p', '아래 제안은 서버가 승인하지 않은 값입니다. 검토용으로 표시합니다.'));
     if (ai.mappings?.length) {
       section.append(table(['단품 ID', '구매옵션명', 'AI 제안 값', '개별 신뢰도', 'AI가 제출한 근거', '판단 구조'], ai.mappings.map(mapping => {
         if (!mapping) return ['—', '—', '누락된 제안', '—', '—', '—'];
-        const source = { goodsName: '상품명', productNoticeText: '정보고시', productCompositionText: '기술서 구성' }[mapping.evidenceSource] || mapping.evidenceSource || '원본 옵션명';
+        const source = evidenceSourceLabel(mapping.evidenceSource);
         return [mapping.optionId, mapping.targetPurchaseOptionName, mapping.value,
           typeof mapping.confidence === 'number' ? mapping.confidence.toFixed(2) : '—',
           mapping.evidenceText ? `${source}: ${mapping.evidenceText}` : source, calculationText(mapping.calculation)];
@@ -699,7 +729,7 @@ function showResult(request, response, httpStatus) {
     diagnostics.append(table(headers, response.optionMappings.map(mapping => [
       mapping.optionId, mapping.sourceOptionName || '(이름 없음)', mapping.targetPurchaseOptionName, mapping.value,
       simulated ? '—' : `${(mapping.confidence * 100).toFixed(1)}%`,
-      ...(hasEvidence ? [mapping.evidenceText ? `${{ goodsName: '상품명', productNoticeText: '정보고시', productCompositionText: '기술서 구성', optionName1: '원본 옵션명' }[mapping.evidenceSource] || mapping.evidenceSource}: ${mapping.evidenceText}` : '원본 옵션명'] : []),
+      ...(hasEvidence ? [mapping.evidenceText ? `${evidenceSourceLabel(mapping.evidenceSource)}: ${mapping.evidenceText}` : '원본 옵션명'] : []),
       ...(hasCalculation ? [calculationText(mapping.calculation)] : [])
     ])));
   }
@@ -772,20 +802,45 @@ form.addEventListener('submit', async event => {
   if (validationError) { showMessage(validationError); return; }
   submitButton.disabled = true;
   resetButton.disabled = true;
-  submitButton.textContent = '처리 중…';
+  // AI 호출은 읽기 제한만 30초이고 FULL 재추론까지 가면 1분에 가까워진다. 멈춘 것으로 오해해
+  // 새로고침하지 않도록 경과 시간을 보여주고, 길어지면 예상 소요를 함께 안내한다.
+  const startedAt = Date.now();
+  const showProgress = () => {
+    const seconds = Math.round((Date.now() - startedAt) / 1000);
+    submitButton.textContent = `분석 중… ${seconds}초`;
+    if (seconds === 10) showMessage('AI 분석이 진행 중입니다. 입력이 크면 1분까지 걸릴 수 있습니다.');
+  };
+  showProgress();
+  const progressTimer = setInterval(showProgress, 1000);
   try {
     const url = `/api/v1/coupang/purchase-options/infer${testModeInput.checked ? '?testMode=true' : ''}`;
     const response = await fetch(url, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request)
     });
-    const body = await response.json();
-    showResult(request, body, response.status);
+    // 프록시·컨테이너 오류는 JSON이 아닌 본문을 돌려줄 수 있다. 상태 코드를 먼저 확보해 두어야
+    // 파싱에 실패해도 '연결 오류'로 뭉개지 않고 실제 HTTP 상태를 보여줄 수 있다.
+    const status = response.status;
+    let body;
+    try {
+      body = await response.json();
+    } catch (parseError) {
+      body = {
+        success: false,
+        reason: `서버가 JSON이 아닌 응답을 반환했습니다 (HTTP ${status}).`,
+        errorCode: 'INVALID_RESPONSE_BODY'
+      };
+    }
+    showResult(request, body, status);
   } catch (error) {
     showResult(request, { success: false, reason: '서버에 연결할 수 없거나 응답을 읽지 못했습니다.', errorCode: 'NETWORK_ERROR' }, 0);
   } finally {
+    clearInterval(progressTimer);
     submitButton.disabled = false;
     resetButton.disabled = false;
-    submitButton.textContent = 'AI 매핑 결과 ->';
+    // 원래 라벨에는 aria-hidden 화살표 span이 있다. textContent로 덮으면 그 구조가 사라지므로
+    // 최초에 보관해 둔 노드를 되돌려 스크린리더가 '→'를 읽지 않게 한다.
+    if (submitLabel.length) submitButton.replaceChildren(...submitLabel.map(node => node.cloneNode(true)));
+    else submitButton.textContent = 'AI 매핑 결과 →';
   }
 });
 

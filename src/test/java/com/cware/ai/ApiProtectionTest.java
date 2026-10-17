@@ -91,15 +91,49 @@ class ApiProtectionTest {
         var config = new ApiProtectionConfig(false, "", "internal-test", false, 3, mapper, errors);
         var filter = config.apiProtectionFilter().getFilter();
         var request = new MockHttpServletRequest("POST", URL);
-        filter.doFilter(request, new MockHttpServletResponse(), (req, res) ->
-                assertThat(req.getAttribute(ApiRequestIdentity.ATTRIBUTE)).isEqualTo("security-disabled"));
+        // 필터가 요청을 거부하면 체인 람다가 아예 실행되지 않으므로, 통과 횟수를 밖에서 세어야 검증이 성립한다.
+        var passed = new java.util.concurrent.atomic.AtomicInteger();
+        var identities = new ArrayList<Object>();
+        filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> {
+            passed.incrementAndGet();
+            identities.add(req.getAttribute(ApiRequestIdentity.ATTRIBUTE));
+        });
+        assertThat(passed.get()).as("인증을 끄면 Key 없이도 체인까지 통과해야 한다").isEqualTo(1);
+        assertThat(identities).containsExactly("security-disabled");
+
+        // 같은 설정 인스턴스는 호출 제한기를 공유한다. 제한을 끄면 per-minute=1이어도 네 번 모두 통과해야 한다.
         var enabled = new ApiProtectionConfig(true, "dummy-key", "internal-test", false, 1, mapper, errors);
+        var unlimited = enabled.apiProtectionFilter().getFilter();
+        passed.set(0);
+        identities.clear();
         for (int i = 0; i < 4; i++) {
             var authenticated = new MockHttpServletRequest("POST", URL);
             authenticated.addHeader("X-API-Key", "dummy-key");
-            enabled.apiProtectionFilter().getFilter().doFilter(authenticated, new MockHttpServletResponse(), (req, res) ->
-                    assertThat(req.getAttribute(ApiRequestIdentity.ATTRIBUTE)).isEqualTo("internal-test"));
+            unlimited.doFilter(authenticated, new MockHttpServletResponse(), (req, res) -> {
+                passed.incrementAndGet();
+                identities.add(req.getAttribute(ApiRequestIdentity.ATTRIBUTE));
+            });
         }
+        assertThat(passed.get()).as("호출 제한을 끄면 네 번 모두 통과해야 한다").isEqualTo(4);
+        assertThat(identities).containsOnly("internal-test");
+    }
+
+    /** 제한을 켠 동일 필터에서 한도를 넘기면 체인에 도달하지 않고 429로 막혀야 한다. */
+    @Test void enabledRateLimitStopsRequestsBeyondTheConfiguredCount() throws Exception {
+        var errors = new GlobalExceptionHandler(Fixtures.properties());
+        var limited = new ApiProtectionConfig(true, "dummy-key", "internal-test", true, 1, mapper, errors)
+                .apiProtectionFilter().getFilter();
+        var passed = new java.util.concurrent.atomic.AtomicInteger();
+        var statuses = new ArrayList<Integer>();
+        for (int i = 0; i < 2; i++) {
+            var authenticated = new MockHttpServletRequest("POST", URL);
+            authenticated.addHeader("X-API-Key", "dummy-key");
+            var response = new MockHttpServletResponse();
+            limited.doFilter(authenticated, response, (req, res) -> passed.incrementAndGet());
+            statuses.add(response.getStatus());
+        }
+        assertThat(passed.get()).as("제한이 켜져 있으면 한 번만 체인에 도달해야 한다").isEqualTo(1);
+        assertThat(statuses).containsExactly(200, 429);
     }
 
     @Test void enabledSecurityFailsClosedWhenKeyMissingOrSecretUsedAsId() {

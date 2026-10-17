@@ -12,16 +12,9 @@ public record AiCallUsage(String model, PurchaseOptionPromptMode mode, int attem
         PurchaseOptionPromptMode finalPromptMode, int retryCount, List<AiRetryReason> retryReasons, String status,
         Long elapsedMs) {
     public AiCallUsage(String model, PurchaseOptionPromptMode mode, int attempt,
-            Integer input, Integer cached, Integer output, Integer total, BigDecimal cost,
-            String inferenceId, PurchaseOptionPromptMode initial, PurchaseOptionPromptMode finalMode,
-            int retryCount, List<AiRetryReason> reasons, String status) {
-        this(model, mode, attempt, input, cached, output, total, cost, inferenceId, initial,
-                finalMode, retryCount, reasons, status, null);
-    }
-    public AiCallUsage(String model, PurchaseOptionPromptMode mode, int attempt,
             Integer input, Integer cached, Integer output, Integer total, BigDecimal cost) {
         this(model, mode, attempt, input, cached, output, total, cost, null, mode, mode,
-                attempt - 1, List.of(), null);
+                attempt - 1, List.of(), null, null);
     }
     /** 측정한 토큰·비용을 유지하면서 같은 상품 추론의 모드 전환과 재시도 사유를 연결한다. */
     public AiCallUsage withInference(String id, PurchaseOptionPromptMode initial, PurchaseOptionPromptMode finalMode,

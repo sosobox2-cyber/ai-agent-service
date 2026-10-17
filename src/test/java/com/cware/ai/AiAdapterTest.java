@@ -296,10 +296,12 @@ class AiAdapterTest {
         assertThat(ai.infer(Fixtures.request()).reason()).contains("REVIEW_REQUIRED", "INVALID_RESPONSE");
         verify(model, times(2)).call(any(Prompt.class));
     }
-    @Test void rejectsTruncatedOutput() {
+    /** 잘린 응답은 형식 오류가 아니라 용량 초과다. 재시도해도 같은 결과이므로 한 번만 호출하고 전용 코드로 알린다. */
+    @Test void rejectsTruncatedOutputWithoutRetrying() {
         respond("{}","length");
-        assertThat(ai.infer(Fixtures.request()).reason()).contains("REVIEW_REQUIRED", "INVALID_RESPONSE");
-        verify(model, times(2)).call(any(Prompt.class));
+        assertThatThrownBy(() -> ai.infer(Fixtures.request())).isInstanceOfSatisfying(InferenceException.class,
+                e -> assertThat(e.code()).isEqualTo("AI_OUTPUT_TRUNCATED"));
+        verify(model, times(1)).call(any(Prompt.class));
     }
     @Test void timeoutIsSanitized() {
         when(model.call(any(Prompt.class))).thenThrow(new ResourceAccessException("private upstream text",new SocketTimeoutException()));

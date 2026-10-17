@@ -64,6 +64,26 @@ class AiFailoverTest {
                 new InputHashService(mapper), Fixtures.properties());
     }
 
+    /** max_tokens로 잘린 응답은 형식 오류와 구분하고, 같은 결과가 반복되는 FULL 재시도를 하지 않는다. */
+    @Test void truncatedOutputFailsWithItsOwnCodeAndDoesNotRetryFull() throws Exception {
+        var nativeUsage = new OpenAiApi.Usage(200, 1000, 1200, new OpenAiApi.Usage.PromptTokensDetails(0, 800), null);
+        var cut = new ChatResponse(List.of(new Generation(
+                new AssistantMessage(mapper.writeValueAsString(good()).substring(0, 40)),
+                ChatGenerationMetadata.builder().finishReason("length").build())),
+                ChatResponseMetadata.builder().model("gpt-4.1-mini")
+                        .usage(new DefaultUsage(1000, 200, 1200, nativeUsage)).build());
+        when(model.call(any(Prompt.class))).thenReturn(cut, response(good()));
+        assertThatThrownBy(() -> service("AUTO", AiRetryProperties.defaults()).infer(request))
+                .isInstanceOf(InferenceException.class)
+                .satisfies(thrown -> assertThat(((InferenceException) thrown).code()).isEqualTo("AI_OUTPUT_TRUNCATED"));
+        // 두 번째 스텁이 남아 있어도 호출이 한 번뿐이어야 재시도하지 않았다는 뜻이다.
+        verify(model, times(1)).call(any(Prompt.class));
+        // 토큰을 소비한 호출이므로 사용량은 그대로 기록되어야 한다.
+        var logged = Files.readAllLines(temp.resolve("usage.jsonl"));
+        assertThat(logged).hasSize(1);
+        assertThat(mapper.readTree(logged.get(0)).get("status").asText()).isEqualTo("OUTPUT_TRUNCATED");
+    }
+
     @Test void normalLightCallsOnceWithZeroRetries() throws Exception {
         when(model.call(any(Prompt.class))).thenReturn(response(good()));
         var result = service("AUTO", AiRetryProperties.defaults()).infer(request);

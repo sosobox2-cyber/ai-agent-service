@@ -23,6 +23,28 @@
       </div>
     </header>
 
+    <section class="preset-panel" aria-labelledby="presets-heading">
+      <!-- 예제는 입력 전에 고르는 기능이므로 01 패널 위에 두되, 화면을 차지하지 않게 접어 둔다. -->
+      <details class="preset-details">
+        <summary id="presets-heading">예제 불러오기 <span class="preset-count">12개</span></summary>
+        <p>예제를 선택하면 상품 정보와 옵션이 입력되고 테스트 모드가 켜집니다.</p>
+        <div class="presets">
+          <button type="button" class="button quiet" data-example="sample">아이그너 니트탑 예제</button>
+          <button type="button" class="button quiet" data-example="quantity">리르 패치 수량 예제</button>
+          <button type="button" class="button quiet" data-example="capacity">선크림 용량 예제</button>
+          <button type="button" class="button quiet" data-example="weight">김치 세트 중량 예제</button>
+          <button type="button" class="button quiet" data-example="set">칫솔 세트 수량 예제</button>
+          <button type="button" class="button quiet" data-example="tv">플럭스 TV 화면크기 예제</button>
+          <button type="button" class="button quiet" data-example="toiletPaper">모나리자 화장지 구성 예제</button>
+          <button type="button" class="button quiet" data-example="cream">스와니브 영양크림 구성 예제</button>
+          <button type="button" class="button quiet" data-example="kitchenTowel">크리넥스 키친타올 구성 예제</button>
+          <button type="button" class="button quiet" data-example="pillow">코단잠 메밀베개 사이즈 예제</button>
+          <button type="button" class="button quiet" data-example="smartboard">LG 전자칠판 스탠드 예제</button>
+          <button type="button" class="button quiet" data-example="seafood">올레마켓 옥돔 중량 예제</button>
+        </div>
+      </details>
+    </section>
+
     <!-- app.js가 이 폼의 상품 원문과 반복 행을 추론 API 요청으로 변환한다. -->
     <form id="inference-form">
       <section class="panel" aria-labelledby="product-heading">
@@ -71,34 +93,14 @@
           </table>
         </div>
         <button type="button" class="button subtle" id="add-purchase-option-row">+ 구매옵션 추가</button>
-        <small class="below-table">1~200개 · 한 행에 구매옵션명 하나를 입력하세요. 단위가 필요한 항목만 기본단위와 선택지를 모두 입력하세요.</small>
-        <p class="purchase-option-help">색상·사이즈처럼 단위가 필요 없는 항목은 이름만 입력하세요. 단위 선택지는 쉼표로 구분합니다.<br>AI는 원문에 맞는 단위를 선택하며, 선택지에서 고를 수 없으면 기본단위를 사용합니다.</p>
+        <small class="below-table">1~200개 · 색상·사이즈처럼 단위가 없는 항목은 이름만, 단위가 있는 항목은 기본단위와 선택지(쉼표 구분)를 함께 입력하세요. 선택지에 맞는 단위가 없으면 기본단위를 씁니다.</small>
       </section>
 
-      <div class="actions">
-        <section class="preset-panel" aria-labelledby="presets-heading">
-          <h2 id="presets-heading">예제 불러오기</h2>
-          <p>예제를 선택하면 상품 정보와 옵션이 입력됩니다.</p>
-          <div class="presets">
-            <button type="button" class="button quiet" data-example="sample">아이그너 니트탑 예제</button>
-            <button type="button" class="button quiet" data-example="quantity">리르 패치 수량 예제</button>
-            <button type="button" class="button quiet" data-example="capacity">선크림 용량 예제</button>
-            <button type="button" class="button quiet" data-example="weight">김치 세트 중량 예제</button>
-            <button type="button" class="button quiet" data-example="set">칫솔 세트 수량 예제</button>
-            <button type="button" class="button quiet" data-example="tv">플럭스 TV 화면크기 예제</button>
-            <button type="button" class="button quiet" data-example="toiletPaper">모나리자 화장지 구성 예제</button>
-            <button type="button" class="button quiet" data-example="cream">스와니브 영양크림 구성 예제</button>
-            <button type="button" class="button quiet" data-example="kitchenTowel">크리넥스 키친타올 구성 예제</button>
-            <button type="button" class="button quiet" data-example="pillow">코단잠 메밀베개 사이즈 예제</button>
-            <button type="button" class="button quiet" data-example="smartboard">LG 전자칠판 스탠드 예제</button>
-            <button type="button" class="button quiet" data-example="seafood">올레마켓 옥돔 중량 예제</button>
-          </div>
-        </section>
-        <div class="submit-area">
-          <label class="checkbox test-mode"><input type="checkbox" id="test-mode" checked><span>테스트 모드<small>기본 색상·사이즈·핏·단일상품 수량·용량·롤 포장 구성 모의 추출 · 자동 적용 불가</small></span></label>
-          <div class="submit-buttons">
-            <button type="submit" class="button primary" id="submit-button">AI 매핑 결과 <span aria-hidden="true">-&gt;</span></button>
-          </div>
+      <div class="submit-area">
+        <!-- 기본값은 app.js의 resetInputs()가 해제 상태로 설정한다. 여기에 checked를 두면 실제 동작과 어긋난다. -->
+        <label class="checkbox test-mode" title="AI를 호출하지 않고 기본 색상·사이즈·핏·단일상품 수량·용량·롤 포장 구성을 규칙으로 모의 추출합니다."><input type="checkbox" id="test-mode"><span>테스트 모드<small>AI 호출 없이 규칙 기반 모의 추출 · 자동 적용 불가</small></span></label>
+        <div class="submit-buttons">
+          <button type="submit" class="button primary" id="submit-button">AI 매핑 결과 <span aria-hidden="true">→</span></button>
         </div>
       </div>
     </form>

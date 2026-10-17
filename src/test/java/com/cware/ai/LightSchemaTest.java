@@ -36,16 +36,43 @@ class LightSchemaTest {
         assertThat(light.at("/properties/mappings/items/required")).isEqualTo(full.at("/properties/mappings/items/required"));
         assertThat(full.at("/properties/mappings/items/properties/calculation/anyOf/0/properties/operation/enum"))
                 .isEqualTo(mapper.valueToTree(List.of("DIRECT", "CONVERT", "SUM", "PACK_COUNT", "PACK_CONTENT")));
-        assertOrdered(PurchaseOptionAiService.schema(request, PurchaseOptionPromptMode.LIGHT));
-        assertOrdered(PurchaseOptionAiService.schema(request, PurchaseOptionPromptMode.FULL));
+        for (var mode : PurchaseOptionPromptMode.values()) {
+            var schema = PurchaseOptionAiService.schema(request, mode);
+            assertOrdered(schema);
+            // 모델은 properties 순서대로 출력하므로 판단을 마친 뒤 confidence와 certain을 쓰도록 고정한다.
+            assertThat(keys(schema, "properties")).containsExactly("mappings", "reason", "confidence", "certain");
+            assertThat(keys(at(schema, "properties", "mappings", "items"), "properties")).containsExactly(
+                    "optionId", "targetPurchaseOptionName", "evidenceSource", "evidenceText", "calculation", "value", "confidence");
+        }
+        var calculation = at(PurchaseOptionAiService.schema(request), "properties", "mappings", "items", "properties", "calculation");
+        var calculationObject = (Map<?,?>) ((List<?>) calculation.get("anyOf")).get(0);
+        assertThat(keys(calculationObject, "properties")).containsExactly("operation", "context", "operands", "outputUnit");
+        assertThat(keys(at(calculationObject, "properties", "operands", "items"), "properties")).containsExactly("evidence", "amount", "unit");
     }
 
+    /** 스키마 키워드 키는 정렬되고 properties와 required는 같은 출력 순서를 가져야 한다. */
     void assertOrdered(Object value) {
         if (value instanceof Map<?,?> map) {
-            var keys = map.keySet().stream().map(Object::toString).toList();
-            assertThat(keys).isSorted();
-            map.values().forEach(this::assertOrdered);
+            assertThat(map.keySet().stream().map(Object::toString).toList()).isSorted();
+            map.forEach((key, child) -> {
+                if (!key.equals("properties")) assertOrdered(child);
+                else {
+                    var properties = (Map<?,?>) child;
+                    assertThat(map.get("required")).isEqualTo(properties.keySet().stream().map(Object::toString).toList());
+                    properties.values().forEach(this::assertOrdered);
+                }
+            });
         } else if (value instanceof List<?> list) list.forEach(this::assertOrdered);
+    }
+
+    static List<String> keys(Map<?,?> map, String key) {
+        return ((Map<?,?>) map.get(key)).keySet().stream().map(Object::toString).toList();
+    }
+
+    static Map<?,?> at(Map<?,?> map, String... path) {
+        Object current = map;
+        for (String key : path) current = ((Map<?,?>) current).get(key);
+        return (Map<?,?>) current;
     }
 
     @Test void lightKeepsCommonDimensionsAndEvidenceForEveryColor() throws Exception {

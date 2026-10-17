@@ -91,11 +91,14 @@ function renderGuide(markdown, root, toc) {
       const wrapper = guideNode('div');
       wrapper.className = 'table-scroll';
       const table = guideNode('table');
-        if (/^(필드|객체·필드)$/.test(line.split('|')[1].trim())) {
-          table.className = 'field-table';
-        } else if (line.split('|')[1].trim() === '설명용 JSON 키') {
-          table.className = 'call-options-table';
-        }
+      // 헤더에 셀이 없는 표(`|` 한 개)도 있을 수 있다. 여기서 예외가 나면 renderGuide 전체가
+      // 중단되어 문서 한 장이 통째로 '불러오지 못했습니다'로 바뀌므로 빈 값으로 처리한다.
+      const firstHeader = (line.split('|')[1] || '').trim();
+      if (/^(필드|객체·필드)$/.test(firstHeader)) {
+        table.className = 'field-table';
+      } else if (firstHeader === '설명용 JSON 키') {
+        table.className = 'call-options-table';
+      }
       const head = guideNode('thead');
       const body = guideNode('tbody');
       const addRow = (text, tag, parent) => {

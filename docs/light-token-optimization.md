@@ -10,6 +10,8 @@ LIGHT Schema는 기존 필드와 required를 유지하며 calculation만 `{"type
 
 Schema 내부 모든 객체 키를 재귀적으로 정렬한 LinkedHashMap으로 변환한다. enum, required, anyOf 등의 배열 순서와 내용은 유지한다. strict, additionalProperties 및 요청별 enum은 유지한다.
 
+> 이후 변경: `properties`와 `required`는 알파벳순 대신 모델 출력 순서로 고정한다. 모델은 properties 순서대로 응답을 쓰므로 최상위는 `mappings → reason → confidence → certain`, 매핑은 `optionId → targetPurchaseOptionName → evidenceSource → evidenceText → calculation → value → confidence` 순서로 두어 판단을 마친 뒤 확신도를 매기게 한다. 스키마 키워드 키(type, enum 등)는 계속 정렬하므로 요청마다 같은 스키마 문자열이 만들어진다.
+
 ## 동일 의류 요청의 오프라인 비교
 
 실제 SDK 요청을 모의 HTTP 서버에서 캡처하고 JTokkit o200k_base로 메시지 문자열과 직렬화된 Schema를 측정했다. 대표 입력은 examples/ai-request.json이며 변경 전후 User 메시지는 완전히 동일하다. API 내부 framing은 포함하지 않는다.

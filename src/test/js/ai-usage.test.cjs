@@ -9,7 +9,8 @@ const context = vm.createContext({
   },
   table(headers, rows) { return { headers, rows }; }
 });
-vm.runInContext(source.slice(source.indexOf('function summarizeAiUsage('), source.indexOf('function showResult(')), context);
+// 공통 라벨·판정 헬퍼가 대상 함수보다 앞에 정의되어 있으므로 그 블록부터 잘라낸다.
+vm.runInContext(source.slice(source.indexOf('const EVIDENCE_SOURCE_LABELS'), source.indexOf('function showResult(')), context);
 const call = { attempt: 1, mode: 'LIGHT', model: 'gpt-4.1-mini', input_tokens: 1000,
   cached_tokens: 800, output_tokens: 200, total_tokens: 1200, elapsedMs: 3733, estimated_cost_usd: 0.00048 };
 context.calls = [call, { ...call, attempt: 2, retryCount: 1, mode: 'FULL', retryReasons: ['CERTAIN_FALSE'] }];

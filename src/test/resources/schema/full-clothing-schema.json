@@ -6,19 +6,6 @@
       "items": {
         "additionalProperties": false,
         "properties": {
-          "targetPurchaseOptionName": {
-            "type": "string",
-            "enum": [
-              "패션의류/잡화 사이즈",
-              "색상"
-            ]
-          },
-          "value": {
-            "type": "string"
-          },
-          "confidence": {
-            "type": "number"
-          },
           "optionId": {
             "type": "string",
             "enum": [
@@ -28,67 +15,52 @@
               "4"
             ]
           },
+          "targetPurchaseOptionName": {
+            "type": "string",
+            "enum": [
+              "패션의류/잡화 사이즈",
+              "색상"
+            ]
+          },
+          "evidenceSource": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "goodsName",
+              "productNoticeText",
+              "productCompositionText",
+              null
+            ]
+          },
+          "evidenceText": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "실제 원문 근거 요약. 일반 옵션명 추출은 null."
+          },
           "calculation": {
             "anyOf": [
               {
                 "additionalProperties": false,
                 "properties": {
-                  "outputUnit": {
+                  "operation": {
                     "type": "string",
-                    "description": "단위 설정이 없는 구매옵션은 원문과 옵션 의미에 맞는 단위를 그대로 사용한다. 설정된 구매옵션은 해당 unitOptions 또는 defaultUnit을 사용한다."
-                  },
-                  "operands": {
-                    "type": "array",
-                    "items": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "unit": {
-                          "type": "string",
-                          "description": "실제 원문 단위. 선택지 밖의 단위도 원문 그대로 보존한다."
-                        },
-                        "amount": {
-                          "type": "string",
-                          "description": "양수 숫자 문자열"
-                        },
-                        "evidence": {
-                          "additionalProperties": false,
-                          "properties": {
-                            "text": {
-                              "type": "string"
-                            },
-                            "source": {
-                              "type": "string",
-                              "enum": [
-                                "goodsName",
-                                "productNoticeText",
-                                "productCompositionText",
-                                "optionName1"
-                              ]
-                            }
-                          },
-                          "type": "object",
-                          "required": [
-                            "source",
-                            "text"
-                          ]
-                        }
-                      },
-                      "type": "object",
-                      "required": [
-                        "amount",
-                        "evidence",
-                        "unit"
-                      ]
-                    }
+                    "enum": [
+                      "DIRECT",
+                      "CONVERT",
+                      "SUM",
+                      "PACK_COUNT",
+                      "PACK_CONTENT"
+                    ]
                   },
                   "context": {
                     "anyOf": [
                       {
                         "additionalProperties": false,
                         "properties": {
-                          "text": {
-                            "type": "string"
-                          },
                           "source": {
                             "type": "string",
                             "enum": [
@@ -97,6 +69,9 @@
                               "productCompositionText",
                               "optionName1"
                             ]
+                          },
+                          "text": {
+                            "type": "string"
                           }
                         },
                         "type": "object",
@@ -110,22 +85,60 @@
                       }
                     ]
                   },
-                  "operation": {
+                  "operands": {
+                    "type": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "evidence": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "source": {
+                              "type": "string",
+                              "enum": [
+                                "goodsName",
+                                "productNoticeText",
+                                "productCompositionText",
+                                "optionName1"
+                              ]
+                            },
+                            "text": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object",
+                          "required": [
+                            "source",
+                            "text"
+                          ]
+                        },
+                        "amount": {
+                          "type": "string",
+                          "description": "양수 숫자 문자열"
+                        },
+                        "unit": {
+                          "type": "string",
+                          "description": "실제 원문 단위. 선택지 밖의 단위도 원문 그대로 보존한다."
+                        }
+                      },
+                      "type": "object",
+                      "required": [
+                        "evidence",
+                        "amount",
+                        "unit"
+                      ]
+                    }
+                  },
+                  "outputUnit": {
                     "type": "string",
-                    "enum": [
-                      "DIRECT",
-                      "CONVERT",
-                      "SUM",
-                      "PACK_COUNT",
-                      "PACK_CONTENT"
-                    ]
+                    "description": "단위 설정이 없는 구매옵션은 원문과 옵션 의미에 맞는 단위를 그대로 사용한다. 설정된 구매옵션은 해당 unitOptions 또는 defaultUnit을 사용한다."
                   }
                 },
                 "type": "object",
                 "required": [
+                  "operation",
                   "context",
                   "operands",
-                  "operation",
                   "outputUnit"
                 ]
               },
@@ -134,35 +147,22 @@
               }
             ]
           },
-          "evidenceText": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "실제 원문 근거 요약. 일반 옵션명 추출은 null."
+          "value": {
+            "type": "string"
           },
-          "evidenceSource": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "enum": [
-              "goodsName",
-              "productNoticeText",
-              "productCompositionText",
-              null
-            ]
+          "confidence": {
+            "type": "number"
           }
         },
         "type": "object",
         "required": [
-          "calculation",
-          "confidence",
-          "evidenceSource",
-          "evidenceText",
           "optionId",
           "targetPurchaseOptionName",
-          "value"
+          "evidenceSource",
+          "evidenceText",
+          "calculation",
+          "value",
+          "confidence"
         ]
       }
     },
@@ -179,9 +179,9 @@
   },
   "type": "object",
   "required": [
-    "certain",
-    "confidence",
     "mappings",
-    "reason"
+    "reason",
+    "confidence",
+    "certain"
   ]
 }

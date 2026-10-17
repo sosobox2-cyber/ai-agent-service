@@ -8,7 +8,8 @@ function element(tag, text, className) {
     append(...nodes) { this.children.push(...nodes); } };
 }
 const context = vm.createContext({ element });
-vm.runInContext(source.slice(source.indexOf('function unitMappingData('), source.indexOf('function showResult(')), context);
+// 공통 라벨·판정 헬퍼가 대상 함수보다 앞에 정의되어 있으므로 그 블록부터 잘라낸다.
+vm.runInContext(source.slice(source.indexOf('const EVIDENCE_SOURCE_LABELS'), source.indexOf('function showResult(')), context);
 const request = JSON.parse(fs.readFileSync('examples/ai-request.json', 'utf8'));
 const product = request.product || request;
 assert.equal(product.options.length, 4);

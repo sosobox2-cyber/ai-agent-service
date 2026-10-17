@@ -64,7 +64,10 @@ purchase-option:
 | SUCCESS | 검증 및 기존 최종 신뢰도 기준 통과 |
 | VALIDATION_ERROR | LIGHT 검증 실패, FULL 전환 예정 |
 | REVIEW_REQUIRED | 추가 호출 없이 검토 필요로 최종 처리 |
+| OUTPUT_TRUNCATED | `finish_reason=length`로 응답이 잘림. 재시도하지 않고 `AI_OUTPUT_TRUNCATED`를 반환 |
 | API_ERROR | 기존 API 오류 처리 |
+
+출력 한도 초과는 형식 오류와 구분합니다. `max_tokens`에 도달해 잘린 응답은 같은 입력으로 다시 호출해도 동일하게 잘리며, FULL은 `calculation`까지 요구해 응답이 더 길어지므로 전환이 무의미합니다. 따라서 LIGHT라도 FULL로 재시도하지 않고 사용량만 기록한 뒤 HTTP 413 `AI_OUTPUT_TRUNCATED`로 반환합니다. 호출자는 한 요청의 단품 수나 허용 구매옵션 수를 줄여 다시 시도해야 합니다. 실제 `finish_reason`은 `ai_response_unusable` 경고 로그에 남습니다.
 
 응답 `aiUsage`의 기존 mode·attempt·usage 필드는 유지하고 `inferenceId`, `initialPromptMode`, `finalPromptMode`, `retryCount`, `retryReasons`, `status`를 추가합니다. `attempt`는 기존처럼 1, 2입니다. 호출 중 예외로 반환되는 API 오류 응답은 기존 계약대로 usage를 제공하지 않지만, 먼저 수신한 LIGHT usage는 JSONL에 보존됩니다.
 

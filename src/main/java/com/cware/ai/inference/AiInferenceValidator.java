@@ -23,11 +23,6 @@ public class AiInferenceValidator {
         this(results, retry, .80, true);
     }
 
-    public AiInferenceValidator(ResultValidator results, AiRetryProperties retry,
-            double applicationConfidenceThreshold) {
-        this(results, retry, applicationConfidenceThreshold, true);
-    }
-
     @Autowired
     public AiInferenceValidator(ResultValidator results, AiRetryProperties retry,
             @Value("${app.inference.confidence-threshold:0.80}") double applicationConfidenceThreshold,

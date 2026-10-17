@@ -337,7 +337,16 @@ Usage는 ChatResponse.metadata.usage의 실제 입력·출력·전체 값을 읽
 | SUCCESS | 제안 검증·최종 confidence 기준 통과 |
 | VALIDATION_ERROR | LIGHT 검증 실패, FULL 전환 예정 |
 | REVIEW_REQUIRED | 더 호출하지 않고 불확실·검증 실패·신뢰도 미달 |
+| OUTPUT_TRUNCATED | `finish_reason=length`로 잘린 응답. 재시도 없이 `AI_OUTPUT_TRUNCATED` 반환 |
 | API_ERROR | model.call() 예외, 받은 usage와 제안 없음 |
+
+### 출력 한도 초과
+
+`max_tokens`(기본 4096)에 도달하면 OpenAI가 `finish_reason=length`로 응답을 끊습니다. 잘린 JSON은 파싱 오류와 증상이 같지만 원인과 해법이 다르므로 별도로 구분합니다.
+
+한 요청의 응답 길이는 매핑 수에 비례합니다. JSON Schema가 모든 필드를 `required`로 요구하므로 값이 null이어도 필드가 실립니다. 대략 LIGHT는 매핑당 60토큰, FULL은 `calculation` 때문에 150토큰 수준이며, 4096토큰이면 LIGHT 약 60건·FULL 약 27건이 상한입니다. 단품마다 구매옵션 두 개를 매핑하면 **LIGHT 약 30단품, FULL 약 13단품**이 실질 한계입니다.
+
+요청 검증이 허용하는 단품 200개는 형식상의 상한이며 한 번에 처리 가능한 수가 아닙니다. 초과하면 재시도 없이 HTTP 413 `AI_OUTPUT_TRUNCATED`를 반환하므로, 호출자는 단품을 나눠 보내야 합니다. `max_tokens`를 올리면 한계도 함께 올라갑니다.
 
 finalPromptMode=FULL인 LIGHT 행은 예정 상태입니다. 프로세스 중단이나 로그 유실로 FULL 행이 없을 수 있습니다. 같은 inferenceId의 마지막 행과 retryCount를 함께 확인하세요. UUID는 OpenAI request ID가 아닙니다.
 

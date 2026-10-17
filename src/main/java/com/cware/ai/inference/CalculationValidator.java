@@ -35,7 +35,6 @@ public final class CalculationValidator {
             units.put(name, new Unit(name, "pack", BigDecimal.ONE));
         return Collections.unmodifiableMap(units);
     }
-    public static List<String> supportedUnits() { return UNITS.values().stream().map(Unit::name).toList(); }
     public static List<Calculation.Operand> operandsFrom(String source, String text) {
         // 원문에서 숫자와 단위를 함께 찾고 일치한 문구를 피연산자의 근거로 붙인다.
         var result = new ArrayList<Calculation.Operand>();
