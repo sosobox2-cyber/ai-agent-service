@@ -3,6 +3,8 @@ package com.cware.ai.exception;
 import com.cware.ai.config.InferenceProperties;
 import com.cware.ai.dto.InferenceResponse;
 import com.cware.ai.dto.ServerAssessment;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.*;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -13,6 +15,7 @@ import java.util.List;
 @RestControllerAdvice
 /** 컨트롤러 예외를 동일한 응답 계약으로 변환하고 공개 가능한 오류 정보만 반환한다. */
 public class GlobalExceptionHandler {
+    private static final Logger LOG = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private final InferenceProperties properties;
     public GlobalExceptionHandler(InferenceProperties properties) { this.properties=properties; }
     @ExceptionHandler(InferenceException.class)
@@ -36,7 +39,10 @@ public class GlobalExceptionHandler {
     }
     @ExceptionHandler(Exception.class)
     public ResponseEntity<InferenceResponse> unexpected(Exception e) {
-        // 외부 예외 메시지/본문에는 키와 상품정보가 포함될 수 있으므로 반환하거나 기록하지 않는다.
+        // 예외 메시지·본문에는 키나 상품정보가 섞일 수 있으므로 응답에는 넣지 않는다.
+        // 다만 여기서 처리하면 프레임워크가 더 이상 기록하지 않으므로, 서버 로그에는 반드시 남겨
+        // 운영 중 장애의 원인을 추적할 수 있게 한다. 로그는 클라이언트에 노출되지 않는다.
+        LOG.error("처리되지 않은 예외로 요청이 실패했습니다.", e);
         return ResponseEntity.internalServerError().body(error("INTERNAL_ERROR","요청 처리 중 오류가 발생했습니다.",List.of()));
     }
     private InferenceResponse error(String code,String reason,List<String> errors) {

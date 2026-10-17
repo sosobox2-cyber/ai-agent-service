@@ -32,6 +32,26 @@ class PurchaseOptionUnitTest {
                 List.of("수량"), List.of(new SourceOption("1", source)), "제조국: 한국", settings);
     }
 
+    /** 형식만 맞으면 통과하던 '0개'·'0.0개' 같은 값을 거부하고, 정당한 소수 용량은 그대로 허용한다. */
+    @Test void rejectsNonPositiveAmountsButKeepsValidDecimals() {
+        var validator = new ResultValidator();
+        for (String value : List.of("0개", "0.0개", "0,000개")) {
+            var errors = validator.validateProposal(request(List.of(units), "단일상품"), proposal(value, null));
+            assertThat(errors).as("수치가 0인 %s는 거부되어야 한다", value)
+                    .contains("구매옵션 값의 수치는 0보다 커야 합니다.");
+        }
+        // 양수는 정수·소수·자릿수 구분 기호와 관계없이 통과해야 한다.
+        var capacityUnits = new PurchaseOptionUnit("개당 용량", "ml", List.of("ml", "L"));
+        var capacityRequest = new InferenceRequest("unit-test", "테스트 상품", "테스트",
+                List.of("개당 용량"), List.of(new SourceOption("1", "단일상품")), "제조국: 한국", List.of(capacityUnits));
+        for (String value : List.of("50ml", "0.5L", "1,500ml")) {
+            var entry = new MappingProposal.Entry("1", "개당 용량", value, .95);
+            var errors = validator.validateProposal(capacityRequest,
+                    new MappingProposal(true, .95, List.of(entry), "용량 추출"));
+            assertThat(errors).as("양수 %s는 통과해야 한다", value).isEmpty();
+        }
+    }
+
     @Test void mockUsesExplicitUnitAndFallsBackOnlyForBareNumber() {
         for (String source : List.of("6박스", "6세트", "6개", "6")) {
             var result = MockOptionInferenceService.infer(request(List.of(units), source));

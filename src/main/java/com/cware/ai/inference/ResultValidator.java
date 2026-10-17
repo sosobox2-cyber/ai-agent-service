@@ -37,9 +37,14 @@ public class ResultValidator {
                     .filter(u -> u.purchaseOptionName().equals(entry.targetPurchaseOptionName()))
                     .findFirst().ifPresent(u -> {
                         String selected = UnitSelection.selectedUnit(entry.value(), u);
-                        if (selected == null)
+                        if (selected == null) {
                             errors.add("단위가 설정된 구매옵션 값은 숫자와 허용된 단위를 조합해야 합니다.");
-                        else if (entry.calculation() != null && !selected.equals(entry.calculation().outputUnit()))
+                            return;
+                        }
+                        // 형식 검사만으로는 '0개'처럼 적용할 수 없는 값이 통과하므로 수치도 확인한다.
+                        if (!UnitSelection.positiveAmount(entry.value(), selected))
+                            errors.add("구매옵션 값의 수치는 0보다 커야 합니다.");
+                        if (entry.calculation() != null && !selected.equals(entry.calculation().outputUnit()))
                             errors.add("구매옵션 값의 단위와 calculation.outputUnit이 일치하지 않습니다.");
                     });
             // 원본 단품과 허용된 구매옵션명에 속하는 매핑인지 확인한다.
