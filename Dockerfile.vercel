@@ -11,7 +11,8 @@ RUN mvn -B -ntp verify && cp target/ai-agent-service-*.jar /build/app.jar
 # 실행 이미지는 JRE와 JAR만 포함하고 전용 일반 사용자로 서버를 시작한다.
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
-RUN groupadd --gid 10001 app && useradd --uid 10001 --gid app --no-create-home app
+RUN groupadd --gid 10001 app && useradd --uid 10001 --gid app --no-create-home app \
+    && mkdir -p /app/logs && chown app:app /app/logs
 COPY --from=build --chown=app:app /build/app.jar ./app.jar
 ENV SERVER_ADDRESS=0.0.0.0 PORT=8081
 USER app
