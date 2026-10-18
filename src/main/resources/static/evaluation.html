@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>테스트 데이터 관리 · AI Agent Service</title>
+  <title>스토아 운영상품 테스트 · AI Agent Service</title>
   <link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/evaluation.css">
   <script src="/ai-usage.js" defer></script>
   <script src="/evaluation.js" defer></script>
@@ -10,21 +10,24 @@
 <body>
 <main class="shell evaluation-shell">
   <header class="page-header">
-    <div><span class="eyebrow">AI AGENT SERVICE / EVALUATION</span><h1>테스트 데이터 관리</h1>
+    <div><span class="eyebrow">AI AGENT SERVICE / EVALUATION</span><h1>스토아 운영상품 테스트</h1>
       <p>등록값과 추론 결과를 비교하고, 직접 확인한 성공 사례를 쌓아갑니다.</p></div>
     <a class="button quiet" href="/">구매옵션 API 화면</a>
   </header>
 
   <section class="panel setup" aria-label="데이터 가져오기">
-    <div class="setup-main">
-      <label class="dataset-label" for="dataset">데이터 세트
-        <select id="dataset"><option value="">데이터를 불러오세요</option></select></label>
-      <div class="setup-buttons">
-        <button id="connect" type="button" class="button quiet">목록 새로고침</button>
-        <button id="backup" type="button" class="button quiet" disabled>데이터 백업</button>
+    <details class="setup-dataset">
+      <summary>데이터 세트</summary>
+      <div class="setup-main">
+        <label class="dataset-label" for="dataset">데이터 세트 선택
+          <select id="dataset"><option value="">데이터를 불러오세요</option></select></label>
+        <div class="setup-buttons">
+          <button id="connect" type="button" class="button quiet">목록 새로고침</button>
+          <button id="backup" type="button" class="button quiet" disabled>데이터 백업</button>
+        </div>
       </div>
-    </div>
-    <p id="dataset-info" class="hint">데이터와 실행 이력은 이 서버에 저장됩니다.</p>
+      <p id="dataset-info" class="hint">데이터와 실행 이력은 이 서버에 저장됩니다.</p>
+    </details>
 
     <details class="setup-import">
       <summary>데이터 새로 가져오기</summary>
@@ -43,13 +46,16 @@
         </form>
       </div>
     </details>
-    <p id="access-hint" class="hint">실제 AI 실행은 서버에 설정된 운영 키를 사용합니다.</p>
+    <p id="access-hint" class="hint" hidden></p>
   </section>
 
   <p id="message" role="status" aria-live="polite"></p>
   <section id="stats" class="stats" aria-label="테스트 현황"></section>
 
   <section class="panel workspace" aria-label="테스트 사례 목록">
+    <details class="filter-details">
+      <!-- 접었을 때도 어떤 조건이 걸려 있는지 보이도록 JS가 이 자리에 요약을 쓴다. -->
+      <summary>상품 검색<span id="filter-summary" class="filter-summary"></span></summary>
     <form id="filters" class="filter-line">
       <label for="query">상품 검색<input id="query" type="search" placeholder="상품코드 · 상품명 · 카테고리"></label>
       <label for="state">진행 상태<select id="state">
@@ -61,9 +67,9 @@
       <label for="target">구매옵션명<input id="target" placeholder="예: 수량, 색상 (정확히 일치)"></label>
       <button class="button quiet" type="submit">조회</button>
     </form>
+    </details>
 
     <div class="run-toolbar">
-      <p class="hint">실제 AI 실행 · 서버에 설정된 운영 키를 사용하며 실행 시 비용이 발생합니다.</p>
       <div class="run-actions">
         <span id="selection-count" class="hint">실행할 상품을 선택하세요 (한 번에 최대 20개)</span>
         <button id="run-selected" class="button" type="button" disabled>선택 사례 실행</button>
@@ -94,7 +100,9 @@
 
 <dialog id="detail-dialog" aria-labelledby="detail-title">
   <div class="dialog-heading"><div><span id="detail-code" class="eyebrow"></span><h2 id="detail-title">사례 상세</h2></div><button id="close-detail" type="button" class="button quiet">닫기</button></div>
-  <p id="detail-status" class="hint"></p><p id="detail-message" role="status" aria-live="polite"></p>
+  <!-- 본문만 스크롤시켜 제목·닫기를 고정하고, 비교표 머리글이 이 영역 기준으로 붙게 한다. -->
+  <div class="dialog-body">
+  <p id="detail-status" class="detail-status"></p><p id="detail-message" role="status" aria-live="polite"></p>
   <div class="detail-actions"><label for="history">실행 이력<select id="history"></select></label><button id="run-detail" type="button" class="button">이 사례 실행</button><span class="hint">서버 운영 키로 실제 AI를 실행합니다.</span></div>
   <div id="detail-issues"></div>
   <div class="table-wrap"><table class="comparison-table"><thead><tr><th scope="col">원본 행 / 단품</th><th scope="col">구매옵션</th><th scope="col">등록 기준값</th><th scope="col">확정 기준값</th><th scope="col">이번 결과</th><th scope="col">비교</th><th scope="col">성공 확인</th><th scope="col">검토</th></tr></thead><tbody id="comparisons"></tbody></table></div>
@@ -106,9 +114,9 @@
     <p class="hint">성공 확인은 서버가 승인한 실제 AI 결과만 가능합니다. 성공으로 체크하면 이번 결과가 확정 기준값으로 저장됩니다.</p>
     <div class="review-buttons"><button type="submit" class="button">검토 저장</button><button id="cancel-review" type="button" class="button quiet">취소</button></div>
   </form>
-  <details><summary>상품 원문과 입력</summary><div id="source-inputs"></div></details>
+  <details class="source-input-details"><summary>상품 원문과 입력</summary><div id="source-inputs"></div></details>
   <section id="detail-usage" class="detail-usage-section" aria-labelledby="detail-usage-title"></section>
-  <details class="json-details" open>
+  <details class="json-details">
     <summary>요청·응답 JSON 보기</summary>
     <div class="json-grid">
       <div><div class="json-heading"><h3>요청</h3><button type="button" class="button quiet" data-detail-copy="raw-request">요청 복사</button></div><pre id="raw-request"></pre></div>
@@ -116,5 +124,6 @@
     </div>
     <p id="detail-copy-status" role="status" aria-live="polite"></p>
   </details>
+  </div>
 </dialog>
 </body></html>

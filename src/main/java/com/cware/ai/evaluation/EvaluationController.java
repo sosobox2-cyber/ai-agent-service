@@ -50,7 +50,7 @@ public class EvaluationController {
         return service.detail(id, caseId);
     }
     @PostMapping("/datasets/{id}/cases/{caseId}/runs") public Run run(@PathVariable String id, @PathVariable String caseId,
-            @RequestBody RunRequest command) throws IOException { return service.run(id, caseId, command); }
+            @jakarta.validation.Valid @RequestBody RunRequest command) throws IOException { return service.run(id, caseId, command); }
     @PostMapping("/datasets/{id}/cases/{caseId}/mock-runs") public Run mock(@PathVariable String id, @PathVariable String caseId) throws IOException {
         // 모의 실행 버튼은 클라이언트 본문과 무관하게 모의 모드를 강제한다.
         return service.run(id, caseId, new RunRequest("MOCK", false));

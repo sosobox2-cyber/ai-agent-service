@@ -26,7 +26,7 @@
 
     <section class="preset-panel" aria-labelledby="presets-heading">
       <!-- 예제는 입력 전에 고르는 기능이므로 01 패널 위에 두되, 화면을 차지하지 않게 접어 둔다. -->
-      <!-- 테스트 데이터 불러오기는 정적 예제가 아니라 별도 화면을 여는 동작이므로
+      <!-- 스토아 운영상품 테스트는 정적 예제가 아니라 별도 화면을 여는 동작이므로
            예제 그리드에서 빼고 제목 줄 오른쪽에 다른 모양으로 둔다. -->
       <div class="preset-head">
         <details class="preset-details">
@@ -48,7 +48,7 @@
           </div>
           <p id="evaluation-import-status" role="status" aria-live="polite"></p>
         </details>
-        <button type="button" class="button quiet dataset-open" id="open-evaluation">테스트 데이터에서 불러오기</button>
+        <button type="button" class="button quiet dataset-open" id="open-evaluation">스토아 운영상품 테스트</button>
       </div>
     </section>
 
@@ -140,9 +140,10 @@
     </section>
     <footer>이 화면은 API 테스트용입니다. 입력한 데이터는 현재 서버의 추론 API로 전송됩니다.</footer>
   </main>
-  <dialog id="evaluation-dialog" aria-labelledby="evaluation-dialog-title">
-    <div class="evaluation-dialog-heading"><h2 id="evaluation-dialog-title">테스트 데이터 관리 · 예제 불러오기</h2><button type="button" class="button quiet" id="close-evaluation">닫기</button></div>
-    <iframe id="evaluation-frame" title="테스트 데이터 관리" data-src="/evaluation.html?picker=1"></iframe>
+    <!-- 닫기 버튼은 창 오른쪽 상단에 둔다. -->
+    <dialog id="evaluation-dialog" aria-label="스토아 운영상품 테스트">
+    <button type="button" id="close-evaluation" aria-label="창 닫기" title="닫기">×</button>
+    <iframe id="evaluation-frame" title="스토아 운영상품 테스트" data-src="/evaluation.html?picker=1"></iframe>
   </dialog>
   <!-- 단품 추가 시 복제하는 행이며 원본 ID와 옵션 문자열을 함께 보관한다. -->
   <template id="option-row-template">

@@ -54,17 +54,20 @@ public class EvaluationService {
         var data = store.data(datasetId);
         synchronized (data.lock(caseId)) {
             Case test = store.test(data, caseId);
-            if (!test.issues().isEmpty()) throw invalid("입력 데이터 확인이 필요한 사례입니다: " + String.join(" / ", test.issues()));
+            if (command.request() == null && !test.issues().isEmpty()) throw invalid("입력 데이터 확인이 필요한 사례입니다: " + String.join(" / ", test.issues()));
+            InferenceRequest input = command.request() == null ? test.request() : command.request();
+            if (!Objects.equals(test.request().goodsId(), input.goodsId()))
+                throw invalid("연결된 상품과 상품 ID가 다릅니다. 해당 상품을 다시 불러오세요.");
             String start = Instant.now().toString(), error = null;
             InferenceResponse response = null;
-            try { response = inference.infer(test.request(), command.mode().equals("MOCK")); }
+            try { response = inference.infer(input, command.mode().equals("MOCK")); }
             catch (InferenceException e) { error = e.code() + ": " + e.getMessage(); }
             catch (RuntimeException e) {
                 LOG.error("평가 추론 처리 실패 (caseId={})", caseId, e);
                 error = "추론 처리 실패. 서버 로그와 입력을 확인하세요.";
             }
             List<Comparison> comparisons = compare(test, response, data.reviews.getOrDefault(caseId, Map.of()));
-            Run run = new Run(UUID.randomUUID().toString(), caseId, start, Instant.now().toString(), command.mode(), error, response, comparisons);
+            Run run = new Run(UUID.randomUUID().toString(), caseId, start, Instant.now().toString(), command.mode(), error, response, comparisons, input);
             store.saveRun(datasetId, data, run);
             return run;
         }

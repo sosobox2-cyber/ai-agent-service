@@ -15,7 +15,12 @@ public final class EvaluationModels {
     public record Comparison(int row, String optionId, String target, String baseline,
                              String confirmedValue, String actual, String status, String evidence) {}
     public record Run(String id, String caseId, String startedAt, String finishedAt, String mode,
-                      String error, InferenceResponse response, List<Comparison> comparisons) {}
+                      String error, InferenceResponse response, List<Comparison> comparisons, InferenceRequest request) {
+        public Run(String id, String caseId, String startedAt, String finishedAt, String mode,
+                   String error, InferenceResponse response, List<Comparison> comparisons) {
+            this(id,caseId,startedAt,finishedAt,mode,error,response,comparisons,null);
+        }
+    }
     public record Review(int row, String status, String note, String confirmedValue,
                          String runId, String reviewedValue, String updatedAt) {}
     public record Detail(Case testCase, Run latest, List<Run> history, Map<Integer, Review> reviews) {}
@@ -23,6 +28,8 @@ public final class EvaluationModels {
                       int references, String state, String mode, int matched, int differences,
                       int confirmed, int regressions, int issues, String lastRunAt) {}
     public record Page(List<Row> rows, int total, int page, int pageSize, Map<String, Long> counts) {}
-    public record RunRequest(String mode, boolean allowPaidCall) {}
+    public record RunRequest(String mode, boolean allowPaidCall, @jakarta.validation.Valid InferenceRequest request) {
+        public RunRequest(String mode, boolean allowPaidCall) { this(mode,allowPaidCall,null); }
+    }
     public record ReviewRequest(String status, String note, String confirmedValue, String runId) {}
 }

@@ -27,6 +27,28 @@ class EvaluationServiceTest {
                 List.of(new OptionMapping("001","단일상품","수량",value,.99,"goodsName","계란",null)),
                 List.of(),"test",List.of(),accepted?null:"TEST_MODE","input-hash","v-test",accepted?"AI":"TEST");
     }
+    @Test void editedMainInputIsExecutedOnceAndStoredWithoutReplacingOriginal() throws Exception {
+        var store = new EvaluationStore(directory.toString(),mapper); var dataset = store.save(sample());
+        var inference = mock(PurchaseOptionInferenceService.class);
+        var service = new EvaluationService(store,inference);
+        var edited = new InferenceRequest("20019170","수정한 계란","식품",List.of("수량"),
+                List.of(new SourceOption("001","31개")),"수량: 31개",List.of(),"수정한 구성");
+        when(inference.infer(edited,false)).thenReturn(response("31개",true));
+        var run = service.run(dataset.id(),"c00001",new RunRequest("AI",true,edited));
+        verify(inference,times(1)).infer(edited,false);
+        assertThat(run.request()).isEqualTo(edited);
+        var restarted = new EvaluationService(new EvaluationStore(directory.toString(),mapper),inference);
+        var detail = restarted.detail(dataset.id(),"c00001");
+        assertThat(detail.history()).hasSize(1);
+        assertThat(detail.latest().request()).isEqualTo(edited);
+        assertThat(detail.testCase().request().goodsName()).isEqualTo("계란 30개");
+        assertThat(detail.latest().comparisons().get(0).baseline()).isEqualTo("30개");
+        var other = new InferenceRequest("another","다른 상품","식품",List.of("수량"),edited.options(),"수량: 31개");
+        assertThatThrownBy(() -> service.run(dataset.id(),"c00001",new RunRequest("AI",true,other)))
+                .isInstanceOf(InferenceException.class).hasMessageContaining("상품 ID");
+        verifyNoMoreInteractions(inference);
+        assertThat(restarted.detail(dataset.id(),"c00001").history()).hasSize(1);
+    }
     @Test void approvalsAreTiedToRealRunAndPersistForFutureRegressionChecks() throws Exception {
         var store = new EvaluationStore(directory.toString(),mapper);
         var dataset = store.save(sample());

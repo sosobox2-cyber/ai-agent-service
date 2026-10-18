@@ -108,13 +108,18 @@ th { padding: 0 7px 10px; text-align: left; color: var(--text-muted); font-size:
 .preset-details[open] > summary { margin-bottom: 4px; }
 .presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 10px; }
 .presets .button { padding: 12px; white-space: normal; overflow-wrap: anywhere; line-height: 1.5; text-align: left; }
-/* 제목 줄은 좌측 예제 목록과 우측 데이터 불러오기로 나눈다.
-   details가 열리면 내용은 왼쪽 항목 안에서 아래로 펼쳐지고 버튼은 위에 남는다. */
-.preset-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.preset-head > .preset-details { flex: 1; min-width: 0; }
+/* 테스트 버튼은 제목 줄 오른쪽에 항상 두되 흐름에서 빼낸다.
+   흐름에 두면 details가 버튼 너비만큼 좁아져 아래 예제 그리드까지 왼쪽으로 몰린다.
+   min-height는 제목 줄(약 22px)보다 높은 버튼(약 34px)에 맞춰 패널이 줄어들지 않게 한다. */
+.preset-head { position: relative; min-height: 34px; }
+/* 제목이 버튼과 겹치지 않게 오른쪽을 비운다.
+   padding-bottom은 펼쳤을 때 버튼이 바로 아래 설명 문단과 겹치는 것을 막는다. */
+.preset-details > summary { padding-right: var(--preset-action-space); }
+.preset-details[open] > summary { padding-bottom: 12px; }
 /* 정적 예제 버튼과 구분되게 브랜드 면을 쓰고, 별도 화면이 열린다는 뜻으로 화살표를 붙인다. */
 .dataset-open {
-  flex-shrink: 0; display: inline-flex; align-items: center; gap: 7px;
+  position: absolute; top: 0; right: 0;
+  display: inline-flex; align-items: center; gap: 7px;
   padding: 8px 14px; border-radius: 999px;
   background: var(--brand-soft); color: var(--brand-strong);
   border: 1px solid var(--result-panel-border);
@@ -122,9 +127,14 @@ th { padding: 0 7px 10px; text-align: left; color: var(--text-muted); font-size:
 }
 .dataset-open:hover { background: var(--brand-soft-hover); }
 .dataset-open::after { content: "↗"; font-size: 12px; }
+/* 버튼이 제목과 겹치지 않도록 비워 두는 폭. 버튼 문구를 바꾸면 이 값도 함께 본다. */
+.preset-head { --preset-action-space: 200px; }
 @media (max-width: 620px) {
-  .preset-head { flex-direction: column; gap: 12px; }
-  .dataset-open { align-self: flex-start; }
+  /* 좁은 화면에서는 흐름에 넣되 order로 제목 위에 올린다. 그냥 두면 예제 12개 아래로 밀린다. */
+  .preset-head { display: flex; flex-direction: column; min-height: 0; }
+  .dataset-open { position: static; order: -1; align-self: flex-start; margin-bottom: 12px; }
+  .preset-details > summary { padding-right: 0; }
+  .preset-details[open] > summary { padding-bottom: 0; }
 }
 /* 테스트 모드와 제출 버튼을 입력 영역 아래에 배치한다. */
 .submit-area { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 26px 0 30px; }
@@ -214,9 +224,11 @@ footer { color: var(--text-muted); text-align: center; font-size: 12px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 #evaluation-dialog { width:min(1500px,96vw); height:92vh; max-height:96vh; padding:16px; border:1px solid var(--border); border-radius:14px; background:var(--surface); color:var(--text); }
 #evaluation-dialog::backdrop { background:#152a4577; }
-.evaluation-dialog-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; height:48px; }
-.evaluation-dialog-heading h2 { font-size:1.1rem; margin:0; }
-#evaluation-frame { display:block; width:100%; height:calc(100% - 56px); margin-top:8px; border:0; }
+#evaluation-dialog[open] { display:flex; flex-direction:column; }
+#close-evaluation { position:absolute; top:10px; right:12px; z-index:1; display:grid; place-items:center; width:36px; height:36px; padding:0; border:1px solid var(--border); border-radius:50%; background:var(--surface); color:var(--text); font-size:26px; line-height:1; cursor:pointer; }
+#close-evaluation:hover { background:var(--surface-alt); }
+#close-evaluation:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; }
+#evaluation-frame { display:block; width:100%; flex:1; min-height:0; border:0; }
 #evaluation-import-status:empty { display:none; }
 /* 반응형 규칙은 모두 여기에 모은다. */
 @media (max-width: 850px) {

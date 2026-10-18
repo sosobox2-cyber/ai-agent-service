@@ -34,6 +34,26 @@ class LocalEvaluationApiTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper mapper;
     @MockitoBean PurchaseOptionInferenceService inference;
+    @Test void mainEditedRequestIsValidatedAndStoredWithRun() throws Exception {
+        String sample=mvc.perform(post("/api/v1/evaluation/sample")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String base="/api/v1/evaluation/datasets/"+mapper.readTree(sample).path("id").asText()+"/cases/c00001";
+        var detail=mapper.readTree(mvc.perform(get(base)).andReturn().getResponse().getContentAsString());
+        var input=(com.fasterxml.jackson.databind.node.ObjectNode)detail.path("testCase").path("request").deepCopy();
+        String original=input.path("goodsName").asText();
+        var command=mapper.createObjectNode().put("mode","AI").put("allowPaidCall",true); command.set("request",input);
+        input.put("goodsName","");
+        mvc.perform(post(base+"/runs").contentType("application/json").content(mapper.writeValueAsBytes(command)))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(inference);
+        input.put("goodsName","Edited main input");
+        when(inference.infer(any(),eq(false))).thenReturn(new InferenceResponse(input.path("goodsId").asText(),false,false,0,
+                List.of(),List.of(),"fixture",List.of(),"REVIEW_REQUIRED","hash","version","AI"));
+        mvc.perform(post(base+"/runs").contentType("application/json").content(mapper.writeValueAsBytes(command)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.request.goodsName").value("Edited main input"));
+        mvc.perform(get(base)).andExpect(jsonPath("$.latest.request.goodsName").value("Edited main input"))
+                .andExpect(jsonPath("$.testCase.request.goodsName").value(original));
+        verify(inference,times(1)).infer(any(),eq(false));
+    }
     @Test void localEvaluationUsesServerCredentialsWhileExternalAccessStaysProtected() throws Exception {
         mvc.perform(get("/api/v1/evaluation/access")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.managementRequiresApiKey").value(false)).andExpect(jsonPath("$.aiRequiresApiKey").value(false));

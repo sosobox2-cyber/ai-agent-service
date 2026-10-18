@@ -15,6 +15,12 @@ const testModeInput = document.querySelector('#test-mode');
 const noticeInput = form.elements.productNoticeText;
 const purchaseOptionRows = document.querySelector('#purchase-option-rows');
 const purchaseOptionRowTemplate = document.querySelector('#purchase-option-row-template');
+let evaluationLink = null;
+function clearEvaluationLink() {
+  evaluationLink = null;
+  const status = document.querySelector('#evaluation-import-status');
+  if (status) status.textContent = '';
+}
 
 // 예제 데이터는 입력 채우기에만 사용하며, 불러올 때 실제 호출 대신 테스트 모드를 켠다.
 const examples = {
@@ -360,6 +366,7 @@ function resizeNoticeInput() {
 
 // 입력·결과·복사 상태를 초기화하고 빈 단품과 구매옵션 행을 하나씩 만든다.
 function resetInputs() {
+  clearEvaluationLink();
   form.reset();
   testModeInput.checked = false;
   rows.replaceChildren();
@@ -379,6 +386,7 @@ function resetInputs() {
 
 // 예제의 옵션명에 단위 설정을 연결한 뒤 폼을 채우고 모의 테스트를 선택한다.
 function loadExample(example) {
+  clearEvaluationLink();
   testModeInput.checked = true;
   for (const field of ['goodsId', 'goodsName', 'categoryName', 'productNoticeText', 'productCompositionText']) {
     form.elements[field].value = example[field] ?? '';
@@ -766,10 +774,12 @@ window.addEventListener('message', event => {
       || event.data?.type !== 'evaluation:select') return;
   const request = event.data.request;
   if (!request || !Array.isArray(request.options) || !Array.isArray(request.allowedPurchaseOptions)) return;
+  if (!/^[a-f0-9-]{36}$/.test(event.data.datasetId || '') || !/^c[0-9]+$/.test(event.data.caseId || '')) return;
   loadExample(request);
+  evaluationLink = {datasetId:event.data.datasetId,caseId:event.data.caseId,goodsId:request.goodsId};
   testModeInput.checked = false;
   evaluationDialog.close();
-  document.querySelector('#evaluation-import-status').textContent = `${request.goodsName} (${request.goodsId}) 사례를 불러왔습니다. 실제 AI 실행으로 설정되었습니다. 메인 화면 실행 결과는 테스트 관리 이력에 저장되지 않습니다.`;
+  document.querySelector('#evaluation-import-status').textContent = `${request.goodsName} (${request.goodsId}) 사례와 연결되었습니다. 메인 실행 결과와 수정한 입력도 같은 사례의 이력에 저장됩니다.`;
   form.elements.goodsName.focus();
 });
 // 입력 검증 후 JSON을 전송하며 중복 제출을 막고 성공·실패와 관계없이 버튼 상태를 복원한다.
@@ -778,6 +788,11 @@ form.addEventListener('submit', async event => {
   const request = makeRequest();
   const validationError = validateRequest(request);
   if (validationError) { showMessage(validationError); return; }
+  const linked = evaluationLink;
+  if (linked && request.goodsId !== linked.goodsId) {
+    showMessage('연결된 사례와 상품 ID가 다릅니다. 입력 초기화 또는 다른 사례 불러오기를 해주세요.'); return;
+  }
+  const simulated = testModeInput.checked;
   submitButton.disabled = true;
   resetButton.disabled = true;
   // AI 호출은 읽기 제한만 30초이고 FULL 재추론까지 가면 1분에 가까워진다. 멈춘 것으로 오해해
@@ -791,9 +806,12 @@ form.addEventListener('submit', async event => {
   showProgress();
   const progressTimer = setInterval(showProgress, 1000);
   try {
-    const url = `/api/v1/coupang/purchase-options/infer${testModeInput.checked ? '?testMode=true' : ''}`;
+    const url = linked
+      ? `/api/v1/evaluation/datasets/${linked.datasetId}/cases/${linked.caseId}/runs`
+      : `/api/v1/coupang/purchase-options/infer${simulated ? '?testMode=true' : ''}`;
+    const payload = linked ? {mode:simulated ? 'MOCK' : 'AI',allowPaidCall:!simulated,request} : request;
     const response = await fetch(url, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request)
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
     });
     // 프록시·컨테이너 오류는 JSON이 아닌 본문을 돌려줄 수 있다. 상태 코드를 먼저 확보해 두어야
     // 파싱에 실패해도 '연결 오류'로 뭉개지 않고 실제 HTTP 상태를 보여줄 수 있다.
@@ -808,8 +826,18 @@ form.addEventListener('submit', async event => {
         errorCode: 'INVALID_RESPONSE_BODY'
       };
     }
+    if (linked && response.ok && body.id) {
+      const run = body;
+      body = run.response || {success:false,reason:run.error || '추론 결과를 확인할 수 없습니다.',errorCode:'EVALUATION_RUN_ERROR'};
+      document.querySelector('#evaluation-import-status').textContent = `실행 결과와 입력을 연결된 사례의 이력에 저장했습니다. 실행 ID: ${run.id}${run.error ? ' · 실행 오류도 저장되었습니다.' : ''}`;
+      document.querySelector('.preset-details').open = true;
+      evaluationFrame.contentWindow.postMessage({type:'evaluation:refresh',datasetId:linked.datasetId,caseId:linked.caseId},window.location.origin);
+    } else if (linked) {
+      document.querySelector('#evaluation-import-status').textContent = '이력 저장이 완료되지 않았습니다. 아래 요청 오류를 확인하세요.';
+    }
     showResult(request, body, status);
   } catch (error) {
+    if (linked) document.querySelector('#evaluation-import-status').textContent = '실행 결과의 저장 여부를 확인할 수 없습니다. 다시 실행하기 전에 관리 화면의 실행 이력을 확인하세요.';
     showResult(request, { success: false, reason: '서버에 연결할 수 없거나 응답을 읽지 못했습니다.', errorCode: 'NETWORK_ERROR' }, 0);
   } finally {
     clearInterval(progressTimer);

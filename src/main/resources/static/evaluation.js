@@ -3,7 +3,7 @@ const $ = id => document.getElementById(id);
 const pickerMode = new URLSearchParams(location.search).get('picker') === '1' && window.parent !== window;
 if (pickerMode) {
   document.querySelector('.page-header a').hidden = true;
-  document.querySelector('.page-header p').textContent = '상품을 찾아 「메인 입력으로 불러오기」를 누르세요. 가져온 원본 입력은 메인 화면에서 수정할 수 있습니다.';
+  document.querySelector('.page-header p').hidden = true;
 }
 const labels = {UNTESTED:'미실행',MOCK:'모의 실행',MATCH:'기준값 일치 · 미확인',MISMATCH:'기준값 불일치',
   REGRESSION:'확정값 회귀',CONFIRMED:'전체 성공 확인',REVIEW_REQUIRED:'서버 검토 필요',INPUT_ISSUE:'입력 확인 필요',ERROR:'실행 오류',
@@ -69,8 +69,18 @@ async function chooseDataset() {
   $('dataset-info').textContent = `${number(data.rows)} 기준 행 · ${number(data.products)} 상품 · ${number(data.options)} 단품 · 기준값 확인 표시 ${number(data.issueRows)}행. 원본 등록값은 그대로 보존합니다.`;
   await loadPage();
 }
+// 검색 영역을 접어도 어떤 조건으로 걸러진 목록인지 알 수 있게 제목 줄에 요약을 쓴다.
+function updateFilterSummary() {
+  const query = $('query').value.trim(), target = $('target').value.trim(), state = $('state').value;
+  const parts = [];
+  if (query) parts.push(`검색 "${query}"`);
+  if (state) parts.push(labels[state] || state);
+  if (target) parts.push(`구매옵션 ${target}`);
+  $('filter-summary').textContent = parts.length ? ` · ${parts.join(' · ')}` : '';
+}
 async function loadPage() {
   if (!datasetId) return;
+  updateFilterSummary();
   const params = new URLSearchParams({page:currentPage,size:30,q:$('query').value,state:$('state').value,target:$('target').value.trim()});
   const id = datasetId;
   const result = await json(`${base(id)}/cases?${params}`);
@@ -95,19 +105,13 @@ function renderCases() {
     const product = node('td'); product.append(node('div',item.goodsName,'product-name'),node('span',`${item.goodsId} · ${item.categoryName}`,'subtext'));
     const state = node('td'); state.append(badge(item.state)); if (item.issues) state.append(node('span',`데이터 확인 ${item.issues}건`,'subtext'));
     const reviewed = node('td',`${item.confirmed} / ${item.references}`); if (item.regressions) reviewed.append(node('span',`회귀 ${item.regressions}건`,'subtext'));
-    const action = node('td'), button = node('button','열기','button quiet'); button.type = 'button'; button.addEventListener('click',() => openDetail(item.id).catch(error => message(error.message,true))); action.append(button);
-    if (pickerMode) {
-      const pick = node('button','메인 입력으로 불러오기','button quiet'); pick.type = 'button'; pick.disabled = busy;
-      pick.addEventListener('click', async () => {
-        pick.disabled = true;
-        try {
-          const value = await json(`${base()}/cases/${encodeURIComponent(item.id)}`);
-          window.parent.postMessage({type:'evaluation:select',request:value.testCase.request},location.origin);
-        } catch (error) { message(error.message,true); }
-        finally { pick.disabled = busy; }
-      });
-      action.append(pick);
-    }
+    const action = node('td'), button = node('button','상세 확인','button quiet'); button.type = 'button'; button.addEventListener('click',() => openDetail(item.id).catch(error => message(error.message,true)));
+    // 체크 후 상단 버튼으로 가지 않고 이 행만 바로 실행한다. 실행 경로는 선택 실행과 같다.
+    const run = node('button','실행','button quiet run-case'); run.type = 'button';
+    run.disabled = busy || item.state === 'INPUT_ISSUE';
+    run.title = item.state === 'INPUT_ISSUE' ? '입력 확인이 필요한 사례는 실행할 수 없습니다.' : '이 상품만 실제 AI로 실행합니다.';
+    run.addEventListener('click',() => handle(runCases([item.id])));
+    action.append(run,button);
     row.append(choiceCell,product,node('td',`${item.options} / ${item.references}`),state,node('td',item.mode ? `${item.matched} / ${item.differences}` : '—'),reviewed,
       node('td',item.lastRunAt ? new Date(item.lastRunAt).toLocaleString('ko-KR') : '—'),action);
     $('cases').append(row);
@@ -124,7 +128,7 @@ function updateSelection() {
 function setBusy(value) {
   busy = value;
   for (const id of ['connect','dataset','upload','load-sample','query','state','target','select-page','run-detail','backup']) $(id).disabled = value || (id==='backup' && !datasetId);
-  for (const control of document.querySelectorAll('#filters button,#cases input,#review-form button,#comparisons input,#comparisons button')) control.disabled = value;
+  for (const control of document.querySelectorAll('#filters button,#cases input,#cases .run-case,#review-form button,#comparisons input,#comparisons button')) control.disabled = value;
   $('stop').hidden = !value; updateSelection();
 }
 function runCommand() {
@@ -164,13 +168,43 @@ async function openDetail(caseId) {
   $('history').replaceChildren();
   if (!detail.history.length) $('history').append(new Option('아직 실행하지 않았습니다',''));
   detail.history.forEach((run,index) => $('history').append(new Option(`${index === 0 ? '최근 · ' : ''}${run.mode === 'AI' ? '실제 AI' : '모의'} · ${new Date(run.startedAt).toLocaleString('ko-KR')}`,run.id)));
-  $('source-inputs').replaceChildren();
-  for (const [title,value] of [['상품정보고시',request.productNoticeText],['기술서',request.productCompositionText],['원본 단품',JSON.stringify(request.options,null,2)],['단위 설정',JSON.stringify(request.purchaseOptionUnits,null,2)]])
-    $('source-inputs').append(node('h3',title),node('pre',value || '(없음)'));
+  renderSourceInputs(request);
   renderDetail(); if (!$('detail-dialog').open) $('detail-dialog').showModal();
+}
+// 메인 화면의 01~03 입력을 같은 구성으로 모두 보여준다.
+// JSON 덩어리로 두면 허용 구매옵션이 빠진 것도 눈에 띄지 않는다.
+function renderSourceInputs(request) {
+  const box = $('source-inputs');
+  box.replaceChildren();
+  const add = (title, body) => box.append(node('h3', title), body);
+
+  // usageTable은 null만 —로 바꾸므로 빈 문자열도 null로 넘긴다.
+  add('상품 정보', usageTable(['상품 ID','상품명','내부 카테고리'],
+    [[request.goodsId, request.goodsName, request.categoryName || null]]));
+  add('상품정보고시', node('pre', request.productNoticeText || '(없음)'));
+  add('상품 기술서 · 구성', node('pre', request.productCompositionText || '(없음)'));
+
+  const options = request.options || [];
+  add('스토아 단품 옵션', options.length
+    ? usageTable(['단품 ID','원본 옵션명'], options.map(option => [option.optionId, option.optionName1 || null]))
+    : node('p','단일상품으로 처리합니다.','hint'));
+
+  // 단위 설정은 구매옵션명별로 붙으므로 허용 목록을 기준으로 합쳐 메인 03 표와 같은 열로 만든다.
+  const units = new Map((request.purchaseOptionUnits || []).map(unit => [unit.purchaseOptionName, unit]));
+  const allowed = request.allowedPurchaseOptions || [];
+  add('쿠팡 구매옵션명', allowed.length
+    ? usageTable(['구매옵션명','기본단위','단위 선택지'], allowed.map(name => {
+        const unit = units.get(name);
+        return [name, unit?.defaultUnit || null, (unit?.unitOptions || []).join(', ') || null];
+      }))
+    : node('p','허용 구매옵션이 없습니다.','hint'));
 }
 function renderDetail() {
   const run = displayedRun, current = !run || run.id === detail.latest?.id;
+  // 승인·모의·오류를 색으로 구분한다. 글만으로는 작은 배너에서 잘 읽히지 않는다.
+  const tone = !run ? '' : run.error || (run.mode === 'AI' && !run.response?.success) ? 'bad'
+    : run.mode === 'MOCK' ? 'warn' : 'good';
+  $('detail-status').className = `detail-status${tone ? ' ' + tone : ''}`;
   $('detail-status').textContent = !run ? '미실행 · 원본 등록값을 검토하거나 실제 AI를 실행하세요.'
     : `${run.mode === 'MOCK' ? '모의 실행 · 실제 AI 성능 평가와 성공 확인에 포함하지 않습니다.' : run.response?.success ? '서버 승인 · 일치 여부와 별도로 내용을 검토해 성공 체크하세요.' : '서버 미승인 · AI 제안은 진단용이며 성공 체크할 수 없습니다.'}${current ? '' : ' · 이전 실행 이력 (검토는 최근 결과에서만 가능)'}${run.error ? ` · ${run.error}` : ''}`;
   $('detail-issues').textContent = detail.testCase.issues.join('\n');
@@ -197,9 +231,11 @@ function renderDetail() {
     const actual = node('td',comparison?.actual ?? '—'); if (comparison?.evidence) actual.append(node('span',comparison.evidence,'subtext'));
     row.append(identity,node('td',reference.target),baseline,node('td',confirmed || '—'),actual,statusCell,successCell,reviewCell); $('comparisons').append(row);
   }
-  $('raw-request').textContent = JSON.stringify(detail.testCase.request,null,2);
+  $('raw-request').textContent = JSON.stringify(run?.request || detail.testCase.request,null,2);
   $('raw-response').textContent = run ? JSON.stringify(run.response || {error:run.error},null,2) : '아직 실행하지 않았습니다.';
   $('detail-copy-status').textContent = '';
+  // 실행 전에는 빈 박스를 두지 않고 영역째 숨긴다.
+  $('detail-usage').hidden = !run;
   if (run) {
     const usage = renderAiUsage(run.response || {inferenceSource:run.mode === 'MOCK' ? 'TEST' : 'AI'},node,usageTable);
     const summary = usage.querySelector('summary');
@@ -208,8 +244,7 @@ function renderDetail() {
     summary.remove();
     $('detail-usage').replaceChildren(heading,...Array.from(usage.childNodes));
   } else {
-    const heading = node('h3','AI 호출·토큰 사용량'); heading.id = 'detail-usage-title';
-    $('detail-usage').replaceChildren(heading,node('p','실행 후 AI 호출·토큰 사용량이 표시됩니다.','hint'));
+    $('detail-usage').replaceChildren();
   }
 }
 document.querySelectorAll('[data-detail-copy]').forEach(button => button.addEventListener('click', async () => {
@@ -230,6 +265,14 @@ async function saveReview(row, command) {
   await openDetail(caseId); await loadPage(); message('검토 결과를 저장했습니다.',false,true);
 }
 function handle(promise, inDetail = false) { promise.catch(error => message(error.message,true,inDetail)); }
+window.addEventListener('message', event => {
+  if (!pickerMode || event.origin !== location.origin || event.source !== window.parent
+      || event.data?.type !== 'evaluation:refresh' || event.data.datasetId !== datasetId || busy) return;
+  handle((async () => {
+    await loadPage();
+    if (detail && $('detail-dialog').open && detail.testCase.id === event.data.caseId) await openDetail(event.data.caseId);
+  })());
+});
 $('connect').addEventListener('click',() => handle(connect()));
 $('load-sample').addEventListener('click',() => {
   if (busy) return;
@@ -279,7 +322,8 @@ async function initialize() {
   access = await json('/api/v1/evaluation/access');
   $('access-hint').textContent = access.managementRequiresApiKey
     ? '테스트 관리는 로컬 주소(http://127.0.0.1:8081/evaluation.html)에서 사용해 주세요.'
-    : '실제 AI 실행은 서버에 설정된 운영 키를 사용합니다.';
+    : '';
+  $('access-hint').hidden = !access.managementRequiresApiKey;
   await connect();
 }
 handle(initialize());
