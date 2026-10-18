@@ -25,6 +25,8 @@ spring:
 app:
   evaluation:
     enabled: ${EVALUATION_ENABLED:false}
+    storage: ${EVALUATION_STORAGE:file}
+    blob-store-id: ${BLOB_STORE_ID:}
     data-directory: ${EVALUATION_DATA_DIRECTORY:data/evaluation}
     sample-file: ${EVALUATION_SAMPLE_FILE:}
     sample-name: ${EVALUATION_SAMPLE_NAME:}

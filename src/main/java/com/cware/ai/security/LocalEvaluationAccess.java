@@ -38,6 +38,8 @@ public class LocalEvaluationAccess {
     public boolean allows(HttpServletRequest request, String path) {
         if (!available(request)) return false;
         String method = request.getMethod(), root = "/api/v1/evaluation";
+        if(method.equals("POST") && (path.equals(root+"/imports") || path.matches(root+"/imports/[a-f0-9-]{36}/complete"))) return true;
+        if(method.equals("PUT") && path.matches(root+"/imports/[a-f0-9-]{36}/parts/[0-9]+")) return true;
         if (method.equals("POST") && (path.equals(root + "/sample") || path.equals(root + "/datasets"))) return true;
         String dataset = root + "/datasets/[a-f0-9-]{36}";
         if (method.equals("GET")) return path.equals(root + "/datasets")

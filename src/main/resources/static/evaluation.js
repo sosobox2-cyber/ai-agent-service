@@ -43,8 +43,9 @@ async function api(url, options = {}) {
   const response = await fetch(url, {...options, headers, cache:'no-store'});
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    const reason = response.status === 404 ? '테스트 관리 기능 또는 데이터를 찾을 수 없습니다. 로컬 서버의 EVALUATION_ENABLED 설정을 확인하고 서버를 재시작하세요.'
-      : response.status === 401 ? '로컬 테스트 화면(http://127.0.0.1:8081/evaluation.html)에서 접속해 주세요.' : error.reason || `요청 실패 (${response.status})`;
+    const reason = response.status === 413 ? '업로드 요청 크기가 제한을 초과했습니다. 화면을 새로고침한 후 다시 가져오세요.'
+      : response.status === 404 ? error.reason || '테스트 관리 기능 또는 데이터를 찾을 수 없습니다. 서버 설정을 확인하세요.'
+      : response.status === 401 ? '이 서버의 접근 인증이 필요합니다. 서버 인증 설정을 확인하세요.' : error.reason || `요청 실패 (${response.status})`;
     throw new Error(reason);
   }
   return response;
@@ -309,10 +310,24 @@ $('review-form').addEventListener('submit',event => { event.preventDefault(); if
 $('upload-form').addEventListener('submit',event => { event.preventDefault(); if (busy) return;
   const file = $('upload-file').files[0]; if (!file) return;
   if (file.size > 32*1024*1024) { message('32MB 이하의 파일을 선택하세요.',true); return; }
-  const data = new FormData(); data.append('file',file); $('upload').disabled = true; message('Excel 데이터를 가져오는 중입니다…');
-  handle((async () => { try { const result = await json('/api/v1/evaluation/datasets',{method:'POST',body:data}); await connect(result.id);
+  setBusy(true); $('stop').hidden = true; message('Excel 데이터를 가져오는 중입니다…');
+  handle((async () => { try {
+    let result;
+    if (file.size > 3*1024*1024) {
+      const ticket = await json('/api/v1/evaluation/imports',{method:'POST',json:{filename:file.name,size:file.size}});
+      for(let part=0;part<ticket.parts;part++) {
+        message(`Excel 파일 업로드 ${part+1} / ${ticket.parts}`);
+        await api(`/api/v1/evaluation/imports/${ticket.id}/parts/${part}`,{method:'PUT',headers:{'Content-Type':'application/octet-stream'},body:file.slice(part*1024*1024,(part+1)*1024*1024)});
+      }
+      message('업로드한 Excel 데이터를 분석하고 저장하는 중입니다…');
+      result = await json(`/api/v1/evaluation/imports/${ticket.id}/complete`,{method:'POST'});
+    } else {
+      const data = new FormData(); data.append('file',file);
+      result = await json('/api/v1/evaluation/datasets',{method:'POST',body:data});
+    }
+    await connect(result.id);
     message(`${number(result.products)}상품 · ${number(result.rows)} 기준 행을 가져왔습니다. 확인 표시 ${number(result.issueRows)}행은 원본 기준값을 검토하세요.`);
-  } finally { $('upload').disabled = false; } })());
+  } finally { setBusy(false); if(pageData) renderCases(); } })());
 });
 $('backup').addEventListener('click',() => handle((async () => {
   const response = await api(`${base()}/backup`); const url = URL.createObjectURL(await response.blob());
@@ -321,7 +336,7 @@ $('backup').addEventListener('click',() => handle((async () => {
 async function initialize() {
   access = await json('/api/v1/evaluation/access');
   $('access-hint').textContent = access.managementRequiresApiKey
-    ? '테스트 관리는 로컬 주소(http://127.0.0.1:8081/evaluation.html)에서 사용해 주세요.'
+    ? '이 서버의 접근 인증이 필요합니다. 서버 인증 설정을 확인하세요.'
     : '';
   $('access-hint').hidden = !access.managementRequiresApiKey;
   await connect();

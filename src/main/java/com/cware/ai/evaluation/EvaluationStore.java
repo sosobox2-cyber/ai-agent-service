@@ -16,6 +16,7 @@ import static com.cware.ai.evaluation.EvaluationModels.*;
 
 @Component
 @ConditionalOnProperty(name="app.evaluation.enabled", havingValue="true")
+@org.springframework.boot.autoconfigure.condition.ConditionalOnExpression("'${app.evaluation.storage:file}' == 'file'")
 public class EvaluationStore {
     private final Path root;
     private final ObjectMapper mapper;
@@ -26,6 +27,7 @@ public class EvaluationStore {
         final Map<String, Run> latest = new ConcurrentHashMap<>();
         final Map<String, Map<Integer, Review>> reviews = new ConcurrentHashMap<>();
         final Map<String, Object> locks = new ConcurrentHashMap<>();
+        final Map<String, Row> summaries = new ConcurrentHashMap<>();
         Data(Dataset metadata) { this.metadata = metadata; }
         Object lock(String caseId) { return locks.computeIfAbsent(caseId, key -> new Object()); }
     }
@@ -84,12 +86,14 @@ public class EvaluationStore {
     Case test(Data data, String caseId) {
         Case test = data.cases.get(caseId); if (test == null) throw missing(); return test;
     }
-    synchronized void saveRun(String datasetId, Data data, Run run) throws IOException {
+    synchronized Run saveRun(String datasetId, Data data, Run run) throws IOException {
         Path folder = folder(datasetId);
         atomic(folder.resolve("runs").resolve(run.caseId()).resolve(run.id() + ".json"), run);
         atomic(folder.resolve("latest").resolve(run.caseId() + ".json"), run);
         data.latest.put(run.caseId(), run);
+        return run;
     }
+    void refreshCase(String datasetId, Data data, String caseId) throws IOException { }
     synchronized void saveReviews(String datasetId, Data data, String caseId, Map<Integer, Review> entries, Review event) throws IOException {
         atomic(folder(datasetId).resolve("review-history").resolve(caseId).resolve(UUID.randomUUID() + ".json"), event);
         atomic(folder(datasetId).resolve("reviews").resolve(caseId + ".json"), entries.values());

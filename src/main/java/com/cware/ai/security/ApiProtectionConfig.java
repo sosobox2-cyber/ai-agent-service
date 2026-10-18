@@ -67,7 +67,8 @@ public class ApiProtectionConfig {
                 boolean evaluationManagement = path.startsWith("/api/v1/evaluation/")
                         && (request.getMethod().equals("GET") || request.getMethod().equals("PUT")
                         || (request.getMethod().equals("POST") && (path.equals("/api/v1/evaluation/datasets")
-                        || path.equals("/api/v1/evaluation/sample"))));
+                        || path.equals("/api/v1/evaluation/sample") || path.equals("/api/v1/evaluation/imports")
+                        || path.matches("/api/v1/evaluation/imports/[a-f0-9-]{36}/complete"))));
                 if (rateEnabled && !evaluationManagement) {
                     // 인증된 식별자별 요청 수를 확인하며 초과 시 재요청까지 남은 초를 전달한다.
                     long retryAfter = limiter.retryAfter(identity);

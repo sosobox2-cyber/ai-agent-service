@@ -21,12 +21,14 @@ public class EvaluationController {
     private final EvaluationStore store;
     private final EvaluationService service;
     private final EvaluationSampleService sample;
+    private final EvaluationUploadService uploads;
     private final LocalEvaluationAccess localAccess;
     private final boolean securityEnabled;
     public EvaluationController(EvaluationImporter importer, EvaluationStore store, EvaluationService service, EvaluationSampleService sample,
-            LocalEvaluationAccess localAccess, @Value("${app.security.enabled:true}") boolean securityEnabled) {
+            LocalEvaluationAccess localAccess, EvaluationUploadService uploads, @Value("${app.security.enabled:true}") boolean securityEnabled) {
         this.importer = importer; this.store = store; this.service = service; this.sample = sample;
         this.localAccess = localAccess; this.securityEnabled = securityEnabled;
+        this.uploads = uploads;
     }
     @ModelAttribute public void noStore(HttpServletResponse response) { response.setHeader("Cache-Control", "no-store"); }
     public record Access(boolean localManagementAvailable, boolean managementRequiresApiKey, boolean aiRequiresApiKey) {}
@@ -36,6 +38,10 @@ public class EvaluationController {
     }
     @GetMapping("/datasets") public List<Dataset> datasets() throws IOException { return store.datasets(); }
     @PostMapping("/sample") public Dataset sample() throws IOException { return sample.load(); }
+    @PostMapping("/imports") public EvaluationUploadService.Ticket startUpload(@RequestBody EvaluationUploadService.Start command) throws IOException { return uploads.start(command); }
+    @PutMapping(value="/imports/{id}/parts/{part}",consumes=MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public void uploadPart(@PathVariable String id,@PathVariable int part,@RequestBody byte[] bytes) throws IOException { uploads.part(id,part,bytes); }
+    @PostMapping("/imports/{id}/complete") public Dataset finishUpload(@PathVariable String id) throws IOException { return uploads.complete(id); }
     @PostMapping(value="/datasets", consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
     public Dataset upload(@RequestParam("file") MultipartFile file) throws IOException {
         return store.save(importer.read(file.getBytes(), file.getOriginalFilename()));

@@ -25,6 +25,7 @@ public class EvaluationSampleService {
         this.filename = filename; this.displayName = displayName; this.importer = importer; this.store = store;
     }
     public synchronized Dataset load() throws IOException {
+        if (filename.isBlank() && !store.datasets().isEmpty()) return store.datasets().get(0);
         if (filename.isBlank() || !Files.isRegularFile(Path.of(filename)))
             throw new InferenceException("EVALUATION_SAMPLE_UNAVAILABLE", HttpStatus.BAD_REQUEST,
                     "서버에 등록한 샘플 파일이 없습니다. 아래 Excel 파일 선택으로 직접 가져올 수 있습니다.");

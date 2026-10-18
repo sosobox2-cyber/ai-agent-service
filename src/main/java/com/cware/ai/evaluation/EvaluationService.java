@@ -29,7 +29,7 @@ public class EvaluationService {
         Map<String, Long> counts = new LinkedHashMap<>();
         List<Row> filtered = new ArrayList<>();
         for (Case test : data.cases.values()) {
-            Row row = summarize(test, data.latest.get(test.id()), data.reviews.getOrDefault(test.id(), Map.of()));
+            Row row = data.summaries.getOrDefault(test.id(), summarize(test, data.latest.get(test.id()), data.reviews.getOrDefault(test.id(), Map.of())));
             counts.merge(row.state(), 1L, Long::sum);
             counts.merge("CONFIRMED_ROWS", (long) row.confirmed(), Long::sum);
             if ((!needle.isEmpty() && !(row.goodsId() + " " + row.goodsName() + " " + row.categoryName()).toLowerCase(Locale.ROOT).contains(needle))
@@ -44,6 +44,7 @@ public class EvaluationService {
     public Detail detail(String datasetId, String caseId) throws IOException {
         var data = store.data(datasetId);
         synchronized (data.lock(caseId)) {
+            store.refreshCase(datasetId,data,caseId);
             Case test = store.test(data, caseId);
             return new Detail(test, data.latest.get(caseId), store.history(datasetId, caseId), data.reviews.getOrDefault(caseId, Map.of()));
         }
@@ -53,6 +54,7 @@ public class EvaluationService {
         if (command.mode().equals("AI") && !command.allowPaidCall()) throw invalid("실제 AI 호출의 비용 발생에 동의해야 합니다.");
         var data = store.data(datasetId);
         synchronized (data.lock(caseId)) {
+            store.refreshCase(datasetId,data,caseId);
             Case test = store.test(data, caseId);
             if (command.request() == null && !test.issues().isEmpty()) throw invalid("입력 데이터 확인이 필요한 사례입니다: " + String.join(" / ", test.issues()));
             InferenceRequest input = command.request() == null ? test.request() : command.request();
@@ -68,8 +70,7 @@ public class EvaluationService {
             }
             List<Comparison> comparisons = compare(test, response, data.reviews.getOrDefault(caseId, Map.of()));
             Run run = new Run(UUID.randomUUID().toString(), caseId, start, Instant.now().toString(), command.mode(), error, response, comparisons, input);
-            store.saveRun(datasetId, data, run);
-            return run;
+            return store.saveRun(datasetId, data, run);
         }
     }
     public Review review(String datasetId, String caseId, int rowNumber, ReviewRequest command) throws IOException {
@@ -80,6 +81,7 @@ public class EvaluationService {
         if (note.length() > 2000 || correction.length() > 500) throw invalid("메모 또는 확정값이 너무 깁니다.");
         var data = store.data(datasetId);
         synchronized (data.lock(caseId)) {
+            store.refreshCase(datasetId,data,caseId);
             Case test = store.test(data, caseId);
             if (test.references().stream().noneMatch(r -> r.row() == rowNumber)) throw invalid("해당 기준 행이 없습니다.");
             Run run = data.latest.get(caseId);
@@ -132,7 +134,7 @@ public class EvaluationService {
         }
         return result;
     }
-    private static Row summarize(Case test, Run run, Map<Integer, Review> reviews) {
+    static Row summarize(Case test, Run run, Map<Integer, Review> reviews) {
         int matched = 0, differences = 0, confirmed = 0, regressions = 0;
         if (run != null) for (Comparison c : run.comparisons()) {
             if (ValueComparison.matches(c.status())) matched++; else differences++;

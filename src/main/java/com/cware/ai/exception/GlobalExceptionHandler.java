@@ -45,6 +45,14 @@ public class GlobalExceptionHandler {
         LOG.error("처리되지 않은 예외로 요청이 실패했습니다.", e);
         return ResponseEntity.internalServerError().body(error("INTERNAL_ERROR","요청 처리 중 오류가 발생했습니다.",List.of()));
     }
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<InferenceResponse> missingResource(org.springframework.web.servlet.resource.NoResourceFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error("NOT_FOUND","요청한 화면 또는 API를 찾을 수 없습니다.",List.of()));
+    }
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<InferenceResponse> uploadTooLarge(org.springframework.web.multipart.MaxUploadSizeExceededException e) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(error("UPLOAD_TOO_LARGE","파일은 32MB 이하여야 합니다.",List.of()));
+    }
     private InferenceResponse error(String code,String reason,List<String> errors) {
         // 오류 응답에는 적용 가능한 매핑을 넣지 않고 서버 판정과 설정된 버전을 포함한다.
         return new InferenceResponse(null,false,false,0,List.of(),List.of(),reason,errors,code,
