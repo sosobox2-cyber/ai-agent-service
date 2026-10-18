@@ -1,5 +1,11 @@
 # ai-agent-service
 
+개발·테스트와 오류 확인은 **IntelliJ 로컬 서버(`http://127.0.0.1:8081`) 기준**으로 진행합니다. Docker 반영·배포는 별도 요청이 있을 때 진행합니다.
+
+엑셀 기반 테스트·기준값 비교·성공 확인·회귀 추적은 **[테스트 데이터 관리](docs/evaluation-management.md)**를 참고하세요. 로컬 테스트 화면은 `http://127.0.0.1:8081/evaluation.html`입니다.
+
+IntelliJ의 **AI Agent Service** 실행 구성에는 테스트 관리 활성화와 샘플 경로(`data/evaluation-samples/sample.xls`)가 설정되어 있습니다. 실행 구성을 변경한 뒤에는 서버를 Stop → Run으로 재시작해야 합니다. 샘플 파일은 Git에 포함되지 않으므로 다른 PC에서는 해당 경로에 파일을 두거나 화면에서 Excel을 직접 업로드하세요. IntelliJ와 Docker는 데이터 저장소와 환경 변수가 별개이며, 실제 AI는 각 서버의 `OPENAI_API_KEY`를 사용합니다.
+
 서비스 API Key 인증과 인스턴스별 30회/분 제한이 기본 활성화됩니다. 운영 시작 전에 OpenAI Key와 별개인 `AI_AGENT_API_KEY`를 Secret에 설정해야 합니다. 브라우저 테스트 페이지에는 Key를 넣지 않습니다. 설정·호출 방법과 로컬 개발 방법은 [API 보호 안내](docs/api-protection.md)를 참고하세요.
 
 AI 호출 처리시간은 `elapsedMs`(ms)로 파일 로그와 콘솔에 기록하고 API Usage에도 반환합니다. 콘솔 출력은 기본 활성화이며 `AI_USAGE_LOG_ENABLED=false`로 끌 수 있습니다.

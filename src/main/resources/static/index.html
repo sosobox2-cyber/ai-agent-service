@@ -6,6 +6,7 @@
   <title>구매옵션 매핑 API · AI Agent Service</title>
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/user-guide.css">
+  <script src="/ai-usage.js" defer></script>
   <script src="/app.js" defer></script>
 </head>
 <body>
@@ -25,24 +26,30 @@
 
     <section class="preset-panel" aria-labelledby="presets-heading">
       <!-- 예제는 입력 전에 고르는 기능이므로 01 패널 위에 두되, 화면을 차지하지 않게 접어 둔다. -->
-      <details class="preset-details">
-        <summary id="presets-heading">예제 불러오기 <span class="preset-count">12개</span></summary>
-        <p>예제를 선택하면 상품 정보와 옵션이 입력되고 테스트 모드가 켜집니다.</p>
-        <div class="presets">
-          <button type="button" class="button quiet" data-example="sample">아이그너 니트탑 예제</button>
-          <button type="button" class="button quiet" data-example="quantity">리르 패치 수량 예제</button>
-          <button type="button" class="button quiet" data-example="capacity">선크림 용량 예제</button>
-          <button type="button" class="button quiet" data-example="weight">김치 세트 중량 예제</button>
-          <button type="button" class="button quiet" data-example="set">칫솔 세트 수량 예제</button>
-          <button type="button" class="button quiet" data-example="tv">플럭스 TV 화면크기 예제</button>
-          <button type="button" class="button quiet" data-example="toiletPaper">모나리자 화장지 구성 예제</button>
-          <button type="button" class="button quiet" data-example="cream">스와니브 영양크림 구성 예제</button>
-          <button type="button" class="button quiet" data-example="kitchenTowel">크리넥스 키친타올 구성 예제</button>
-          <button type="button" class="button quiet" data-example="pillow">코단잠 메밀베개 사이즈 예제</button>
-          <button type="button" class="button quiet" data-example="smartboard">LG 전자칠판 스탠드 예제</button>
-          <button type="button" class="button quiet" data-example="seafood">올레마켓 옥돔 중량 예제</button>
-        </div>
-      </details>
+      <!-- 테스트 데이터 불러오기는 정적 예제가 아니라 별도 화면을 여는 동작이므로
+           예제 그리드에서 빼고 제목 줄 오른쪽에 다른 모양으로 둔다. -->
+      <div class="preset-head">
+        <details class="preset-details">
+          <summary id="presets-heading">예제 불러오기 <span class="preset-count">기본 예제 12개</span></summary>
+          <p>예제를 선택하면 상품 정보와 옵션이 입력되고 테스트 모드가 켜집니다.</p>
+          <div class="presets">
+            <button type="button" class="button quiet" data-example="sample">아이그너 니트탑 예제</button>
+            <button type="button" class="button quiet" data-example="quantity">리르 패치 수량 예제</button>
+            <button type="button" class="button quiet" data-example="capacity">선크림 용량 예제</button>
+            <button type="button" class="button quiet" data-example="weight">김치 세트 중량 예제</button>
+            <button type="button" class="button quiet" data-example="set">칫솔 세트 수량 예제</button>
+            <button type="button" class="button quiet" data-example="tv">플럭스 TV 화면크기 예제</button>
+            <button type="button" class="button quiet" data-example="toiletPaper">모나리자 화장지 구성 예제</button>
+            <button type="button" class="button quiet" data-example="cream">스와니브 영양크림 구성 예제</button>
+            <button type="button" class="button quiet" data-example="kitchenTowel">크리넥스 키친타올 구성 예제</button>
+            <button type="button" class="button quiet" data-example="pillow">코단잠 메밀베개 사이즈 예제</button>
+            <button type="button" class="button quiet" data-example="smartboard">LG 전자칠판 스탠드 예제</button>
+            <button type="button" class="button quiet" data-example="seafood">올레마켓 옥돔 중량 예제</button>
+          </div>
+          <p id="evaluation-import-status" role="status" aria-live="polite"></p>
+        </details>
+        <button type="button" class="button quiet dataset-open" id="open-evaluation">테스트 데이터에서 불러오기</button>
+      </div>
     </section>
 
     <!-- app.js가 이 폼의 상품 원문과 반복 행을 추론 API 요청으로 변환한다. -->
@@ -133,6 +140,10 @@
     </section>
     <footer>이 화면은 API 테스트용입니다. 입력한 데이터는 현재 서버의 추론 API로 전송됩니다.</footer>
   </main>
+  <dialog id="evaluation-dialog" aria-labelledby="evaluation-dialog-title">
+    <div class="evaluation-dialog-heading"><h2 id="evaluation-dialog-title">테스트 데이터 관리 · 예제 불러오기</h2><button type="button" class="button quiet" id="close-evaluation">닫기</button></div>
+    <iframe id="evaluation-frame" title="테스트 데이터 관리" data-src="/evaluation.html?picker=1"></iframe>
+  </dialog>
   <!-- 단품 추가 시 복제하는 행이며 원본 ID와 옵션 문자열을 함께 보관한다. -->
   <template id="option-row-template">
     <tr>

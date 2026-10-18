@@ -8,6 +8,12 @@ services:
     environment:
       SERVER_ADDRESS: "0.0.0.0"
       PORT: "8081"
+      EVALUATION_ENABLED: "true"
+      EVALUATION_LOCAL_UI_ENABLED: "true"
+      EVALUATION_LOCAL_BIND_ADDRESS: "${HOST_ADDRESS:-127.0.0.1}"
+      EVALUATION_DATA_DIRECTORY: "/app/data/evaluation"
+      EVALUATION_SAMPLE_FILE: "/app/evaluation-samples/sample.xls"
+      EVALUATION_SAMPLE_NAME: "구매옵션 정보2.xls"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4.1-mini}"
       AI_AGENT_SECURITY_ENABLED: "${AI_AGENT_SECURITY_ENABLED:-true}"
@@ -15,4 +21,9 @@ services:
       AI_AGENT_API_KEY_ID: "${AI_AGENT_API_KEY_ID:-internal-test}"
       AI_AGENT_RATE_LIMIT_ENABLED: "${AI_AGENT_RATE_LIMIT_ENABLED:-true}"
       AI_AGENT_RATE_LIMIT_PER_MINUTE: "${AI_AGENT_RATE_LIMIT_PER_MINUTE:-30}"
+    volumes:
+      - evaluation-data:/app/data/evaluation
+      - ./data/evaluation-samples:/app/evaluation-samples:ro
     restart: unless-stopped
+volumes:
+  evaluation-data:

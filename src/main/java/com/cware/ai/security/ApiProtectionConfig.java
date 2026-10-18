@@ -19,17 +19,23 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.util.Collections;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /** 현재 유일한 추론 API가 속한 /api 경로를 조기에 보호한다. 정적 페이지·문서는 공개다. */
 @Configuration
 public class ApiProtectionConfig {
     private final OncePerRequestFilter filter;
+    public ApiProtectionConfig(boolean enabled, String key, String id, boolean rateEnabled, int limit,
+            ObjectMapper mapper, GlobalExceptionHandler errors) {
+        this(enabled, key, id, rateEnabled, limit, mapper, errors, new LocalEvaluationAccess(false, "127.0.0.1"));
+    }
+    @Autowired
     public ApiProtectionConfig(@Value("${app.security.enabled:true}") boolean enabled,
             @Value("${app.security.api-key:}") String key,
             @Value("${app.security.api-key-id:internal-test}") String id,
             @Value("${app.security.rate-limit.enabled:true}") boolean rateEnabled,
             @Value("${app.security.rate-limit.per-minute:30}") int limit,
-            ObjectMapper mapper, GlobalExceptionHandler errors) {
+            ObjectMapper mapper, GlobalExceptionHandler errors, LocalEvaluationAccess localAccess) {
         // 인증을 켠 상태에서는 비밀 키와 로그용 식별자가 유효하게 설정되어야 시작할 수 있다.
         if (enabled && (key.isBlank() || key.equals(id) || !id.matches("[A-Za-z0-9._-]{1,100}")))
             throw new IllegalArgumentException("Service API key and a valid API key ID must be configured");
@@ -45,8 +51,10 @@ public class ApiProtectionConfig {
                     chain.doFilter(request, response);
                     return;
                 }
-                String identity = enabled ? id : "security-disabled";
-                if (enabled) {
+                boolean publicAccessInfo = request.getMethod().equals("GET") && path.equals("/api/v1/evaluation/access");
+                boolean localManagement = localAccess.allows(request, path);
+                String identity = localManagement ? "local-evaluation" : enabled ? id : "security-disabled";
+                if (enabled && !localManagement && !publicAccessInfo) {
                     // 중복 헤더를 거부하고, 고정 길이 해시를 비교해 키 원문을 직접 비교하지 않는다.
                     var headers = Collections.list(request.getHeaders("X-API-Key"));
                     if (headers.size() != 1 || headers.get(0).isBlank()
@@ -55,7 +63,12 @@ public class ApiProtectionConfig {
                         return;
                     }
                 }
-                if (rateEnabled) {
+                // 평가 목록 조회·검토 저장은 AI 호출 한도를 소비하지 않는다. 인증은 동일하게 적용한다.
+                boolean evaluationManagement = path.startsWith("/api/v1/evaluation/")
+                        && (request.getMethod().equals("GET") || request.getMethod().equals("PUT")
+                        || (request.getMethod().equals("POST") && (path.equals("/api/v1/evaluation/datasets")
+                        || path.equals("/api/v1/evaluation/sample"))));
+                if (rateEnabled && !evaluationManagement) {
                     // 인증된 식별자별 요청 수를 확인하며 초과 시 재요청까지 남은 초를 전달한다.
                     long retryAfter = limiter.retryAfter(identity);
                     if (retryAfter > 0) {

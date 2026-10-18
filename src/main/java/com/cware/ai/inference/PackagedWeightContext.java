@@ -36,8 +36,11 @@ final class PackagedWeightContext {
             if (!match.find()) continue;
             if (!sourceName.equals("productNoticeText") && AMBIGUOUS.matcher(text).find()) return null;
             do {
+                // 줄바꿈으로 구분된 다음 정보고시 항목의 '또는' 등은 현재 구성의 조건이 아니다.
+                int lineEnd = text.indexOf('\n', match.end());
                 if (sourceName.equals("productNoticeText") && AMBIGUOUS.matcher(text.substring(
-                        Math.max(0, match.start() - 20), Math.min(text.length(), match.end() + 20))).find()) return null;
+                        Math.max(text.lastIndexOf('\n', match.start()) + 1, match.start() - 20),
+                        Math.min(lineEnd < 0 ? text.length() : lineEnd, match.end() + 20))).find()) return null;
                 if (new BigDecimal(match.group(1)).signum() <= 0) return null;
                 var candidate = List.of(new BigDecimal(match.group(1)).stripTrailingZeros().toPlainString(),
                         match.group(2).toLowerCase(Locale.ROOT), match.group(3), match.group(4));

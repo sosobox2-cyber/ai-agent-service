@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
 
 /** 테스트 모드에서 색상만 다른 단품의 단일 공통 치수와 명시된 공통 개수를 처리한다. */
 final class CommonDimensionContext {
-    private static final Pattern SIZE = Pattern.compile("(?:치수|크기|규격)\\s*:\\s*(\\d+(?:\\.\\d+)?\\s*[xX×*]\\s*\\d+(?:\\.\\d+)?(?:\\s*[xX×*]\\s*\\d+(?:\\.\\d+)?)?\\s*(?:cm|mm)(?:\\s*\\([^()\\r\\n]*\\))?)\\s*(?=,\\s*\\d{3}:|$)");
+    private static final Pattern SIZE = Pattern.compile("(?:치수|크기|규격)\\s*:\\s*(\\d+(?:\\.\\d+)?\\s*[xX×*]\\s*\\d+(?:\\.\\d+)?(?:\\s*[xX×*]\\s*\\d+(?:\\.\\d+)?)?\\s*(?:cm|mm)(?:\\s*\\([^()\\r\\n]*\\))?)[ \\t]*(?=,\\s*\\d{3}:|\\r?\\n|$)");
     static MappingProposal.Entry mockEntry(InferenceRequest request, SourceOption option, String target, Set<String> colors) {
         // 모든 단품이 색상명일 때만 하나의 정보고시 치수를 공통 사이즈로 적용한다.
         if (request.productNoticeText() == null || request.options().stream()

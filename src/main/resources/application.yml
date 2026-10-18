@@ -3,6 +3,10 @@ server:
   port: ${PORT:8081}
   address: ${SERVER_ADDRESS:127.0.0.1}
 spring:
+  servlet:
+    multipart:
+      max-file-size: 32MB
+      max-request-size: 33MB
   application:
     name: ai-agent-service
   jackson:
@@ -19,6 +23,13 @@ spring:
           max-tokens: 4096
 # 서비스 API 인증·호출 제한은 OpenAI 키와 별개의 설정이다.
 app:
+  evaluation:
+    enabled: ${EVALUATION_ENABLED:false}
+    data-directory: ${EVALUATION_DATA_DIRECTORY:data/evaluation}
+    sample-file: ${EVALUATION_SAMPLE_FILE:}
+    sample-name: ${EVALUATION_SAMPLE_NAME:}
+    local-ui-enabled: ${EVALUATION_LOCAL_UI_ENABLED:false}
+    local-bind-address: ${EVALUATION_LOCAL_BIND_ADDRESS:${server.address:127.0.0.1}}
   security:
     enabled: ${AI_AGENT_SECURITY_ENABLED:true}
     api-key: ${AI_AGENT_API_KEY:}

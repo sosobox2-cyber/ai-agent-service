@@ -16,7 +16,7 @@ final class SingleDeviceContext {
                 // 정보고시의 유일한 모델명이 상품명에도 있는 경우에만 본체 모델로 사용한다.
                 if (request.productNoticeText() == null) return null;
                 text = request.productNoticeText(); source = "productNoticeText";
-                var match = Pattern.compile("품명 및 모델명\\s*:\\s*([A-Za-z0-9][A-Za-z0-9-]*)\\s*(?=,|$)").matcher(text);
+                var match = Pattern.compile("품명 및 모델명\\s*:\\s*([A-Za-z0-9][A-Za-z0-9-]*)[ \\t]*(?=,|\\r?\\n|$)").matcher(text);
                 if (!match.find()) return null;
                 value = match.group(1); text = match.group();
                 if (match.find() || !request.goodsName().contains(value)
