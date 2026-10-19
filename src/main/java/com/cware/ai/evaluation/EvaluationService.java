@@ -22,6 +22,21 @@ public class EvaluationService {
     public EvaluationService(EvaluationStore store, PurchaseOptionInferenceService inference) {
         this.store = store; this.inference = inference;
     }
+    /** 개별 상태 외에 실행 여부로 묶어 거르는 TESTED·UNTESTED_ONLY를 함께 받는다.
+     *  상태가 여러 개로 흩어져 있어 "실행한 것만" 보려면 상태를 하나씩 돌려봐야 하기 때문이다.
+     *  실행 여부는 state가 아니라 mode로 판단한다. mode가 null이면 한 번도 실행하지 않은 사례다. */
+    private static boolean matchesState(String state, Row row) {
+        if (state == null || state.isBlank()) return true;
+        if ("TESTED".equals(state)) return row.mode() != null;
+        if ("UNTESTED_ONLY".equals(state)) return row.mode() == null;
+        // 현황 카드의 "기준값 불일치 / 회귀"는 두 상태를 합쳐 세므로 조회도 같은 묶음으로 받는다.
+        if ("MISMATCH_OR_REGRESSION".equals(state))
+            return "MISMATCH".equals(row.state()) || "REGRESSION".equals(row.state());
+        // "성공 확인한 기준 행"은 행 수라서 상품 목록으로 바꿀 때는 확인된 행을 가진 상품으로 본다.
+        // 전부 확인된 상품만 보려면 CONFIRMED를 쓴다.
+        if ("HAS_CONFIRMED_ROW".equals(state)) return row.confirmed() > 0;
+        return state.equals(row.state());
+    }
     public Page page(String datasetId, String query, String state, String target, int page, int size) throws IOException {
         var data = store.data(datasetId);
         int pageSize = Math.max(1, Math.min(size, 100));
@@ -32,8 +47,9 @@ public class EvaluationService {
             Row row = data.summaries.getOrDefault(test.id(), summarize(test, data.latest.get(test.id()), data.reviews.getOrDefault(test.id(), Map.of())));
             counts.merge(row.state(), 1L, Long::sum);
             counts.merge("CONFIRMED_ROWS", (long) row.confirmed(), Long::sum);
+            if (row.mode() != null) counts.merge("TESTED", 1L, Long::sum);
             if ((!needle.isEmpty() && !(row.goodsId() + " " + row.goodsName() + " " + row.categoryName()).toLowerCase(Locale.ROOT).contains(needle))
-                    || (state != null && !state.isBlank() && !state.equals(row.state()))
+                    || !matchesState(state, row)
                     || (target != null && !target.isBlank() && test.references().stream().noneMatch(r -> r.target().equals(target)))) continue;
             filtered.add(row);
         }

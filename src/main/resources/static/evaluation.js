@@ -1,13 +1,11 @@
 'use strict';
 const $ = id => document.getElementById(id);
-const pickerMode = new URLSearchParams(location.search).get('picker') === '1' && window.parent !== window;
-if (pickerMode) {
-  document.querySelector('.page-header a').hidden = true;
-  document.querySelector('.page-header p').hidden = true;
-}
+// 별도 페이지로 열리므로 iframe 여부는 보지 않는다. 메인에서 들어왔는지만 구분한다.
+const pickerMode = new URLSearchParams(location.search).get('picker') === '1';
 const labels = {UNTESTED:'미실행',MOCK:'모의 실행',MATCH:'기준값 일치 · 미확인',MISMATCH:'기준값 불일치',
   REGRESSION:'확정값 회귀',CONFIRMED:'전체 성공 확인',REVIEW_REQUIRED:'서버 검토 필요',INPUT_ISSUE:'입력 확인 필요',ERROR:'실행 오류',
-  EXACT:'동일',EQUIVALENT:'표현만 다름',DIFFERENT:'불일치',MISSING:'결과 없음',NO_REFERENCE:'기준값 없음',DUPLICATE:'중복 결과'};
+  EXACT:'동일',EQUIVALENT:'표현만 다름',DIFFERENT:'불일치',MISSING:'결과 없음',NO_REFERENCE:'기준값 없음',DUPLICATE:'중복 결과',
+  TESTED:'실행한 상품 전체',UNTESTED_ONLY:'실행하지 않은 상품 전체',MISMATCH_OR_REGRESSION:'기준값 불일치 / 회귀',HAS_CONFIRMED_ROW:'성공 확인한 행이 있는 상품'};
 let datasets = [], datasetId = '', currentPage = 1, pageData = null, selected = new Set();
 let detail = null, displayedRun = null, editingRow = null, busy = false, stopped = false;
 let access = {managementRequiresApiKey:true,aiRequiresApiKey:true};
@@ -91,10 +89,33 @@ async function loadPage() {
   renderStats(result.counts); renderCases();
 }
 function renderStats(counts) {
-  const stats = [ ['전체 상품',counts.TOTAL],['미실행',counts.UNTESTED],['기준값 불일치 / 회귀',(counts.MISMATCH || 0)+(counts.REGRESSION || 0)],
-    ['전체 성공 확인 상품',counts.CONFIRMED],['성공 확인한 기준 행',counts.CONFIRMED_ROWS] ];
-  $('stats').replaceChildren(...stats.map(([title,value]) => {
-    const card = node('div', null, 'stat'); card.append(node('span',title),node('strong',number(value))); return card;
+  // 세 번째 값은 눌렀을 때 적용할 진행 상태다. null이면 조회 조건으로 바꿀 수 없는 카드다.
+  // '성공 확인한 기준 행'은 상품이 아니라 행 수라서 상품 목록 조건으로 쓸 수 없다.
+  const stats = [
+    ['전체 상품',          counts.TOTAL,                                     ''],
+    ['실행한 상품',        counts.TESTED,                                    'TESTED'],
+    ['미실행',             (counts.TOTAL || 0) - (counts.TESTED || 0),       'UNTESTED_ONLY'],
+    ['기준값 불일치 / 회귀', (counts.MISMATCH || 0)+(counts.REGRESSION || 0),  'MISMATCH_OR_REGRESSION'],
+    ['전체 성공 확인 상품',  counts.CONFIRMED,                                 'CONFIRMED'],
+    ['성공 확인한 기준 행',  counts.CONFIRMED_ROWS,                            'HAS_CONFIRMED_ROW',
+      '행 수입니다. 누르면 확인된 행이 하나라도 있는 상품을 조회하므로 건수와 다를 수 있습니다.'],
+  ];
+  // 검색어나 구매옵션명이 함께 걸려 있으면 목록이 더 걸러진 상태이므로 선택 표시를 하지 않는다.
+  const detailed = !!($('query').value.trim() || $('target').value.trim());
+  $('stats').replaceChildren(...stats.map(([title,value,state,note]) => {
+    const card = node(state === null ? 'div' : 'button', null, 'stat');
+    card.append(node('span',title),node('strong',number(value)));
+    if (note) card.title = note;
+    if (state === null) return card;
+    card.type = 'button';
+    card.dataset.state = state;
+    card.disabled = busy;
+    card.setAttribute('aria-pressed', String(!detailed && $('state').value === state));
+    card.addEventListener('click',() => {
+      if (busy) return;
+      $('state').value = state; currentPage = 1; handle(loadPage());
+    });
+    return card;
   }));
 }
 function renderCases() {
@@ -126,11 +147,13 @@ function renderCases() {
 function updateSelection() {
   $('selection-count').textContent = `${selected.size}상품 선택 · 한 번에 최대 20개`;
   $('run-selected').disabled = busy || !selected.size || selected.size > 20;
+  // 일괄 확인은 AI를 호출하지 않으므로 20개 제한을 적용하지 않는다.
+  $('confirm-selected').disabled = busy || !selected.size;
 }
 function setBusy(value) {
   busy = value;
   for (const id of ['connect','dataset','upload','load-sample','query','state','target','select-page','run-detail','backup','git-snapshot']) $(id).disabled = value || (['backup','git-snapshot'].includes(id) && !datasetId);
-  for (const control of document.querySelectorAll('#filters button,#cases input,#cases .run-case,#review-form button,#comparisons input,#comparisons button')) control.disabled = value;
+  for (const control of document.querySelectorAll('#filters button,#stats button,#cases input,#cases .run-case,#review-form button,#comparisons input,#comparisons button')) control.disabled = value;
   $('stop').hidden = !value; updateSelection();
 }
 function runCommand() {
@@ -161,6 +184,43 @@ async function runCases(ids) {
     if (detail && $('detail-dialog').open) await openDetail(detail.testCase.id);
   } finally { setBusy(false); await loadPage(); if (detail && $('detail-dialog').open) renderDetail(); }
 }
+// 등록 기준값과 일치한 행만 한 번에 성공 확인한다.
+// 자동 확정이 아니라 사람이 묶음 단위로 판단하는 흐름이다. 확정 기준값은 회귀 판정의 기준이 되므로
+// 불일치·중복·모의 실행·서버 미승인 결과는 건드리지 않는다.
+async function confirmSelected(ids) {
+  if (busy) return;
+  if (!ids.length) throw new Error('성공 확인할 상품을 선택하세요.');
+  stopped = false; setBusy(true);
+  $('stop').disabled = false; $('stop').textContent = '현재 사례 완료 후 중지';
+  const region = document.querySelector('.progress-region'); region.hidden = false;
+  $('progress').max = ids.length; $('progress').value = 0;
+  let done = 0, confirmedRows = 0, skippedCases = 0, skippedRows = 0;
+  try {
+    for (const caseId of ids) {
+      if (stopped) break;
+      $('progress-label').textContent = `${done + 1} / ${ids.length} 확인 중`;
+      const info = await json(`${base()}/cases/${encodeURIComponent(caseId)}`);
+      const run = info.latest;
+      // 상세 화면의 성공 확인 체크박스와 같은 자격 조건을 쓴다.
+      if (!run || run.mode !== 'AI' || !run.response?.success || run.error) { skippedCases++; done++; $('progress').value = done; continue; }
+      const results = new Map((run.comparisons || []).map(value => [value.row, value]));
+      for (const reference of info.testCase.references) {
+        const comparison = results.get(reference.row);
+        if (!comparison || !comparison.actual || !['EXACT','EQUIVALENT'].includes(comparison.status)) { skippedRows++; continue; }
+        const review = info.reviews?.[reference.row];
+        if (review && review.status === 'SUCCESS' && review.runId === run.id) continue;
+        await json(`${base()}/cases/${encodeURIComponent(caseId)}/reviews/${reference.row}`,
+          {method:'PUT', json:{status:'SUCCESS', note:review?.note || '', confirmedValue:'', runId:run.id}});
+        confirmedRows++;
+      }
+      done++; $('progress').value = done;
+    }
+    $('progress-label').textContent = `${done} / ${ids.length} 완료${stopped ? ' · 중지됨' : ''}`;
+    message(`${confirmedRows}개 기준 행을 성공 확인했습니다.`
+      + (skippedCases ? ` 실제 AI 승인 결과가 없어 건너뛴 상품 ${skippedCases}개.` : '')
+      + (skippedRows ? ` 일치하지 않아 건너뛴 행 ${skippedRows}개.` : ''));
+  } finally { setBusy(false); await loadPage(); }
+}
 async function openDetail(caseId) {
   detail = await json(`${base()}/cases/${encodeURIComponent(caseId)}`);
   displayedRun = detail.latest; editingRow = null; $('review-form').hidden = true;
@@ -172,6 +232,39 @@ async function openDetail(caseId) {
   detail.history.forEach((run,index) => $('history').append(new Option(`${index === 0 ? '최근 · ' : ''}${run.mode === 'AI' ? '실제 AI' : '모의'} · ${new Date(run.startedAt).toLocaleString('ko-KR')}`,run.id)));
   renderSourceInputs(request);
   renderDetail(); if (!$('detail-dialog').open) $('detail-dialog').showModal();
+}
+// AI가 왜 그렇게 판단했는지와 서버가 왜 승인·반려했는지를 보여준다.
+// 행별 근거만으로는 전체 판단 이유를 알 수 없고, 반려된 결과는 원본 JSON에만 남아 있었다.
+function renderJudgment(run) {
+  const box = $('detail-judgment');
+  box.replaceChildren();
+  box.hidden = !run;
+  if (!run) return;
+
+  const response = run.response, ai = response?.aiAssessment, server = response?.serverAssessment;
+  const add = (title, body, extra) => {
+    const block = node('div', null, 'judgment-block');
+    block.append(node('h3', title), node('p', body));
+    if (extra) block.append(node('span', extra, 'subtext'));
+    box.append(block);
+  };
+
+  if (ai) {
+    // certain은 AI가 스스로 확신했는지, confidence는 그 확신의 정도다. 둘 다 서버 승인과는 별개다.
+    const certain = ai.certain === true ? '확실' : ai.certain === false ? '불확실' : '확인 불가';
+    const confidence = Number.isFinite(ai.confidence) ? ai.confidence.toFixed(2) : '—';
+    add('AI 판단', ai.reason || '설명이 없습니다.', `${certain} · confidence ${confidence}`);
+  } else if (run.mode === 'MOCK') {
+    add('AI 판단', '모의 실행이라 AI 판단 데이터가 없습니다.');
+  } else {
+    add('AI 판단', response?.reason || '확인할 수 있는 AI 판단 데이터가 없습니다.');
+  }
+
+  if (server) {
+    const threshold = Number.isFinite(server.confidenceThreshold) ? server.confidenceThreshold.toFixed(2) : '—';
+    add('서버 판정', server.reason || '설명이 없습니다.', `${server.decisionCode || '—'} · 자동적용 기준 ${threshold}`);
+  }
+  if (run.error) add('실행 오류', run.error);
 }
 // 메인 화면의 01~03 입력을 같은 구성으로 모두 보여준다.
 // JSON 덩어리로 두면 허용 구매옵션이 빠진 것도 눈에 띄지 않는다.
@@ -210,6 +303,7 @@ function renderDetail() {
   $('detail-status').textContent = !run ? '미실행 · 원본 등록값을 검토하거나 실제 AI를 실행하세요.'
     : `${run.mode === 'MOCK' ? '모의 실행 · 실제 AI 성능 평가와 성공 확인에 포함하지 않습니다.' : run.response?.success ? '서버 승인 · 일치 여부와 별도로 내용을 검토해 성공 체크하세요.' : '서버 미승인 · AI 제안은 진단용이며 성공 체크할 수 없습니다.'}${current ? '' : ' · 이전 실행 이력 (검토는 최근 결과에서만 가능)'}${run.error ? ` · ${run.error}` : ''}`;
   $('detail-issues').textContent = detail.testCase.issues.join('\n');
+  renderJudgment(run);
   $('run-detail').disabled = busy || !!detail.testCase.issues.length;
   $('comparisons').replaceChildren();
   const results = new Map((run?.comparisons || []).map(value => [value.row,value]));
@@ -267,14 +361,6 @@ async function saveReview(row, command) {
   await openDetail(caseId); await loadPage(); message('검토 결과를 저장했습니다.',false,true);
 }
 function handle(promise, inDetail = false) { promise.catch(error => message(error.message,true,inDetail)); }
-window.addEventListener('message', event => {
-  if (!pickerMode || event.origin !== location.origin || event.source !== window.parent
-      || event.data?.type !== 'evaluation:refresh' || event.data.datasetId !== datasetId || busy) return;
-  handle((async () => {
-    await loadPage();
-    if (detail && $('detail-dialog').open && detail.testCase.id === event.data.caseId) await openDetail(event.data.caseId);
-  })());
-});
 $('connect').addEventListener('click',() => handle(connect()));
 $('load-sample').addEventListener('click',() => {
   if (busy) return;
@@ -300,6 +386,12 @@ $('select-page').addEventListener('change',() => {
   });
 });
 $('run-selected').addEventListener('click',() => handle(runCases([...selected])));
+$('confirm-selected').addEventListener('click',() => {
+  const ids = [...selected];
+  // 확정 기준값은 되돌리려면 행마다 검토를 초기화해야 하므로 한 번 확인받는다.
+  if (!confirm(`선택한 ${ids.length}개 상품에서 등록 기준값과 일치한 행을 성공 확인으로 저장합니다.\n확정 기준값으로 저장되어 다음 실행부터 회귀 비교의 기준이 됩니다.`)) return;
+  handle(confirmSelected(ids));
+});
 $('run-detail').addEventListener('click',() => handle(runCases([detail.testCase.id]),true));
 $('stop').addEventListener('click',() => { stopped = true; $('stop').disabled = true; $('stop').textContent = '현재 사례 완료 후 중지합니다'; });
 $('close-detail').addEventListener('click',() => $('detail-dialog').close());

@@ -385,6 +385,7 @@ function resetInputs() {
 }
 
 // 예제의 옵션명에 단위 설정을 연결한 뒤 폼을 채우고 모의 테스트를 선택한다.
+// 예제는 둘러보는 용도이므로 모르고 실행해도 과금되지 않게 테스트 모드를 켠다.
 function loadExample(example) {
   clearEvaluationLink();
   testModeInput.checked = true;
@@ -761,27 +762,24 @@ document.querySelector('#add-purchase-option-row').addEventListener('click', () 
 document.querySelectorAll('[data-example]').forEach(button => {
   button.addEventListener('click', () => loadExample(examples[button.dataset.example]));
 });
-// 관리 화면을 같은 페이지에서 열고 선택한 사례의 원본 입력만 가져온다.
-const evaluationDialog = document.querySelector('#evaluation-dialog');
-const evaluationFrame = document.querySelector('#evaluation-frame');
-document.querySelector('#open-evaluation')?.addEventListener('click', () => {
-  if (!evaluationFrame.getAttribute('src')) evaluationFrame.src = evaluationFrame.dataset.src;
-  evaluationDialog.showModal();
+// 문서는 페이지를 떠나지 않고 팝업으로 띄운다. 입력하던 내용을 잃지 않게 하려는 목적이다.
+const documentDialog = document.querySelector('#doc-dialog');
+const documentFrame = document.querySelector('#doc-frame');
+document.querySelectorAll('.header-actions a[data-doc]').forEach(link => {
+  link.addEventListener('click', event => {
+    // 새 탭·새 창으로 여는 조작은 기본 동작을 그대로 둔다.
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    event.preventDefault();
+    const label = link.textContent.trim();
+    const source = link.getAttribute('href');
+    if (documentFrame.getAttribute('src') !== source) documentFrame.src = source;
+    documentFrame.title = label;
+    documentDialog.setAttribute('aria-label', label);
+    documentDialog.showModal();
+  });
 });
-document.querySelector('#close-evaluation')?.addEventListener('click', () => evaluationDialog.close());
-window.addEventListener('message', event => {
-  if (!evaluationFrame || event.origin !== window.location.origin || event.source !== evaluationFrame.contentWindow
-      || event.data?.type !== 'evaluation:select') return;
-  const request = event.data.request;
-  if (!request || !Array.isArray(request.options) || !Array.isArray(request.allowedPurchaseOptions)) return;
-  if (!/^[a-f0-9-]{36}$/.test(event.data.datasetId || '') || !/^c[0-9]+$/.test(event.data.caseId || '')) return;
-  loadExample(request);
-  evaluationLink = {datasetId:event.data.datasetId,caseId:event.data.caseId,goodsId:request.goodsId};
-  testModeInput.checked = false;
-  evaluationDialog.close();
-  document.querySelector('#evaluation-import-status').textContent = `${request.goodsName} (${request.goodsId}) 사례와 연결되었습니다. 메인 실행 결과와 수정한 입력도 같은 사례의 이력에 저장됩니다.`;
-  form.elements.goodsName.focus();
-});
+document.querySelector('#close-doc')?.addEventListener('click', () => documentDialog.close());
+
 // 입력 검증 후 JSON을 전송하며 중복 제출을 막고 성공·실패와 관계없이 버튼 상태를 복원한다.
 form.addEventListener('submit', async event => {
   event.preventDefault();
@@ -831,7 +829,6 @@ form.addEventListener('submit', async event => {
       body = run.response || {success:false,reason:run.error || '추론 결과를 확인할 수 없습니다.',errorCode:'EVALUATION_RUN_ERROR'};
       document.querySelector('#evaluation-import-status').textContent = `실행 결과와 입력을 연결된 사례의 이력에 저장했습니다. 실행 ID: ${run.id}${run.error ? ' · 실행 오류도 저장되었습니다.' : ''}`;
       document.querySelector('.preset-details').open = true;
-      evaluationFrame.contentWindow.postMessage({type:'evaluation:refresh',datasetId:linked.datasetId,caseId:linked.caseId},window.location.origin);
     } else if (linked) {
       document.querySelector('#evaluation-import-status').textContent = '이력 저장이 완료되지 않았습니다. 아래 요청 오류를 확인하세요.';
     }

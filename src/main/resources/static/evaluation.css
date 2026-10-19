@@ -1,6 +1,6 @@
-/* 테스트 데이터 관리 화면. 색과 여백은 styles.css의 토큰만 사용한다.
-   .shell이 width로 폭을 정하므로 여기서도 max-width가 아닌 width로 덮어써야 한다. */
-.evaluation-shell { width: min(1540px, calc(100% - 48px)); }
+/* 스토아 운영상품 테스트 화면. 색과 여백은 styles.css의 토큰만 사용한다.
+   폭은 .shell(1280px)을 그대로 따른다. 메인과 값이 다르면 화면을 오갈 때 폭이 튄다.
+   넓히려면 max-width가 아니라 width로 덮어써야 한다(.shell이 width로 정하므로). */
 .evaluation-shell .panel { margin-bottom: 20px; }
 
 /* ── 공통 폼 요소 ───────────────────────────────── */
@@ -19,6 +19,14 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   outline: 3px solid var(--focus-ring); outline-offset: 2px;
 }
 .hint { font-size: .82rem; color: var(--text-muted); line-height: 1.6; }
+/* 별도 페이지이므로 메인으로 돌아갈 길이 이 링크뿐이다. 눈에 띄게 둔다. */
+.back-to-main {
+  display: inline-flex; align-items: center; gap: 7px;
+  text-decoration: none; background: var(--brand-soft); color: var(--brand-strong);
+  border: 1px solid var(--result-panel-border);
+}
+.back-to-main::before { content: "←"; font-size: 13px; }
+.back-to-main:hover { background: var(--brand-soft-hover); }
 
 /* ── 상단 설정 ─────────────────────────────────── */
 /* 가장 자주 쓰는 데이터 세트 선택을 맨 위에 두고, 가져오기는 details로 접어 둔다. */
@@ -34,6 +42,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .setup > .hint { margin: 12px 0 0; }
 
 .setup-import { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px; }
+/* 둘 다 접히면 제목 두 줄과 안내 한 줄뿐이라 상자가 비어 보인다. 그때만 세로 여백을 줄인다.
+   :has를 못 쓰는 브라우저에서는 이 규칙만 무시되고 기존 여백이 유지된다. */
+.setup:has(.setup-dataset:not([open])):has(.setup-import:not([open])) { padding-top: 14px; padding-bottom: 14px; }
+.setup-import:not([open]) { margin-top: 12px; padding-top: 11px; }
+.setup:has(.setup-dataset:not([open])):has(.setup-import:not([open])) > .hint { margin-top: 10px; }
 .import-body { margin-top: 16px; display: grid; gap: 16px; }
 .sample-line { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .upload-line { display: grid; gap: 9px; border-top: 1px solid var(--border-faint); padding-top: 16px; }
@@ -49,9 +62,21 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 /* ── 현황 카드 ─────────────────────────────────── */
 /* 고정 5열은 1100px 부근에서 숫자가 눌린다. 폭에 맞춰 자동으로 접히게 둔다. */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin: 20px 0; }
-.stat { background: var(--surface); border: 1px solid var(--border); padding: 18px 20px; border-radius: 12px; }
+/* 카드는 누르면 그 조건으로 조회된다. button으로 그려지므로 기본 버튼 모양을 지운다. */
+.stat {
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 18px 20px; border-radius: 12px;
+  font: inherit; color: inherit; text-align: left; width: 100%;
+}
 .stat span { display: block; color: var(--text-muted); font-size: .83rem; line-height: 1.45; }
 .stat strong { display: block; font-size: 1.7rem; margin-top: 7px; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+button.stat { cursor: pointer; }
+button.stat:hover:not(:disabled) { background: var(--surface-alt); border-color: var(--border-input); }
+button.stat:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+/* 지금 보고 있는 목록이 어느 카드인지 드러낸다. */
+.stat[aria-pressed="true"] { background: var(--brand-soft); border-color: var(--result-panel-border); }
+.stat[aria-pressed="true"] span { color: var(--brand-strong); }
+.stat[aria-pressed="true"] strong { color: var(--brand-strong); }
 
 /* ── 필터와 실행 ───────────────────────────────── */
 .filter-line, .run-toolbar, .detail-actions, .pagination { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
@@ -153,6 +178,20 @@ dialog::backdrop { background: #152a4555; }
 /* 라벨+셀렉트는 2단이라 center로 맞추면 버튼이 공중에 뜬다. 바닥선을 맞춘다. */
 .detail-actions { margin: 18px 0; align-items: end; }
 .detail-actions .hint { padding-bottom: 10px; }
+/* AI 판단·서버 판정. 둘을 나란히 두어 왜 승인·반려됐는지 한눈에 비교되게 한다. */
+.detail-judgment {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px; margin-top: 16px;
+}
+.detail-judgment[hidden] { display: none; }
+.judgment-block {
+  padding: 14px 16px; border: 1px solid var(--border-soft);
+  border-radius: 10px; background: var(--surface-alt);
+}
+.judgment-block h3 { margin: 0 0 7px; font-size: .82rem; color: var(--text-muted); }
+.judgment-block p { margin: 0; font-size: .85rem; line-height: 1.6; white-space: pre-wrap; }
+.judgment-block .subtext { margin-top: 8px; }
+
 #detail-issues:not(:empty) {
   padding: 12px; background: var(--review-bg); color: var(--review-ink);
   border-radius: 8px; margin-bottom: 15px; font-size: .85rem; white-space: pre-wrap;
@@ -211,7 +250,7 @@ pre {
   .run-toolbar .consent { max-width: none; }
 }
 @media (max-width: 850px) {
-  .evaluation-shell { width: calc(100% - 32px); }
+  /* 폭은 styles.css의 .shell 반응형 규칙을 그대로 따른다. 여기서 따로 정하면 메인과 어긋난다. */
   .setup-main > label, .filter-line > label { flex-basis: 100%; }
   .review-editor { grid-template-columns: 1fr; }
   .workspace .table-wrap { max-height: none; }
@@ -221,7 +260,8 @@ pre {
 #detail-dialog .json-grid > div { min-width:0; }
 #detail-dialog .json-grid pre { margin-top:0; max-height:460px; }
 #detail-dialog .detail-usage-section { margin-top:20px; padding:18px; border:1px solid var(--border-soft); border-radius:10px; background:var(--surface-alt); }
-#detail-dialog .detail-usage-section h3 { margin:0 0 14px; font-size:1rem; }
+/* 제목 크기·색은 바로 위 AI 판단 블록(.judgment-block h3)과 맞춘다. */
+#detail-dialog .detail-usage-section h3 { margin:0 0 14px; font-size:.82rem; color:var(--text-muted); }
 #detail-dialog .detail-usage-section .result-table { min-width:1000px; }
 #detail-dialog .detail-usage-section .table-scroll { overflow-x:auto; }
 #detail-copy-status { font-size:.85rem; color:var(--text-muted); }

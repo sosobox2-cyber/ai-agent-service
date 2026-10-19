@@ -11,8 +11,8 @@
 <main class="shell evaluation-shell">
   <header class="page-header">
     <div><span class="eyebrow">AI AGENT SERVICE / EVALUATION</span><h1>스토아 운영상품 테스트</h1>
-      <p>등록값과 추론 결과를 비교하고, 직접 확인한 성공 사례를 쌓아갑니다.</p></div>
-    <a class="button quiet" href="/">구매옵션 API 화면</a>
+      <p>실제 구매옵션과 AI 추론 결과를 비교하고, 직접 확인한 성공 사례를 쌓아갑니다.</p></div>
+    <a class="button quiet back-to-main" href="/">메인 화면으로</a>
   </header>
 
   <section class="panel setup" aria-label="데이터 가져오기">
@@ -60,9 +60,16 @@
     <form id="filters" class="filter-line">
       <label for="query">상품 검색<input id="query" type="search" placeholder="상품코드 · 상품명 · 카테고리"></label>
       <label for="state">진행 상태<select id="state">
-        <option value="">전체 상태</option><option value="UNTESTED">미실행</option><option value="MOCK">모의 실행</option>
+        <option value="">전체 상태</option>
+        <option value="TESTED">실행한 상품 전체</option>
+        <option value="UNTESTED_ONLY">실행하지 않은 상품 전체</option>
+        <option value="UNTESTED">미실행</option><option value="MOCK">모의 실행</option>
         <option value="MATCH">기준값 일치 · 미확인</option><option value="MISMATCH">기준값 불일치</option>
-        <option value="REGRESSION">확정값 회귀</option><option value="CONFIRMED">전체 성공 확인</option>
+        <option value="REGRESSION">확정값 회귀</option>
+        <!-- 현황 카드가 이 값을 설정한다. select에 없으면 값이 조용히 빈 문자열이 되어 전체 조회가 된다. -->
+        <option value="MISMATCH_OR_REGRESSION">기준값 불일치 / 회귀</option>
+        <option value="CONFIRMED">전체 성공 확인</option>
+        <option value="HAS_CONFIRMED_ROW">성공 확인한 행이 있는 상품</option>
         <option value="REVIEW_REQUIRED">서버 검토 필요</option><option value="INPUT_ISSUE">입력 확인 필요</option><option value="ERROR">실행 오류</option>
       </select></label>
       <label for="target">구매옵션명<input id="target" placeholder="예: 수량, 색상 (정확히 일치)"></label>
@@ -74,6 +81,8 @@
       <div class="run-actions">
         <span id="selection-count" class="hint">실행할 상품을 선택하세요 (한 번에 최대 20개)</span>
         <button id="run-selected" class="button" type="button" disabled>선택 사례 실행</button>
+        <!-- 일치한 행만 한 번에 성공 확인한다. AI 호출이 없으므로 20개 제한을 받지 않는다. -->
+        <button id="confirm-selected" class="button quiet" type="button" disabled>선택 사례 일괄 성공 확인</button>
         <button id="stop" class="button quiet" type="button" hidden>현재 사례 완료 후 중지</button>
       </div>
     </div>
@@ -107,6 +116,11 @@
   <div class="detail-actions"><label for="history">실행 이력<select id="history"></select></label><button id="run-detail" type="button" class="button">이 사례 실행</button><span class="hint">서버 운영 키로 실제 AI를 실행합니다.</span></div>
   <div id="detail-issues"></div>
   <div class="table-wrap"><table class="comparison-table"><thead><tr><th scope="col">원본 행 / 단품</th><th scope="col">구매옵션</th><th scope="col">등록 기준값</th><th scope="col">확정 기준값</th><th scope="col">이번 결과</th><th scope="col">비교</th><th scope="col">성공 확인</th><th scope="col">검토</th></tr></thead><tbody id="comparisons"></tbody></table></div>
+  <!-- 비교 결과를 본 다음 왜 그런 판단이 나왔는지 읽는 순서라 표 아래에 둔다.
+       AI가 왜 그렇게 판단했는지와 서버가 왜 승인·반려했는지를 JS가 채운다. -->
+  <div id="detail-judgment" class="detail-judgment"></div>
+  <!-- 판단 근거와 같이 읽는 정보라 바로 아래에 둔다. 실행 전에는 JS가 숨긴다. -->
+  <section id="detail-usage" class="detail-usage-section" aria-labelledby="detail-usage-title"></section>
   <form id="review-form" class="review-editor" hidden>
     <h3 id="review-title">행 검토</h3>
     <label for="review-state">검토 상태<select id="review-state"><option value="REFERENCE_ISSUE">등록 기준값 확인 필요</option><option value="NEEDS_FIX">시스템 개선 필요</option><option value="SUCCESS">성공 확인</option><option value="UNREVIEWED">검토 초기화 (확정값도 해제)</option></select></label>
@@ -116,7 +130,6 @@
     <div class="review-buttons"><button type="submit" class="button">검토 저장</button><button id="cancel-review" type="button" class="button quiet">취소</button></div>
   </form>
   <details class="source-input-details"><summary>상품 원문과 입력</summary><div id="source-inputs"></div></details>
-  <section id="detail-usage" class="detail-usage-section" aria-labelledby="detail-usage-title"></section>
   <details class="json-details">
     <summary>요청·응답 JSON 보기</summary>
     <div class="json-grid">

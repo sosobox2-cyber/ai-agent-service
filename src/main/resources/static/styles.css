@@ -102,6 +102,12 @@ th { padding: 0 7px 10px; text-align: left; color: var(--text-muted); font-size:
 .below-table { display: inline-block; margin-left: 12px; }
 /* 예제는 입력 전에 고르는 기능이므로 01 패널 위에 한 줄로 접어 둔다. */
 .preset-panel { min-width: 0; margin-bottom: 18px; padding: 16px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+/* 접으면 제목 한 줄뿐이라 상자가 비어 보인다. 그때만 세로 여백을 줄인다.
+   :has를 못 쓰는 브라우저에서는 이 규칙만 무시되고 기존 여백이 유지된다. */
+.preset-panel:has(.preset-details:not([open])) { padding-top: 9px; padding-bottom: 9px; }
+/* 접으면 제목(약 22px)이 버튼 높이로 벌어진 34px 안에서 위로 붙는다. 세로 가운데로 맞춘다.
+   버튼은 absolute라 flex 흐름에서 빠져 있어 영향을 받지 않는다. */
+.preset-panel:has(.preset-details:not([open])) .preset-head { display: flex; align-items: center; }
 .preset-panel p { margin: 8px 0 16px; color: var(--text-muted); font-size: 13px; line-height: 1.5; }
 .preset-details > summary { width: auto; color: var(--text-strong); font-size: 15px; }
 .preset-count { margin-left: 6px; color: var(--text-muted); font-size: 12px; font-weight: 400; }
@@ -119,7 +125,7 @@ th { padding: 0 7px 10px; text-align: left; color: var(--text-muted); font-size:
 /* 정적 예제 버튼과 구분되게 브랜드 면을 쓰고, 별도 화면이 열린다는 뜻으로 화살표를 붙인다. */
 .dataset-open {
   position: absolute; top: 0; right: 0;
-  display: inline-flex; align-items: center; gap: 7px;
+  display: inline-flex; align-items: center; gap: 7px; text-decoration: none;
   padding: 8px 14px; border-radius: 999px;
   background: var(--brand-soft); color: var(--brand-strong);
   border: 1px solid var(--result-panel-border);
@@ -130,8 +136,11 @@ th { padding: 0 7px 10px; text-align: left; color: var(--text-muted); font-size:
 /* 버튼이 제목과 겹치지 않도록 비워 두는 폭. 버튼 문구를 바꾸면 이 값도 함께 본다. */
 .preset-head { --preset-action-space: 200px; }
 @media (max-width: 620px) {
-  /* 좁은 화면에서는 흐름에 넣되 order로 제목 위에 올린다. 그냥 두면 예제 12개 아래로 밀린다. */
-  .preset-head { display: flex; flex-direction: column; min-height: 0; }
+  /* 좁은 화면에서는 흐름에 넣되 order로 제목 위에 올린다. 그냥 두면 예제 12개 아래로 밀린다.
+     세로 배치에서는 가운데 정렬이 가로 정렬로 바뀌므로 되돌린다. */
+  .preset-head, .preset-panel:has(.preset-details:not([open])) .preset-head {
+    display: flex; flex-direction: column; min-height: 0; align-items: stretch;
+  }
   .dataset-open { position: static; order: -1; align-self: flex-start; margin-bottom: 12px; }
   .preset-details > summary { padding-right: 0; }
   .preset-details[open] > summary { padding-bottom: 0; }
@@ -222,13 +231,14 @@ summary { width: fit-content; color: var(--brand); font-size: 13px; font-weight:
 pre { max-height: 360px; overflow: auto; margin: 0; padding: 16px; border-radius: 10px; background: var(--code-bg); color: var(--code-text); font: 12px/1.6 Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
 footer { color: var(--text-muted); text-align: center; font-size: 12px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
-#evaluation-dialog { width:min(1500px,96vw); height:92vh; max-height:96vh; padding:16px; border:1px solid var(--border); border-radius:14px; background:var(--surface); color:var(--text); }
-#evaluation-dialog::backdrop { background:#152a4577; }
-#evaluation-dialog[open] { display:flex; flex-direction:column; }
-#close-evaluation { position:absolute; top:10px; right:12px; z-index:1; display:grid; place-items:center; width:36px; height:36px; padding:0; border:1px solid var(--border); border-radius:50%; background:var(--surface); color:var(--text); font-size:26px; line-height:1; cursor:pointer; }
-#close-evaluation:hover { background:var(--surface-alt); }
-#close-evaluation:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; }
-#evaluation-frame { display:block; width:100%; flex:1; min-height:0; border:0; }
+/* 문서 팝업. display는 반드시 [open]에만 둔다. */
+#doc-dialog { width:min(1500px,96vw); height:92vh; max-height:96vh; padding:16px; border:1px solid var(--border); border-radius:14px; background:var(--surface); color:var(--text); }
+#doc-dialog::backdrop { background:#152a4577; }
+#doc-dialog[open] { display:flex; flex-direction:column; }
+#close-doc { position:absolute; top:10px; right:12px; z-index:1; display:grid; place-items:center; width:36px; height:36px; padding:0; border:1px solid var(--border); border-radius:50%; background:var(--surface); color:var(--text); font-size:26px; line-height:1; cursor:pointer; }
+#close-doc:hover { background:var(--surface-alt); }
+#close-doc:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; }
+#doc-frame { display:block; width:100%; flex:1; min-height:0; border:0; }
 #evaluation-import-status:empty { display:none; }
 /* 반응형 규칙은 모두 여기에 모은다. */
 @media (max-width: 850px) {

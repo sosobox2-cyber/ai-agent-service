@@ -17,10 +17,13 @@
         <h1>구매옵션 매핑 API</h1>
         <p>SK스토아 상품과 단품 옵션을 입력해 쿠팡 구매옵션명을 리턴하는 API 입니다.</p>
       </div>
+      <!-- data-doc이 붙은 링크는 app.js가 팝업으로 연다.
+           href를 남겨 두어 새 탭 열기와 JS가 꺼진 환경에서는 그대로 이동한다.
+           문서 화면에는 되돌아오는 링크가 없으므로 그 경우 브라우저 뒤로가기를 쓴다. -->
       <div class="header-actions">
-        <a class="button quiet" href="/user-guide.html">사용설명서</a>
-        <a class="button quiet" href="/api-reference.html">API 명세서</a>
-        <a class="button quiet" href="/ai-operations.html">API 내부 설계/운영</a>
+        <a class="button quiet" href="/user-guide.html" data-doc>사용설명서</a>
+        <a class="button quiet" href="/api-reference.html" data-doc>API 명세서</a>
+        <a class="button quiet" href="/ai-operations.html" data-doc>API 내부 설계/운영</a>
       </div>
     </header>
 
@@ -48,7 +51,7 @@
           </div>
           <p id="evaluation-import-status" role="status" aria-live="polite"></p>
         </details>
-        <button type="button" class="button quiet dataset-open" id="open-evaluation">스토아 운영상품 테스트</button>
+        <a class="button quiet dataset-open" id="open-evaluation" href="/evaluation.html">스토아 운영상품 테스트</a>
       </div>
     </section>
 
@@ -140,10 +143,10 @@
     </section>
     <footer>이 화면은 API 테스트용입니다. 입력한 데이터는 현재 서버의 추론 API로 전송됩니다.</footer>
   </main>
-    <!-- 닫기 버튼은 창 오른쪽 상단에 둔다. -->
-    <dialog id="evaluation-dialog" aria-label="스토아 운영상품 테스트">
-    <button type="button" id="close-evaluation" aria-label="창 닫기" title="닫기">×</button>
-    <iframe id="evaluation-frame" title="스토아 운영상품 테스트" data-src="/evaluation.html?picker=1"></iframe>
+  <!-- 사용설명서·API 명세서·내부 설계/운영을 같은 창에서 번갈아 띄운다. -->
+  <dialog id="doc-dialog" aria-label="문서">
+    <button type="button" id="close-doc" aria-label="창 닫기" title="닫기">×</button>
+    <iframe id="doc-frame" title="문서"></iframe>
   </dialog>
   <!-- 단품 추가 시 복제하는 행이며 원본 ID와 옵션 문자열을 함께 보관한다. -->
   <template id="option-row-template">
