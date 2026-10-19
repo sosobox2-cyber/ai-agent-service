@@ -112,6 +112,28 @@ public class BlobEvaluationStore extends EvaluationStore {
         for(String key:entry(state(id),caseId).runs()) result.add(mapper.readValue(required(key),Run.class));
         result.sort(Comparator.comparing(Run::startedAt).reversed()); return result;
     }
+    @Override public EvaluationArchive.GitSnapshot gitSnapshot(String id) throws IOException {
+        Data data = data(id);
+        // 하나의 상태 스냅샷을 사용한다. 미검토 상품마다 전체 상태를 다시 내려받지 않는다.
+        State snapshot = state(id);
+        List<EvaluationArchive.GitCase> cases = new ArrayList<>();
+        for (var entry : snapshot.cases.entrySet()) {
+            CaseState c = entry.getValue();
+            if (c.reviews().isEmpty()) continue;
+            var reviews = c.reviews().values().stream().sorted(Comparator.comparingInt(Review::row)).toList();
+            Set<String> runIds = new HashSet<>();
+            reviews.forEach(review -> { if (review.runId() != null) runIds.add(review.runId()); });
+            List<Run> runs = new ArrayList<>();
+            for (String key : c.runs()) {
+                Run run = readRun(id, entry.getKey(), key);
+                if (key.equals(c.latestRun()) || runIds.contains(run.id())) runs.add(run);
+            }
+            runs.sort(Comparator.comparing(Run::startedAt).thenComparing(Run::id));
+            cases.add(new EvaluationArchive.GitCase(test(data, entry.getKey()), reviews, runs));
+        }
+        cases.sort(Comparator.comparing(c -> c.testCase().id()));
+        return new EvaluationArchive.GitSnapshot(1, data.metadata, cases);
+    }
     @Override public synchronized Dataset restore(EvaluationArchive.Snapshot snapshot) throws IOException {
         Dataset dataset = snapshot.dataset();
         String root = prefix(dataset.id());

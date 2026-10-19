@@ -117,6 +117,25 @@ class EvaluationArchiveTest {
         cloud.restore(snapshot);
         assertThat(cloud.datasets()).containsExactly(snapshot.dataset());
     }
+    @Test void blobExportDoesNotReadStateOncePerUntestedProduct() throws Exception {
+        var stateReads = new java.util.concurrent.atomic.AtomicInteger();
+        var memory = new BlobEvaluationStoreTest.MemoryBlob() {
+            @Override public Value get(String key) {
+                if (key.endsWith("state.json")) stateReads.incrementAndGet();
+                return super.get(key);
+            }
+        };
+        var store = new BlobEvaluationStore(memory, mapper);
+        Imported original = sample();
+        List<Case> cases = new ArrayList<>();
+        for (int i = 1; i <= 1000; i++) cases.add(new Case(String.format(Locale.ROOT, "c%05d", i),
+                original.cases().get(0).request(), original.cases().get(0).references(), List.of()));
+        Dataset d = original.dataset();
+        store.save(new Imported(new Dataset(d.id(), d.filename(), d.sourceHash(), d.importedAt(), 1000, 1000, 1000, 0), cases));
+        stateReads.set(0);
+        assertThat(store.gitSnapshot(d.id()).cases()).isEmpty();
+        assertThat(stateReads.get()).isLessThanOrEqualTo(2);
+    }
     @Test void rejectsMalformedOrDanglingBackupsBeforePublishingAnything() throws Exception {
         var store = new EvaluationStore(temporary.toString(), mapper);
         Dataset d = store.save(sample());
