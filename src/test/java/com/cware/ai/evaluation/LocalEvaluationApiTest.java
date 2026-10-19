@@ -61,6 +61,9 @@ class LocalEvaluationApiTest {
                 .andReturn().getResponse().getContentAsString();
         String base="/api/v1/evaluation/datasets/"+mapper.readTree(sample).path("id").asText();
         mvc.perform(get(base+"/cases")).andExpect(status().isOk());
+        mvc.perform(get(base+"/git-snapshot")).andExpect(status().isOk()).andExpect(jsonPath("$.formatVersion").value(1));
+        mvc.perform(get(base+"/git-snapshot").with(request -> { request.setServerName("external.example");return request; }))
+                .andExpect(status().isUnauthorized());
         mvc.perform(get(base+"/cases").with(request -> { request.setServerName("external.example");return request; }))
                 .andExpect(status().isUnauthorized());
         mvc.perform(post("/api/v1/evaluation/sample").header("Origin","https://external.example"))

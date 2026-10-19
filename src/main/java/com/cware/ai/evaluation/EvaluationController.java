@@ -70,4 +70,8 @@ public class EvaluationController {
         return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"evaluation-" + id + ".zip\"")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM).body(output -> store.backup(id, output));
     }
+    @GetMapping("/datasets/{id}/git-snapshot") public ResponseEntity<EvaluationArchive.GitSnapshot> gitSnapshot(@PathVariable String id) throws IOException {
+        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"evaluation-" + id + ".json\"")
+                .body(store.gitSnapshot(id));
+    }
 }

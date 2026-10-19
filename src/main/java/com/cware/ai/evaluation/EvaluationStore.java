@@ -51,7 +51,7 @@ public class EvaluationStore {
     public synchronized List<Dataset> datasets() throws IOException {
         List<Dataset> result = new ArrayList<>();
         try (var folders = Files.list(root)) {
-            for (Path folder : folders.filter(Files::isDirectory).toList()) {
+            for (Path folder : folders.filter(Files::isDirectory).filter(p -> p.getFileName().toString().matches("[a-f0-9-]{36}")).toList()) {
                 Path meta = folder.resolve("metadata.json");
                 if (Files.exists(meta)) result.add(mapper.readValue(meta.toFile(), Dataset.class));
             }
@@ -108,6 +108,52 @@ public class EvaluationStore {
         }
         result.sort(Comparator.comparing(Run::startedAt).reversed());
         return result;
+    }
+    public EvaluationArchive.GitSnapshot gitSnapshot(String id) throws IOException {
+        Data data = data(id);
+        List<EvaluationArchive.GitCase> cases = new ArrayList<>();
+        for (Case test : data.cases.values()) synchronized (data.lock(test.id())) {
+            refreshCase(id, data, test.id());
+            var reviews = data.reviews.getOrDefault(test.id(), Map.of()).values().stream()
+                    .sorted(Comparator.comparingInt(Review::row)).toList();
+            if (reviews.isEmpty()) continue;
+            Set<String> runIds = new HashSet<>();
+            reviews.forEach(review -> { if (review.runId() != null) runIds.add(review.runId()); });
+            Run latest = data.latest.get(test.id());
+            if (latest != null) runIds.add(latest.id());
+            var runs = history(id, test.id()).stream().filter(run -> runIds.contains(run.id()))
+                    .sorted(Comparator.comparing(Run::startedAt).thenComparing(Run::id)).toList();
+            cases.add(new EvaluationArchive.GitCase(test, reviews, runs));
+        }
+        cases.sort(Comparator.comparing(c -> c.testCase().id()));
+        return new EvaluationArchive.GitSnapshot(1, data.metadata, cases);
+    }
+    /** 모든 내용을 준비한 후 디렉터리를 이동해 완성된 복원본만 공개한다. */
+    public synchronized Dataset restore(EvaluationArchive.Snapshot snapshot) throws IOException {
+        Dataset dataset = snapshot.dataset();
+        Path destination = folder(dataset.id());
+        if (Files.exists(destination)) throw new IOException("이미 존재하는 복원 ID입니다.");
+        Path stage = Files.createTempDirectory(root, "restore-");
+        try {
+            try (var writer = Files.newBufferedWriter(stage.resolve("cases.jsonl"), StandardCharsets.UTF_8)) {
+                for (var c : snapshot.cases()) { writer.write(mapper.writeValueAsString(c.testCase())); writer.newLine(); }
+            }
+            for (var c : snapshot.cases()) {
+                String cid = c.testCase().id();
+                for (Run run : c.runs()) atomic(stage.resolve("runs").resolve(cid).resolve(run.id() + ".json"), run);
+                if (c.latest() != null) atomic(stage.resolve("latest").resolve(cid + ".json"), c.latest());
+                if (!c.reviews().isEmpty()) atomic(stage.resolve("reviews").resolve(cid + ".json"), c.reviews().values());
+                for (int i = 0; i < c.events().size(); i++) atomic(stage.resolve("review-history").resolve(cid).resolve(new UUID(0, i).toString() + ".json"), c.events().get(i));
+            }
+            atomic(stage.resolve("metadata.json"), dataset);
+            try { Files.move(stage, destination, StandardCopyOption.ATOMIC_MOVE); }
+            catch (AtomicMoveNotSupportedException e) { Files.move(stage, destination); }
+            return dataset;
+        } finally {
+            if (Files.exists(stage)) try (var paths = Files.walk(stage)) {
+                for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(path);
+            }
+        }
     }
     public synchronized void backup(String id, OutputStream output) throws IOException {
         data(id);

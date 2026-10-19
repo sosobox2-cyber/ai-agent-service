@@ -112,6 +112,37 @@ public class BlobEvaluationStore extends EvaluationStore {
         for(String key:entry(state(id),caseId).runs()) result.add(mapper.readValue(required(key),Run.class));
         result.sort(Comparator.comparing(Run::startedAt).reversed()); return result;
     }
+    @Override public synchronized Dataset restore(EvaluationArchive.Snapshot snapshot) throws IOException {
+        Dataset dataset = snapshot.dataset();
+        String root = prefix(dataset.id());
+        State restored = new State();
+        var bytes = new ByteArrayOutputStream();
+        try (var gzip = new GZIPOutputStream(bytes); var writer = new OutputStreamWriter(gzip, StandardCharsets.UTF_8)) {
+            for (var c : snapshot.cases()) { writer.write(mapper.writeValueAsString(c.testCase())); writer.write('\n'); }
+        }
+        create(root + "cases.jsonl.gz", bytes.toByteArray());
+        for (var c : snapshot.cases()) {
+            String cid = c.testCase().id();
+            List<String> runs = new ArrayList<>(), events = new ArrayList<>();
+            for (Run run : c.runs()) {
+                String key = root + "runs/" + cid + "/" + run.id() + ".json";
+                create(key, mapper.writeValueAsBytes(run)); runs.add(key);
+            }
+            for (int i = 0; i < c.events().size(); i++) {
+                String key = root + "review-history/" + cid + "/" + new UUID(0, i) + ".json";
+                create(key, mapper.writeValueAsBytes(c.events().get(i))); events.add(key);
+            }
+            restored.cases.put(cid, new CaseState(c.latest() == null ? null : root + "runs/" + cid + "/" + c.latest().id() + ".json",
+                    runs, c.reviews(), events, EvaluationService.summarize(c.testCase(), c.latest(), c.reviews())));
+        }
+        create(root + "state.json", mapper.writeValueAsBytes(restored));
+        create(root + "metadata.json", mapper.writeValueAsBytes(dataset));
+        // 원본·이력·상태가 모두 저장된 뒤 카탈로그에 공개한다. 재시도는 같은 업로드 ID로 중복을 막는다.
+        update(ROOT + "catalog.json", Catalog.class, catalog -> {
+            if (catalog.datasets.stream().noneMatch(d -> d.id().equals(dataset.id()))) catalog.datasets.add(dataset);
+        });
+        return dataset;
+    }
     @Override public synchronized void backup(String id,OutputStream output) throws IOException {
         data(id); String root=prefix(id); State state=state(id);
         try(var zip=new ZipOutputStream(output)) {

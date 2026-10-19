@@ -64,5 +64,24 @@ class EvaluationApiTest {
         var backup = mvc.perform(get(base+"/backup").header("X-API-Key","evaluation-test-key")).andExpect(request().asyncStarted()).andReturn();
         var complete = mvc.perform(asyncDispatch(backup)).andExpect(status().isOk()).andReturn();
         assertThat(complete.getResponse().getContentAsByteArray()).startsWith((byte)'P',(byte)'K');
+        mvc.perform(get(base+"/git-snapshot")).andExpect(status().isUnauthorized());
+        mvc.perform(get(base+"/git-snapshot").header("X-API-Key","evaluation-test-key"))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"))
+                .andExpect(jsonPath("$.cases[0].reviews[0].note").value("실제 AI로 재검토"));
+        byte[] bytes = complete.getResponse().getContentAsByteArray();
+        String uploadRoot = "/api/v1/evaluation/imports";
+        mvc.perform(post(uploadRoot).contentType("application/json").content("{\"filename\":\"backup.zip\",\"size\":"+bytes.length+"}"))
+                .andExpect(status().isUnauthorized());
+        String ticket = mvc.perform(post(uploadRoot).header("X-API-Key","evaluation-test-key").contentType("application/json")
+                .content("{\"filename\":\"backup.zip\",\"size\":"+bytes.length+"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String restoreId = mapper.readTree(ticket).path("id").asText();
+        mvc.perform(put(uploadRoot+"/"+restoreId+"/parts/0").header("X-API-Key","evaluation-test-key")
+                .contentType("application/octet-stream").content(bytes)).andExpect(status().isOk());
+        for (int attempt=0;attempt<2;attempt++) mvc.perform(post(uploadRoot+"/"+restoreId+"/complete").header("X-API-Key","evaluation-test-key"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(restoreId));
+        mvc.perform(get(ROOT+"/"+restoreId+"/cases/c00001").header("X-API-Key","evaluation-test-key"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.latest.id").value(runId))
+                .andExpect(jsonPath("$.reviews.2.note").value("실제 AI로 재검토"));
     }
 }

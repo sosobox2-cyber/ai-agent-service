@@ -28,7 +28,7 @@ public class EvaluationUploadService {
     }
     public Ticket start(Start command) throws IOException {
         if(command==null || command.size()<=0 || command.size()>32L*CHUNK || command.filename()==null || command.filename().length()>255
-                || !command.filename().toLowerCase(Locale.ROOT).matches(".*\\.xlsx?")) throw invalid("32MB 이하의 Excel 파일을 선택하세요.");
+                || !command.filename().toLowerCase(Locale.ROOT).matches(".*\\.(?:xlsx?|zip)")) throw invalid("32MB 이하의 Excel 또는 백업 ZIP 파일을 선택하세요.");
         Ticket ticket=new Ticket(UUID.randomUUID().toString(),command.filename(),command.size(),(int)((command.size()+CHUNK-1)/CHUNK),Instant.now().toString());
         write(key(ticket.id(),"ticket.json"),mapper.writeValueAsBytes(ticket));return ticket;
     }
@@ -48,6 +48,8 @@ public class EvaluationUploadService {
             if(part.length!=expected) throw invalid("파일 업로드가 완료되지 않았습니다. 다시 가져오세요.");
             buffer.write(part);
         }
+        if (t.filename().toLowerCase(Locale.ROOT).endsWith(".zip"))
+            return store.restore(EvaluationArchive.read(buffer.toByteArray(), mapper, id, t.createdAt()));
         Imported value=importer.read(buffer.toByteArray(),t.filename());
         Dataset d=value.dataset();
         return store.save(new Imported(new Dataset(id,d.filename(),d.sourceHash(),t.createdAt(),d.rows(),d.products(),d.options(),d.issueRows()),value.cases()));

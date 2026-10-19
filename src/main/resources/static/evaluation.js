@@ -64,6 +64,7 @@ async function connect(preferred) {
 async function chooseDataset() {
   datasetId = $('dataset').value; currentPage = 1; selected.clear();
   $('backup').disabled = !datasetId;
+  $('git-snapshot').disabled = !datasetId;
   if (!datasetId) { $('stats').replaceChildren(); return; }
   localStorage.setItem('evaluation.dataset', datasetId);
   const data = datasets.find(value => value.id === datasetId);
@@ -128,7 +129,7 @@ function updateSelection() {
 }
 function setBusy(value) {
   busy = value;
-  for (const id of ['connect','dataset','upload','load-sample','query','state','target','select-page','run-detail','backup']) $(id).disabled = value || (id==='backup' && !datasetId);
+  for (const id of ['connect','dataset','upload','load-sample','query','state','target','select-page','run-detail','backup','git-snapshot']) $(id).disabled = value || (['backup','git-snapshot'].includes(id) && !datasetId);
   for (const control of document.querySelectorAll('#filters button,#cases input,#cases .run-case,#review-form button,#comparisons input,#comparisons button')) control.disabled = value;
   $('stop').hidden = !value; updateSelection();
 }
@@ -310,28 +311,37 @@ $('review-form').addEventListener('submit',event => { event.preventDefault(); if
 $('upload-form').addEventListener('submit',event => { event.preventDefault(); if (busy) return;
   const file = $('upload-file').files[0]; if (!file) return;
   if (file.size > 32*1024*1024) { message('32MB 이하의 파일을 선택하세요.',true); return; }
-  setBusy(true); $('stop').hidden = true; message('Excel 데이터를 가져오는 중입니다…');
+  const restoring = file.name.toLowerCase().endsWith('.zip');
+  setBusy(true); $('stop').hidden = true; message(restoring ? '백업을 별도 데이터 세트로 복원하는 중입니다…' : 'Excel 데이터를 가져오는 중입니다…');
   handle((async () => { try {
     let result;
-    if (file.size > 3*1024*1024) {
+    if (restoring || file.size > 3*1024*1024) {
       const ticket = await json('/api/v1/evaluation/imports',{method:'POST',json:{filename:file.name,size:file.size}});
       for(let part=0;part<ticket.parts;part++) {
-        message(`Excel 파일 업로드 ${part+1} / ${ticket.parts}`);
+        message(`파일 업로드 ${part+1} / ${ticket.parts}`);
         await api(`/api/v1/evaluation/imports/${ticket.id}/parts/${part}`,{method:'PUT',headers:{'Content-Type':'application/octet-stream'},body:file.slice(part*1024*1024,(part+1)*1024*1024)});
       }
-      message('업로드한 Excel 데이터를 분석하고 저장하는 중입니다…');
+      message(restoring ? '백업의 입력·실행·검토 이력을 검증하고 복원하는 중입니다…' : '업로드한 Excel 데이터를 분석하고 저장하는 중입니다…');
       result = await json(`/api/v1/evaluation/imports/${ticket.id}/complete`,{method:'POST'});
     } else {
       const data = new FormData(); data.append('file',file);
       result = await json('/api/v1/evaluation/datasets',{method:'POST',body:data});
     }
     await connect(result.id);
-    message(`${number(result.products)}상품 · ${number(result.rows)} 기준 행을 가져왔습니다. 확인 표시 ${number(result.issueRows)}행은 원본 기준값을 검토하세요.`);
+    message(restoring ? `${number(result.products)}상품의 백업을 복원했습니다. 실행·검토 이력을 유지하며 기존 데이터는 변경하지 않았습니다.`
+      : `${number(result.products)}상품 · ${number(result.rows)} 기준 행을 가져왔습니다. 확인 표시 ${number(result.issueRows)}행은 원본 기준값을 검토하세요.`);
   } finally { setBusy(false); if(pageData) renderCases(); } })());
 });
 $('backup').addEventListener('click',() => handle((async () => {
   const response = await api(`${base()}/backup`); const url = URL.createObjectURL(await response.blob());
   const link = node('a'); link.href = url; link.download = `evaluation-${datasetId}.zip`; link.click(); setTimeout(() => URL.revokeObjectURL(url),1000);
+})()));
+$('git-snapshot').addEventListener('click',() => handle((async () => {
+  const snapshot = await json(`${base()}/git-snapshot`);
+  const url = URL.createObjectURL(new Blob([JSON.stringify(snapshot,null,2)+'\n'],{type:'application/json'}));
+  const link = node('a'); link.href = url; link.download = `evaluation-${datasetId}.json`; link.click();
+  setTimeout(() => URL.revokeObjectURL(url),1000);
+  message(`검토한 ${number(snapshot.cases.length)}상품을 내보냈습니다. 저장소의 evals 폴더에 같은 파일명으로 저장해 변경을 비교하세요.`);
 })()));
 async function initialize() {
   access = await json('/api/v1/evaluation/access');
