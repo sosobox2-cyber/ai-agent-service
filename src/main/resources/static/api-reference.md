@@ -8,6 +8,22 @@ SK스토아 상품의 단품 옵션명을 쿠팡 구매옵션별 값으로 구�
 
 서버가 요청을 보고 분석 방식을 자동 선택합니다. 설정과 첫 분석 결과에 따라 상세 분석을 한 번 더 수행할 수 있습니다. 클라이언트가 LIGHT/FULL을 지정하는 요청 필드는 없습니다. 추가 분석은 응답 시간과 AI 호출 비용을 늘릴 수 있습니다.
 
+### 기술 스택
+
+| 항목 | 적용 버전·사양 |
+| --- | --- |
+| Java / JDK | Java 17, Docker 기준 Eclipse Temurin |
+| Spring Boot | 3.5.16 |
+| Spring AI | 1.1.8 |
+| AI 연동 라이브러리 | Spring AI OpenAI (`spring-ai-openai`) |
+| AI 모델 | 기본 `gpt-4.1-mini`, `OPENAI_MODEL` 환경변수로 변경 가능 |
+| AI 생성 설정 | `temperature=0`, `max-tokens=4096` |
+| 빌드 도구 | Maven, Docker 빌드 기준 3.9 계열 |
+| 웹 구성 | Spring Web MVC, 내장 서버, 실행 JAR |
+| 엑셀 처리 | Apache POI 5.5.1 |
+
+저장소의 `pom.xml`, `application.yml`, `Dockerfile` 기준입니다. AI 모델은 날짜가 붙은 버전으로 고정하지 않으며, 운영 환경의 모델과 생성 설정은 환경변수 또는 외부 설정에 따라 달라질 수 있습니다.
+
 ## 2. 호출 방법
 
 | 항목 | 사양 |
