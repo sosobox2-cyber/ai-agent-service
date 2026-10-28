@@ -4,7 +4,7 @@ import com.cware.ai.dto.InferenceRequest;
 import java.util.*;
 import java.util.regex.Pattern;
 
-/** AI가 제출한 값과 계산 설명 사이의 제한된 의미 계약. 원문 숫자 대조·재계산은 하지 않는다. */
+/** AI가 제출한 값과 계산 설명 사이의 제한된 의미 계약. 원문 대조는 수량 계열에서 QuantityEvidenceValidator가 맡는다. */
 final class AiValueContract {
     private AiValueContract() {}
     private static final Set<String> COUNTS = Set.of("개", "개입", "매", "매입", "장", "정", "정입",

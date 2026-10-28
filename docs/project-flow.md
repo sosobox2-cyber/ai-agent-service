@@ -94,7 +94,7 @@ SK스토아 상품정보고시는 필수 필드 `productNoticeText`라는 긴 �
 
 테스트 모드는 공백과 `/`를 구분자로 색상 단어, 숫자 사이즈, 핏 등의 기본 패턴을 모의 추출합니다. 단일상품의 명시된 수량 패턴도 모의 추출하지만 AI처럼 의미를 해석하지는 않습니다. 검증을 통과해도 `success=false`, `autoApplyCandidate=false`, `confidence=0`, `errorCode=TEST_MODE`입니다.
 
-수량·용량·중량의 `calculation`은 AI의 판단 설명 구조입니다. [Calculation.java](../src/main/java/com/cware/ai/dto/Calculation.java)는 응답 계약이며 서버 승인 경로는 원문 대조나 재계산을 수행하지 않습니다. 아래 연산 표는 기존 계산 유틸리티의 동작이며 승인 조건이 아닙니다.
+수량·용량·중량의 `calculation`은 AI의 판단 설명 구조입니다. [Calculation.java](../src/main/java/com/cware/ai/dto/Calculation.java)는 응답 계약입니다. 서버 승인 경로는 수량 계열에 한해 `QuantityEvidenceValidator`로 인용·단위·출처 충돌·계층을 대조하고, 명시적 포장식의 포장당 용량(`PACK_CAPACITY`)만 직접 계산합니다. 서버가 바꾼 매핑은 `serverNormalization`으로 구분됩니다. 일반 SUM은 재계산하지 않습니다. 아래 연산 표는 기존 계산 유틸리티의 동작이며 승인 조건이 아닙니다.
 
 | 연산 | 피연산자 | 검사·계산 |
 |---|---|---|

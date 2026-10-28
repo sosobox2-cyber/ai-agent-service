@@ -45,7 +45,8 @@ final class CountUnitNormalizer {
             // 숫자와 원문 근거는 유지하고 반환 표시와 계산 출력 단위만 '개'로 맞춘다.
             return new MappingProposal.Entry(entry.optionId(), entry.targetPurchaseOptionName(),
                     match.group(1) + "개", entry.confidence(), entry.evidenceSource(), entry.evidenceText(),
-                    new Calculation(Calculation.Operation.PACK_COUNT, "개", calculation.operands(), calculation.context()));
+                    new Calculation(Calculation.Operation.PACK_COUNT, "개", calculation.operands(), calculation.context()),
+                    MappingProposal.UNIT_DISPLAY);
         }).toList();
         return new MappingProposal(proposal.certain(), proposal.confidence(), entries, proposal.reason(), proposal.quantityEvidence());
     }
@@ -90,8 +91,10 @@ final class CountUnitNormalizer {
 
     private static MappingProposal.Entry withOutput(MappingProposal.Entry entry, String value, String unit) {
         var old = entry.calculation();
+        boolean changed = !value.equals(entry.value()) || old != null && !unit.equals(old.outputUnit());
         var calculation = old == null ? null : new Calculation(old.operation(), unit, old.operands(), old.context());
         return new MappingProposal.Entry(entry.optionId(), entry.targetPurchaseOptionName(), value,
-                entry.confidence(), entry.evidenceSource(), entry.evidenceText(), calculation);
+                entry.confidence(), entry.evidenceSource(), entry.evidenceText(), calculation,
+                changed ? MappingProposal.UNIT_DISPLAY : entry.serverNormalization());
     }
 }

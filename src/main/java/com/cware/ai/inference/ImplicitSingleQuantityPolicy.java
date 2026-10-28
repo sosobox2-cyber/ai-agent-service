@@ -44,7 +44,7 @@ public final class ImplicitSingleQuantityPolicy {
                 || !"수량".equals(entry.targetPurchaseOptionName())) entries.add(entry);
         var count = new MappingProposal.Entry(optionId, "수량", "1개", 1.0, "optionName1", quote,
                 new Calculation(Calculation.Operation.PACK_COUNT, "개", List.of(),
-                        new Calculation.Evidence("optionName1", quote)));
+                        new Calculation.Evidence("optionName1", quote)), MappingProposal.IMPLICIT_SINGLE_QUANTITY);
         entries.add(count);
         var context = proposal.quantityEvidence();
         if (context == null && request.allowedPurchaseOptions().stream()

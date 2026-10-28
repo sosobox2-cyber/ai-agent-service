@@ -157,7 +157,7 @@ curl --request POST 'http://127.0.0.1:8081/api/v1/coupang/purchase-options/infer
 | `defaultUnit` | string | 예 | 공백뿐인 값·앞뒤 공백 불가, 최대 30자 |
 | `unitOptions` | string[] | 예 | 1~30개. 각 항목 공백뿐인 값·앞뒤 공백 불가·최대 30자, 중복 불가 |
 
-기본단위는 `unitOptions`에 없어도 됩니다. 색상·일반 사이즈는 단위 설정 없이 이름만 전달할 수 있습니다. 같은 의미 차원에서 단위 선택지에 적합한 단위가 없으면 기본단위를 사용하도록 AI에 지시합니다. 중량·용량·길이 숫자를 개수로 바꾸는 기본단위 적용은 허용하지 않습니다. 서버가 단위를 자동 변환하거나 숫자를 재계산하지는 않습니다.
+기본단위는 `unitOptions`에 없어도 됩니다. 색상·일반 사이즈는 단위 설정 없이 이름만 전달할 수 있습니다. 같은 의미 차원에서 단위 선택지에 적합한 단위가 없으면 기본단위를 사용하도록 AI에 지시합니다. 중량·용량·길이 숫자를 개수로 바꾸는 기본단위 적용은 허용하지 않습니다. 서버는 일반적으로 단위를 자동 변환하거나 숫자를 재계산하지 않습니다. 예외는 수량 계열의 단위 표기 보정과 포장당 용량 계산뿐이며, 이렇게 바뀐 매핑에는 `serverNormalization`이 붙습니다.
 
 단위 설정이 있는 결과는 숫자 바로 뒤에 선택지 또는 기본단위가 붙어야 합니다. 예: `6개`, `1,000ml`, `5.2kg`. `6 개`, 음수, 부호를 붙인 수, 지수 표기는 현재 검증 패턴에서 통과하지 않습니다. `calculation`이 있으면 `outputUnit`도 결과 값의 단위와 같아야 합니다.
 
@@ -269,8 +269,9 @@ AI가 매핑하지 않은 허용 구매옵션 중 기본단위 설정이 없는 
 | `value` | string | 추출 값 |
 | `confidence` | number | 개별 신뢰도 |
 | `evidenceSource` | string 또는 null | AI 스키마의 출처는 `goodsName`, `productNoticeText`, `productCompositionText` 또는 null |
-| `evidenceText` | string 또는 null | AI가 제안한 근거. 원문 일치 여부를 서버가 보증하지 않음 |
-| `calculation` | object 또는 null | AI가 제안한 연산 설명. 서버 재계산 결과가 아님 |
+| `evidenceText` | string 또는 null | AI가 제안한 근거. 수량 계열(수량·개당 수량·개당 중량·개당 용량)은 인용문이 원문에 있는지 서버가 검사하며, 그 밖의 옵션은 원문 일치를 보증하지 않음 |
+| `calculation` | object 또는 null | 연산 설명. 일반 SUM은 서버가 재계산하지 않음. `PACK_CAPACITY`는 서버가 원문 포장식으로 계산·검증한 결과 |
+| `serverNormalization` | string, 없을 수 있음 | 서버 규칙이 만들거나 바꾼 매핑에만 있음. `UNIT_DISPLAY`(단위 표기 보정), `IMPLICIT_SINGLE_QUANTITY`(명시 수량 없는 단일상품 1개), `PACK_CAPACITY`(포장당 용량 계산), `PACK_COUNT_EVIDENCE`(판매 포장 수 근거 보완). AI가 보낸 값은 무시 |
 
 ### aiAssessment / serverAssessment
 

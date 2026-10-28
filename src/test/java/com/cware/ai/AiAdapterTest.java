@@ -35,6 +35,15 @@ class AiAdapterTest {
         assertThat(ai.infer(Fixtures.request())).isEqualTo(Fixtures.proposal());
         verify(model).call(any(Prompt.class));
     }
+    @Test void ignoresServerNormalizationClaimedByAi() throws Exception {
+        var mapper = new ObjectMapper();
+        var json = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.valueToTree(Fixtures.proposal());
+        json.withArray("mappings").forEach(m -> ((com.fasterxml.jackson.databind.node.ObjectNode) m)
+                .put("serverNormalization", "PACK_CAPACITY"));
+        respond(mapper.writeValueAsString(json), "stop");
+        assertThat(ai.infer(Fixtures.request()).mappings())
+                .extracting(MappingProposal.Entry::serverNormalization).containsOnlyNulls();
+    }
     @Test void kitchenTowelPromptInstructsSheetAndRollCountExtractionFromGoodsName() throws Exception {
         var mapper = new ObjectMapper();
         var request = mapper.readValue(java.nio.file.Files.readString(java.nio.file.Path.of(
@@ -54,6 +63,8 @@ class AiAdapterTest {
         assertThat(result.items().get(0).purchaseOptions()).containsExactlyInAnyOrderEntriesOf(
                 java.util.Map.of("개당 수량", "140매", "수량", "12개"));
         assertThat(result.optionMappings().get(1).calculation().outputUnit()).isEqualTo("개");
+        assertThat(result.optionMappings().get(1).serverNormalization()).isEqualTo("UNIT_DISPLAY");
+        assertThat(result.optionMappings().get(0).serverNormalization()).isNull();
         assertThat(result.optionMappings().get(1).calculation().operands().get(0).unit()).isEqualTo("롤");
         assertThat(result.aiAssessment().quantityEvidence()).isEqualTo(Fixtures.grounded(request, proposal).quantityEvidence());
         var sent = ArgumentCaptor.forClass(Prompt.class);

@@ -20,8 +20,6 @@ public class ResultValidator {
     }
 
     private static final String POSITIVE_VOLUME = "(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)";
-    private static final Pattern PACKED_VOLUME = Pattern.compile(
-            "(?i)(?<![0-9.])(" + POSITIVE_VOLUME + ")\\s*(ml|l|cc)\\s*[x×*]\\s*([1-9][0-9]*)\\s*(포|개|병|캡슐|정)\\s*[x×*]\\s*([1-9][0-9]*)\\s*(세트|박스|팩|묶음)");
     private static final Pattern VALUE_NUMBER = Pattern.compile("^(" + POSITIVE_VOLUME + ")(.+)$");
 
     /** 판매 포장 수와 내용물 한 포의 용량을 서로 다른 '개당' 계층으로 섞으면 보류한다. */
@@ -30,7 +28,7 @@ public class ResultValidator {
                 || !request.allowedPurchaseOptions().containsAll(List.of("수량", "개당 용량"))) return List.of();
         String composition = request.productCompositionText();
         if (composition == null || composition.isBlank()) return List.of();
-        var matcher = PACKED_VOLUME.matcher(composition);
+        var matcher = PackCapacityNormalizer.EXPRESSION.matcher(composition);
         while (matcher.find()) {
             String optionId = request.options().get(0).optionId();
             var count = proposal.mappings().stream().filter(e -> e != null && optionId.equals(e.optionId())

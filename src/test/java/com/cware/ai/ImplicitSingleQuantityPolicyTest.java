@@ -40,6 +40,10 @@ class ImplicitSingleQuantityPolicyTest {
         assertThat(result.items().get(0).purchaseOptions()).containsEntry("수량", "1개")
                 .containsEntry("수산물 중량", "300g");
         assertThat(result.optionMappings()).extracting(OptionMapping::evidenceSource).contains("optionName1");
+        assertThat(result.optionMappings()).filteredOn(m -> m.targetPurchaseOptionName().equals("수량"))
+                .extracting(OptionMapping::serverNormalization).containsExactly("IMPLICIT_SINGLE_QUANTITY");
+        assertThat(result.optionMappings()).filteredOn(m -> m.targetPurchaseOptionName().equals("수산물 중량"))
+                .extracting(OptionMapping::serverNormalization).containsOnlyNulls();
         assertThat(result.aiAssessment().quantityEvidence().facts()).anyMatch(f -> f.amount() == null
                 && f.unit().equals("개") && f.source().equals("optionName1"));
         assertThat(result.inferenceSource()).isEqualTo("AI");

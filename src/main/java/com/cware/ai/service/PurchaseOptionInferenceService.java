@@ -113,7 +113,8 @@ public class PurchaseOptionInferenceService {
                 proposal.confidence(), proposal.mappings() == null ? null : proposal.mappings().stream()
                     .map(entry -> entry == null ? null : new AiAssessment.ProposedMapping(entry.optionId(),
                             entry.targetPurchaseOptionName(), entry.value(), entry.confidence(),
-                            entry.evidenceSource(), entry.evidenceText(), entry.calculation())).toList(), proposal.reason(),
+                            entry.evidenceSource(), entry.evidenceText(), entry.calculation(),
+                            entry.serverNormalization())).toList(), proposal.reason(),
                 proposal.quantityEvidence());
         return response.withAssessments(assessment,
                 new ServerAssessment(decisionCode, serverReason, properties.confidenceThreshold()));
@@ -126,7 +127,8 @@ public class PurchaseOptionInferenceService {
         return proposal.mappings().stream()
                 .map(entry -> new OptionMapping(entry.optionId(), original.get(entry.optionId()),
                         entry.targetPurchaseOptionName(), entry.value(), entry.confidence(),
-                        entry.evidenceSource(), entry.evidenceText(), entry.calculation())).toList();
+                        entry.evidenceSource(), entry.evidenceText(), entry.calculation(),
+                        entry.serverNormalization())).toList();
     }
 
     private InferenceResponse failure(InferenceRequest r, double confidence, String reason,

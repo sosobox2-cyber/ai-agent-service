@@ -129,6 +129,41 @@ class PackCapacityNormalizerTest {
         assertThat(new ResultValidator().validateAiProposal(request, normalized)).isEmpty();
     }
 
+    @Test void computesCapacityForSpaceSeparatedAndIpSuffixedExpressions() {
+        for (String[] form : List.of(new String[] {"50ml 30포 4세트", "30포"},
+                new String[] {"50ml×30포입×4세트", "30포"}, new String[] {"50ml x 30봉 x 4세트", "30봉"})) {
+            var request = request("상품 정보", form[0]);
+            var proposal = aiProposal(form[0], "50", "ml", "50ml", form[1], "4세트");
+            assertThat(new ResultValidator().validateAiProposal(request, proposal))
+                    .anyMatch(e -> e.startsWith("QUANTITY_LEVEL_MISMATCH"));
+            var normalized = PackCapacityNormalizer.normalize(request, proposal);
+            assertThat(normalized.mappings().get(1).value()).as(form[0]).isEqualTo("1500ml");
+            assertThat(new ResultValidator().validateAiProposal(request, normalized)).as(form[0]).isEmpty();
+        }
+    }
+
+    @Test void leavesUnsupportedOrderAndAmbiguousExpressionsToAi() {
+        for (String expression : List.of("30포×50ml×4세트", "50ml×30포×4세트, 100ml×10포×2세트")) {
+            var request = request("상품 정보", expression);
+            assertThat(PackCapacityNormalizer.normalize(request, aiProposal())).as(expression).isEqualTo(aiProposal());
+        }
+    }
+
+    @Test void marksServerNormalizedMappingsInResponse() {
+        var request = request("상품 정보", "50ml×30포×4세트");
+        var normalized = PackCapacityNormalizer.normalize(request, aiProposal());
+        assertThat(normalized.mappings().get(0).serverNormalization()).isNull();
+        assertThat(normalized.mappings().get(1).serverNormalization()).isEqualTo("PACK_CAPACITY");
+        var ai = mock(OptionInferenceGateway.class);
+        when(ai.infer(any(), any())).thenReturn(normalized);
+        var response = new PurchaseOptionInferenceService(new RequestValidator(), ai, new ResultValidator(),
+                new InputHashService(new ObjectMapper()), Fixtures.properties()).infer(request);
+        assertThat(response.optionMappings()).extracting(OptionMapping::serverNormalization)
+                .containsExactly(null, "PACK_CAPACITY");
+        assertThat(response.aiAssessment().mappings()).extracting(AiAssessment.ProposedMapping::serverNormalization)
+                .containsExactly(null, "PACK_CAPACITY");
+    }
+
     @Test void convertsSubunitLiterExpressionAndChecksEquivalentSource() {
         String expression = "0.05L×30포×4세트";
         var request = request("동일 본품 50ml", expression);

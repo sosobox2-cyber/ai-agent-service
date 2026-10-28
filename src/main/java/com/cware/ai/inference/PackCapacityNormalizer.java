@@ -6,12 +6,19 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.regex.Pattern;
 
-/** 명시적인 낱개 용량 × 포장 내 개수 × 판매 포장 수만 포장당 용량으로 계산한다. */
+/**
+ * 명시적인 낱개 용량 × 포장 내 개수 × 판매 포장 수만 포장당 용량으로 계산한다.
+ * 지원 범위: `용량 → 내용 개수 → 포장 수` 순서, 항목 사이 `x`·`×`·`*` 또는 공백, 내용 개수의 `입` 접미사.
+ * 순서가 다른 표현, 중량, 여러 포장식은 계산하지 않고 AI 제안과 기존 검증에 맡긴다.
+ */
 public final class PackCapacityNormalizer {
     private PackCapacityNormalizer() {}
     private static final String POSITIVE_VOLUME = "(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)";
-    private static final Pattern EXPRESSION = Pattern.compile(
-            "(?i)(?<![0-9.])(" + POSITIVE_VOLUME + ")\\s*(ml|l|cc)\\s*[x×*]\\s*([1-9][0-9]*)\\s*(포|개|병|캡슐|정)\\s*[x×*]\\s*([1-9][0-9]*)\\s*(세트|박스|팩|묶음)");
+    private static final String SEPARATOR = "(?:\\s*[x×*]\\s*|\\s+)";
+    /** 그룹: 1 낱개 용량, 2 용량 단위, 3 내용 개수, 4 내용 단위, 5 판매 포장 수, 6 포장 단위. ResultValidator와 공유한다. */
+    static final Pattern EXPRESSION = Pattern.compile(
+            "(?i)(?<![0-9.])(" + POSITIVE_VOLUME + ")\\s*(ml|l|cc)" + SEPARATOR + "([1-9][0-9]*)\\s*(포|개|병|캡슐|정|봉)(?:입)?"
+                    + SEPARATOR + "([1-9][0-9]*)\\s*(세트|박스|팩|묶음)");
     private static final Pattern VOLUME = Pattern.compile("(?i)(?<![0-9.])(" + POSITIVE_VOLUME + ")\\s*(ml|l|cc)");
     record Expression(String itemAmount, String itemUnit, String contentAmount, String contentUnit,
                       String packAmount, String packUnit, String quote, String itemQuote, String contentQuote,
@@ -82,7 +89,7 @@ public final class PackCapacityNormalizer {
                     new Calculation(Calculation.Operation.PACK_COUNT, x.packUnit(),
                             List.of(new Calculation.Operand(x.packAmount(), x.packUnit(),
                                     new Calculation.Evidence("productCompositionText", x.packQuote()))),
-                            countCalc.context()));
+                            countCalc.context()), MappingProposal.PACK_COUNT_EVIDENCE);
         }
         if (volume.calculation() != null && volume.calculation().operation() == Calculation.Operation.PACK_CAPACITY
                 && Objects.equals(volume.value(), x.output())) {
@@ -117,7 +124,7 @@ public final class PackCapacityNormalizer {
                         new Calculation.Evidence("productCompositionText", x.contentQuote()))),
                 new Calculation.Evidence("productCompositionText", x.quote()));
         var updated = new MappingProposal.Entry(optionId, "개당 용량", x.output(), volume.confidence(),
-                "productCompositionText", x.quote(), calculation);
+                "productCompositionText", x.quote(), calculation, MappingProposal.PACK_CAPACITY);
         MappingProposal.Entry replacement = fixedCount;
         var entries = proposal.mappings().stream().map(e -> e == volume ? updated : e == count ? replacement : e).toList();
         String reason = "판매 포장 하나의 용량 " + x.itemAmount() + x.itemUnit() + " × "

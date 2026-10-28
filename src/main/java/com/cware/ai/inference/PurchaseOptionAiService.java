@@ -202,7 +202,11 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
         if (json == null || json.isBlank() || json.length() > 65536) throw parseFailure();
         MappingProposal proposal = mapper.readValue(json, MappingProposal.class);
         if (proposal == null) throw parseFailure();
-        return proposal;
+        // 서버 보정 표시는 서버만 붙인다. AI가 같은 필드를 보내도 출처로 인정하지 않는다.
+        if (proposal.mappings() == null || proposal.mappings().stream()
+                .noneMatch(e -> e != null && e.serverNormalization() != null)) return proposal;
+        return new MappingProposal(proposal.certain(), proposal.confidence(), proposal.mappings().stream()
+                .map(e -> e == null ? null : e.normalizedBy(null)).toList(), proposal.reason(), proposal.quantityEvidence());
     }
 
     private static MappingProposal review(Attempt attempt) {

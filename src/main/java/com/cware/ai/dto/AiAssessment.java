@@ -9,7 +9,17 @@ public record AiAssessment(Boolean certain, Double confidence, List<ProposedMapp
     public AiAssessment(Boolean certain, Double confidence, List<ProposedMapping> mappings, String reason) {
         this(certain, confidence, mappings, reason, null);
     }
-    /** 반려된 결과도 검토할 수 있도록 AI가 제출한 값·근거·계산 설명을 보존한다. */
+    /**
+     * 반려된 결과도 검토할 수 있도록 AI가 제출한 값·근거·계산 설명을 보존한다.
+     * 서버 규칙이 만들거나 바꾼 매핑은 serverNormalization에 규칙 이름을 남긴다.
+     */
     public record ProposedMapping(String optionId, String targetPurchaseOptionName, String value,
-            Double confidence, String evidenceSource, String evidenceText, Calculation calculation) {}
+            Double confidence, String evidenceSource, String evidenceText, Calculation calculation,
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            String serverNormalization) {
+        public ProposedMapping(String optionId, String targetPurchaseOptionName, String value,
+                Double confidence, String evidenceSource, String evidenceText, Calculation calculation) {
+            this(optionId, targetPurchaseOptionName, value, confidence, evidenceSource, evidenceText, calculation, null);
+        }
+    }
 }

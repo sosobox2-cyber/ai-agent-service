@@ -84,7 +84,7 @@ Java 소스 경로의 공통 접두사는 `src/main/java/com/cware/ai/`다.
 | `resources/static` | 테스트 화면과 사용자·API 문서 | 화면 흐름 확인 시 |
 | `agent`, `tool` | 향후 확장용 package-info | 마지막 |
 
-`*Context`와 `MockCalculation` 등 상세 수량 처리 코드는 우선 뒤로 미뤄도 된다. 파일 이름만 보고 실제 AI 승인 경로에서 사용한다고 판단하지 말고 호출 위치를 확인한다. 특히 `ResultValidator`의 실제 AI 승인 흐름은 원문 숫자 대조나 계산 재수행을 하지 않는다.
+`*Context`와 `MockCalculation` 등 상세 수량 처리 코드는 우선 뒤로 미뤄도 된다. 파일 이름만 보고 실제 AI 승인 경로에서 사용한다고 판단하지 말고 호출 위치를 확인한다. 특히 `ResultValidator`의 실제 AI 승인 흐름은 수량 계열(`QuantityEvidenceValidator`)과 포장당 용량(`PackCapacityNormalizer`)을 제외하면 원문 숫자 대조나 계산 재수행을 하지 않는다.
 
 ## 5. IntelliJ에서 따라가는 방법
 
