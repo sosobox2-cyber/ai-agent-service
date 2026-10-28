@@ -86,6 +86,20 @@ class QuantityEvidenceTest {
             assertThat(errors(r, p)).anyMatch(e -> e.startsWith("QUANTITY_SOURCE_CONFLICT"));
         }
     }
+    @Test void differentCountUnitsDoNotCreateFalseConflictAndConfiguredOriginalUnitWins() {
+        var r = request(List.of("개당 수량"), "70매X10팩", "70매X10팩");
+        var sheet = fact("sheet", "main", Measure.COUNT, Scope.PACK, "70", "매", "goodsName", "70매X10팩");
+        var pack = fact("pack", "main", Measure.COUNT, Scope.PACK, "10", "팩", "goodsName", "70매X10팩");
+        assertThat(errors(r, proposal(r, List.of(sheet, pack), "개당 수량", "70매입",
+                Calculation.Operation.PACK_CONTENT, "매입", "sheet"))).isEmpty();
+
+        r = new InferenceRequest("box", "2박스", null, List.of("수량"), List.of(new SourceOption("1", "단일상품")),
+                "상품 정보", List.of(new PurchaseOptionUnit("수량", "개", List.of("개", "박스", "세트"))), null);
+        var box = fact("box", "main", Measure.COUNT, Scope.TOTAL, "2", "박스", "goodsName", "2박스");
+        assertThat(errors(r, proposal(r, List.of(box), "수량", "2개", Calculation.Operation.PACK_COUNT, "개", "box")))
+                .anyMatch(e -> e.startsWith("QUANTITY_UNIT_PREFERENCE"));
+        assertThat(errors(r, proposal(r, List.of(box), "수량", "2박스", Calculation.Operation.PACK_COUNT, "박스", "box"))).isEmpty();
+    }
     @Test void blocksConflictsEvenWhenMappingIsOmittedAndPreservesEvidence() {
         var r = request(List.of("개당 수량", "색상"), "16매", "17매");
         var facts = List.of(fact("a", "main", Measure.COUNT, Scope.PACK, "16", "매", "goodsName", "16매"),

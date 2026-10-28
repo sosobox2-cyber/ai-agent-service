@@ -67,7 +67,10 @@ public final class QuantityEvidenceValidator {
         Map<List<Object>, String> observations = new HashMap<>();
         for (Fact fact : facts.values()) {
             if (!values.containsKey(fact.id())) continue;
-            List<Object> key = List.of(fact.optionId(), fact.componentId(), fact.measure(), fact.scope());
+            // 매·롤·팩은 모두 COUNT지만 서로 다른 포장 단위다. 같은 계층으로 잘못 표시돼도
+            // 70매와 10팩을 숫자만 비교해 충돌이라고 판단하지 않는다.
+            List<Object> key = List.of(fact.optionId(), fact.componentId(), fact.measure(), fact.scope(),
+                    fact.measure() == Measure.COUNT ? countFamily(fact.unit()) : "physical");
             String previous = observations.putIfAbsent(key, values.get(fact.id()));
             if (previous != null && !previous.equals(values.get(fact.id())))
                 errors.add("QUANTITY_SOURCE_CONFLICT: 같은 본품·같은 계층의 원문 수치가 충돌합니다.");
@@ -249,6 +252,14 @@ public final class QuantityEvidenceValidator {
     }
 
     private static Measure measure(String target) { return target.equals("개당 중량") ? Measure.WEIGHT : target.equals("개당 용량") ? Measure.VOLUME : Measure.COUNT; }
+    private static String countFamily(String unit) {
+        String normalized = unit(unit);
+        return switch (normalized) {
+            case "매", "매입", "장" -> "sheet";
+            case "개", "개입", "ea", "p", "t" -> "piece";
+            default -> normalized;
+        };
+    }
     private static Scope scope(String target) { return target.equals("수량") ? Scope.TOTAL : target.equals("개당 수량") ? Scope.PACK : Scope.ITEM; }
     private static String source(InferenceRequest request, String optionId, String name) {
         var option = request.options().stream().filter(o -> Objects.equals(o.optionId(), optionId)).findFirst();

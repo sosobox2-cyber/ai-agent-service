@@ -315,7 +315,7 @@ AI가 매핑하지 않은 허용 구매옵션 중 기본단위 설정이 없는 
 
 `role`은 MAIN(대상 본품), EXTRA(명시된 사은품·추가 구성)입니다. `measure`는 COUNT/WEIGHT/VOLUME, `scope`는 ITEM/PACK/TOTAL입니다. 수량은 COUNT/TOTAL(판매 포장 수), 개당 수량은 COUNT/PACK(포장 하나의 내용물 수), 개당 중량·용량은 WEIGHT·VOLUME/ITEM입니다. v31은 계산 피연산자의 원문 숫자·단위·출처와 `facts`를 서버가 대조해 연결합니다. 두 개 이상의 사실에 동일하게 맞아 연결이 모호하면 검토로 보냅니다.
 
-서버는 인용문과 제출 수치의 원문 존재, 단품·출처 연결, 단위 동치, 같은 본품·계층의 충돌, 다른 본품의 개당 물리량 합산·대표값 선택을 검사합니다. 상품명과 구성에서 명시한 팩·롤·매 수가 다르면 AI가 한쪽 사실을 누락해도 반려합니다. 수량 근거가 없으면 새 AI 응답은 승인하지 않습니다. `amount=null`은 판매 세트 수가 생략된 명시적 세트 구성에서 PACK_COUNT=1세트에만 허용합니다.
+서버는 인용문과 제출 수치의 원문 존재, 단품·출처 연결, 단위 동치, 같은 본품·계층의 충돌, 다른 본품의 개당 물리량 합산·대표값 선택을 검사합니다. 상품명과 구성에서 명시한 팩·롤·매 수가 다르면 AI가 한쪽 사실을 누락해도 반려합니다. v32부터 서로 다른 개수 단위(매·롤·팩)를 숫자만으로 충돌 처리하지 않으며, 호출자가 지정한 단위 선택지에 원문 단위가 있으면 AI가 임의로 기본단위로 바꾼 제안은 반려합니다. 수량 근거가 없으면 새 AI 응답은 승인하지 않습니다. `amount=null`은 판매 세트 수가 생략된 명시적 세트 구성에서 PACK_COUNT=1세트에만 허용합니다.
 
 검증 오류는 기존 `validationErrors`에 QUANTITY_EVIDENCE_REQUIRED, QUANTITY_SOURCE_MISMATCH, QUANTITY_SOURCE_CONFLICT, QUANTITY_MIXED_ITEMS, QUANTITY_SCOPE_MISMATCH 등의 접두어로 기록합니다. 기존 REVIEW_REQUIRED/RESULT_VALIDATION_FAILED 및 최종 빈 결과 계약을 유지합니다. AI가 검토하지 못한 원문을 NO_RELEVANT_FACT로 잘못 분류하는 등 사실 추출의 완전성을 보장하지는 못합니다.
 
@@ -392,7 +392,7 @@ API 호출 중 예외가 발생하면 응답은 `aiUsage=[]`입니다. 첫 번�
   "validationErrors": [],
   "errorCode": null,
   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-  "promptVersion": "coupang-option-v31",
+  "promptVersion": "coupang-option-v32",
   "inferenceSource": "AI",
   "aiAssessment": {
     "certain": true,
@@ -596,7 +596,7 @@ AI가 돌려준 JSON을 파싱하지 못하거나 응답이 완료되지 않았�
   "reason": "입력 데이터를 확인하세요.",
   "validationErrors": ["optionId는 중복될 수 없습니다."],
   "errorCode": "INVALID_REQUEST", "inputHash": null,
-  "promptVersion": "coupang-option-v31", "inferenceSource": "NONE",
+  "promptVersion": "coupang-option-v32", "inferenceSource": "NONE",
   "aiAssessment": null,
   "serverAssessment": {"decisionCode": "INVALID_REQUEST", "reason": "입력 데이터를 확인하세요.", "confidenceThreshold": 0.8},
   "aiUsage": []

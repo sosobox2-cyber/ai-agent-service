@@ -12,7 +12,28 @@ public class ResultValidator {
         List<String> errors = new ArrayList<>(validateProposal(request, proposal));
         errors.addAll(AiValueContract.validate(request, proposal));
         errors.addAll(QuantityEvidenceValidator.validate(request, proposal));
+        errors.addAll(validatePreferredUnits(request, proposal));
         return errors.stream().distinct().toList();
+    }
+
+    private static List<String> validatePreferredUnits(InferenceRequest request, MappingProposal proposal) {
+        if (proposal == null || proposal.mappings() == null) return List.of();
+        List<String> errors = new ArrayList<>();
+        for (var entry : proposal.mappings()) {
+            if (entry == null || entry.calculation() == null || entry.calculation().operands() == null
+                    || entry.calculation().operands().size() != 1
+                    || entry.calculation().operation() == Calculation.Operation.CONVERT) continue;
+            var operand = entry.calculation().operands().get(0);
+            if (operand == null || operand.unit() == null) continue;
+            request.purchaseOptionUnits().stream()
+                    .filter(u -> Objects.equals(u.purchaseOptionName(), entry.targetPurchaseOptionName()))
+                    .findFirst().ifPresent(u -> {
+                        if (u.unitOptions().contains(operand.unit()) && QuantityEvidenceValidator.COUNTS.contains(operand.unit().toLowerCase(Locale.ROOT))
+                                && !operand.unit().equals(entry.calculation().outputUnit()))
+                            errors.add("QUANTITY_UNIT_PREFERENCE: 원문 개수 단위가 선택지에 있으면 해당 단위를 유지해야 합니다.");
+                    });
+        }
+        return errors;
     }
 
     public List<String> validateProposal(InferenceRequest request, MappingProposal proposal) {
