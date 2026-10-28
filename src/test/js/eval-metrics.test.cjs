@@ -4,7 +4,21 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { classify, wilson, collect, compareValue, rescore, loadReviews } = require('../../../scripts/eval-metrics.cjs');
+const { classify, wilson, collect, compareValue, nearMatch, listReferenceOmitted, rescore, loadReviews } = require('../../../scripts/eval-metrics.cjs');
+
+test('목록 기준값에서 AI가 생략한 행만 기준값 의심으로 본다', () => {
+  assert.equal(listReferenceOmitted('블랙, 그린, 레드', null), true);
+  assert.equal(listReferenceOmitted('12종', ''), true);
+  assert.equal(listReferenceOmitted('블랙, 그린', '블랙'), false);
+  assert.equal(listReferenceOmitted('화이트', null), false);
+});
+
+test('표기 차이 의심은 괄호 별칭·FREE·계열·개수 단위 동의어만 잡고 다른 값은 잡지 않는다', () => {
+  for (const [a, b] of [['킹', '킹(K)'], ['M4W6(230mm)', '230mm'], ['핑크/FREE', '핑크'], ['화이트', '화이트계열'],
+    ['24개입', '24매입'], ['XL(33~34)', 'XL']]) assert.equal(nearMatch(a, b), true, `${a} ${b}`);
+  for (const [a, b] of [['4개', '12개'], ['3개', '3박스'], ['네츄럴', '월넛'], ['핑크', '핑크'], ['50g', '1000g'], ['', 'x']])
+    assert.equal(nearMatch(a, b), false, `${a} ${b}`);
+});
 const { sampleFixed, tunedCases, trialPlan } = require('../../../scripts/eval-diverse.cjs');
 
 const row = (status, confirmedValue = '') => ({ row: 1, target: '수량', status, confirmedValue });

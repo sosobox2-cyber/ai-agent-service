@@ -59,6 +59,13 @@ test('v28도 이전 비용 원장을 이어 쓰며 미검증 버전은 호출하
   x.plan.promptVersion = 'coupang-option-v43';
   await assert.rejects(execute({ ...x, fetcher: async () => assert.fail('must not call') }), /검증된 실행 설정/);
 });
+test('2달러 상한 계획도 누적 원장을 이어 쓰며 2달러를 넘기지 않는다', async t => {
+  const x = setup(t); x.plan.promptVersion = 'coupang-option-v42'; x.plan.budgetUsd = 2.0;
+  fs.writeFileSync(path.join(x.dir, 'ledger.jsonl'), JSON.stringify({ id: 'prior', event: 'completed', costUsd: 1.93 }) + '\n');
+  await execute({ ...x, fetcher: async () => assert.fail('must not call') });
+  x.plan.budgetUsd = 1.7;
+  await assert.rejects(execute({ ...x, fetcher: async () => assert.fail('must not call') }), /검증된 실행 설정/);
+});
 test('v29의 늘어난 예산도 기존 비용을 포함하며 1.45달러에서 중단한다', async t => {
   const x = setup(t); x.plan.promptVersion = 'coupang-option-v29'; x.plan.budgetUsd = 1.45;
   fs.writeFileSync(path.join(x.dir, 'ledger.jsonl'), JSON.stringify({ id: 'prior', event: 'completed', costUsd: 1.36 }) + '\n');

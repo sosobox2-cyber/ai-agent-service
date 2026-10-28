@@ -12,7 +12,10 @@ const MODEL = /^(gpt-4\.1-mini|gpt-4\.1-mini-2025-04-14)$/;
 // v27/v28/v29/v30/v31/v32/v34/v35/v36/v37/v38/v39/v40/v41/v42, max_tokens=4096, 최대 2회 호출을 확인한 운영 환경 전용 상한.
 // 입력 65,536 tokens/회 + 출력 4,096 tokens/회를 비캐시 단가로 계산하면 $0.065536.
 const RESERVE_USD = 0.08;
-const BUDGET_USD = 1.45; // 사용자가 늘린 누적 $1.50 중 $0.05는 추가 여유로 남긴다.
+// 사용자가 2026-10-28 누적 승인 상한을 $2로 올렸다. 예전 계획 파일의 상한($0.95, $1.45)도 계속 실행할 수 있지만
+// 실제 차단은 계획에 적힌 상한으로 한다. 새 계획은 $2를 쓴다.
+const BUDGET_USD = 2.0;
+const KNOWN_BUDGETS = [0.95, 1.45, BUDGET_USD];
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
 const readLines = file => fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split(/\r?\n/).filter(Boolean).map(JSON.parse) : [];
@@ -123,7 +126,7 @@ function accounting(events) {
 async function execute({ dir, plan, maxNew = 1, fetcher = fetch, pause = delay }) {
   const base = new URL(plan.baseUrl);
   if (base.protocol !== 'https:' || base.username || base.password || base.pathname !== '/') throw Error('HTTPS origin이 필요합니다.');
-  if (!['coupang-option-v27', 'coupang-option-v28', 'coupang-option-v29', 'coupang-option-v30', 'coupang-option-v31', 'coupang-option-v32', 'coupang-option-v34', 'coupang-option-v35', 'coupang-option-v36', 'coupang-option-v37', 'coupang-option-v38', 'coupang-option-v39', 'coupang-option-v40', 'coupang-option-v41', 'coupang-option-v42'].includes(plan.promptVersion) || plan.reserveUsd !== RESERVE_USD || ![0.95, BUDGET_USD].includes(plan.budgetUsd)) throw Error('검증된 실행 설정과 다릅니다.');
+  if (!['coupang-option-v27', 'coupang-option-v28', 'coupang-option-v29', 'coupang-option-v30', 'coupang-option-v31', 'coupang-option-v32', 'coupang-option-v34', 'coupang-option-v35', 'coupang-option-v36', 'coupang-option-v37', 'coupang-option-v38', 'coupang-option-v39', 'coupang-option-v40', 'coupang-option-v41', 'coupang-option-v42'].includes(plan.promptVersion) || plan.reserveUsd !== RESERVE_USD || !KNOWN_BUDGETS.includes(plan.budgetUsd)) throw Error('검증된 실행 설정과 다릅니다.');
   const ledger = path.join(dir, 'ledger.jsonl'), lock = path.join(dir, 'running.lock');
   const lockFd = fs.openSync(lock, 'wx');
   const append = e => fs.appendFileSync(ledger, JSON.stringify(e) + '\n', { flush: true });
@@ -180,7 +183,7 @@ async function main() {
   if (!folder || !['plan', 'run', 'status', 'freeze', 'trial'].includes(command)) throw Error(
     '사용법: node scripts/eval-diverse.cjs plan|run|status logs/<평가폴더> [최대상품수] [계획파일]\n'
     + '       node scripts/eval-diverse.cjs freeze logs/<평가폴더> <표본수> <라벨>\n'
-    + '       node scripts/eval-diverse.cjs trial logs/<평가폴더> <라벨> <promptVersion>');
+    + '       node scripts/eval-diverse.cjs trial logs/<평가폴더> <라벨> <promptVersion> <운영데이터셋ID>');
   const dir = path.resolve(folder);
   if (!dir.startsWith(path.join(ROOT, 'logs') + path.sep)) throw Error('산출물 폴더는 이 저장소 logs 아래여야 합니다.');
   const safeLabel = label => { if (!/^[a-z0-9-]{1,40}$/.test(label || '')) throw Error('라벨은 영소문자·숫자·하이픈 1~40자입니다.'); return label; };
@@ -195,7 +198,11 @@ async function main() {
   } else if (command === 'trial') {
     const label = safeLabel(value);
     if (!/^coupang-option-v\d+$/.test(extra || '')) throw Error('promptVersion 형식이 잘못되었습니다.');
-    const plan = trialPlan(readJson(path.join(dir, `fixed-${label}.json`)), readJson(path.join(dir, 'metadata.json')), label, extra);
+    // 배포마다 운영 데이터셋을 새 ID로 복원하므로 metadata.json의 최초 가져오기 ID는 낡을 수 있다.
+    // 실행할 운영 데이터셋 ID를 직접 받고, 같은 원본(sourceHash)인지는 run의 입력 해시 검사로 확인한다.
+    if (!/^[a-f0-9-]{36}$/.test(more || '')) throw Error('운영 데이터셋 ID를 다섯 번째 인자로 지정하세요.');
+    const metadata = { ...readJson(path.join(dir, 'metadata.json')), id: more };
+    const plan = trialPlan(readJson(path.join(dir, `fixed-${label}.json`)), metadata, label, extra);
     const file = `plan-${label}-${extra.replace(/^coupang-option-/, '')}.json`;
     writeJson(path.join(dir, file), plan);
     console.log(JSON.stringify({ plan: file, selected: plan.selected.length }));

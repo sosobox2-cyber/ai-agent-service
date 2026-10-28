@@ -67,6 +67,36 @@ function classify(run, gold = false) {
   return correct ? 'REVIEW_BUT_CORRECT' : 'REVIEW_AND_WRONG';
 }
 
+// 서버 비교(compareValue)는 바꾸지 않는다. 등록값 기준 오답 중 표기만 다를 가능성이 큰 행을 따로 센다.
+// 예: `킹`↔`킹(K)`, `M4W6(230mm)`↔`230mm`, `핑크/FREE`↔`핑크`, `화이트`↔`화이트계열`, `24개입`↔`24매입`.
+// 정답으로 바꾸지 않고 "표기 차이 의심"으로만 보고해 사람 검토 우선순위와 지표의 상한 추정에 쓴다.
+const COUNT_UNITS = new Set(['개', '개입', '매', '매입', '입', 'ea', 'p']);
+function nearMatch(expected, actual) {
+  if (!expected || !actual) return false;
+  const a = normalizeValue(expected), b = normalizeValue(actual);
+  if (a === b) return false;
+  const forms = v => {
+    const out = new Set([v]);
+    const paren = v.match(/^(.+?)\((.+)\)$/);
+    if (paren) { out.add(paren[1]); out.add(paren[2]); }
+    out.add(v.replace(/\/(free|f|프리)$/, ''));
+    out.add(v.replace(/계열$/, ''));
+    return out;
+  };
+  const left = forms(a), right = forms(b);
+  for (const x of left) if (x && right.has(x)) return true;
+  const ca = a.match(/^([0-9]+)([^0-9]+)$/), cb = b.match(/^([0-9]+)([^0-9]+)$/);
+  return !!(ca && cb && ca[1] === cb[1] && COUNT_UNITS.has(ca[2]) && COUNT_UNITS.has(cb[2]));
+}
+
+// 등록값이 여러 값의 목록(`블랙, 그린, 레드`, `12종`)인데 AI가 단품 값을 생략한 행. 사이즈만 다른 단품에
+// 상품 전체 색상 목록을 기준으로 넣은 경우가 많아, AI 생략이 오히려 맞을 수 있다.
+function listReferenceOmitted(expected, actual) {
+  return !!expected && (actual == null || !String(actual).trim())
+    && (/[,，/]\s*\S/.test(expected) || /^\d+\s*종$/.test(expected.trim()));
+}
+const suspectRow = (expected, actual) => nearMatch(expected, actual) || listReferenceOmitted(expected, actual);
+
 // 작은 표본의 비율은 점추정만으로 비교하지 않는다. Wilson 95% 구간을 함께 낸다.
 function wilson(k, n) {
   if (!n) return null;
@@ -80,6 +110,8 @@ function summarize(entries, gold = false) {
   for (const e of entries) { if (latest.has(e.caseId)) repeats++; latest.set(e.caseId, e); }
   const counts = { APPROVED_CORRECT: 0, FALSE_APPROVAL: 0, REVIEW_BUT_CORRECT: 0, REVIEW_AND_WRONG: 0, UNSCORED: 0, ERROR: 0 };
   const targets = {}, reasons = {};
+  // 오답 판정 상품 중 틀린 행이 모두 표기 차이 의심인 상품 수. 이 수만큼이 지표의 낙관적 상한이다.
+  const nearOnly = { FALSE_APPROVAL: 0, REVIEW_AND_WRONG: 0 }; let nearRows = 0;
   let cost = 0, costed = 0;
   for (const e of entries) if (typeof e.costUsd === 'number') { cost += e.costUsd; costed++; }
   for (const { run } of latest.values()) {
@@ -90,6 +122,13 @@ function summarize(entries, gold = false) {
       }
     if (kind === 'ERROR' || kind === 'UNSCORED') continue;
     const approved = run.response.success === true;
+    if (kind === 'FALSE_APPROVAL' || kind === 'REVIEW_AND_WRONG') {
+      const wrong = scoredRows(run, gold).filter(c => !MATCH.has(c.status));
+      // 사람 확정값은 이미 사람이 판단한 기준이므로 의심 분류에서 뺀다.
+      const near = gold ? [] : wrong.filter(c => suspectRow(c.baseline, c.actual));
+      nearRows += near.length;
+      if (near.length === wrong.length) nearOnly[kind]++;
+    }
     for (const c of scoredRows(run, gold)) {
       const t = targets[c.target] ||= { approvedRows: 0, approvedWrong: 0, reviewedRows: 0, reviewedCorrect: 0 };
       if (approved) { t.approvedRows++; if (!MATCH.has(c.status)) t.approvedWrong++; }
@@ -103,6 +142,8 @@ function summarize(entries, gold = false) {
     autoApprovalRate: wilson(approved, scored),
     correctButReviewed: wilson(counts.REVIEW_BUT_CORRECT, reviewed),
     aiCorrectRate: wilson(counts.APPROVED_CORRECT + counts.REVIEW_BUT_CORRECT, scored),
+    notation: { rows: nearRows, falseApprovalOnly: nearOnly.FALSE_APPROVAL, reviewWrongOnly: nearOnly.REVIEW_AND_WRONG,
+      falseApprovalIfNotation: wilson(counts.FALSE_APPROVAL - nearOnly.FALSE_APPROVAL, approved) },
     targets, topReviewReasons: Object.entries(reasons).sort((a, b) => b[1] - a[1]).slice(0, 8),
     meanCostUsd: costed ? cost / costed : null, costUsd: cost };
 }
@@ -133,7 +174,9 @@ function render(result, planSize) {
     `    오승인율(승인 중 오답)  ${pct(s.falseApprovalAmongApproved)}   ${s.counts.FALSE_APPROVAL}건`,
     `    자동승인율            ${pct(s.autoApprovalRate)}`,
     `    정답인데 검토 전환    ${pct(s.correctButReviewed)}   ${s.counts.REVIEW_BUT_CORRECT}건`,
-    `    AI 제안 정답률        ${pct(s.aiCorrectRate)}`];
+    `    AI 제안 정답률        ${pct(s.aiCorrectRate)}`,
+    ...(title.startsWith('사람') ? [] : [`    기준값 의심(표기 차이·목록 기준 생략) ${s.notation.rows}행 · 이것만 틀린 오승인 ${s.notation.falseApprovalOnly}건`
+      + ` → 모두 기준값 문제라면 오승인율 ${pct(s.notation.falseApprovalIfNotation)}`])];
   for (const [version, view] of Object.entries(result.versions).sort()) {
     const s = view.baseline, g = view.gold;
     lines.push(`\n=== ${version}  상품 ${s.cases}건 (반복 호출 ${s.repeats}) ===`);
@@ -181,5 +224,5 @@ function main() {
   console.log(json ? JSON.stringify(result, null, 2) : render(result, planSize));
 }
 
-module.exports = { classify, wilson, summarize, collect, compareValue, rescore, loadReviews };
+module.exports = { classify, wilson, summarize, collect, compareValue, nearMatch, listReferenceOmitted, rescore, loadReviews };
 if (require.main === module) try { main(); } catch (e) { console.error(e.message); process.exitCode = 1; }
