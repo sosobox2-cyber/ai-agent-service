@@ -142,5 +142,14 @@ class PackCapacityNormalizerTest {
         assertThat(PackCapacityNormalizer.normalize(conflict, proposal)).isEqualTo(proposal);
         assertThat(new ResultValidator().validateAiProposal(conflict, proposal))
                 .anyMatch(e -> e.startsWith("QUANTITY_LEVEL_MISMATCH"));
+
+        var converted = new MappingProposal.Entry("1", "개당 용량", "50ml", .9,
+                "productCompositionText", "0.05L", new Calculation(Calculation.Operation.CONVERT, "ml",
+                List.of(new Calculation.Operand("0.05", "L",
+                        new Calculation.Evidence("productCompositionText", "0.05L"))), null));
+        var convertedProposal = new MappingProposal(true, .9,
+                List.of(proposal.mappings().get(0), converted), proposal.reason(), proposal.quantityEvidence());
+        assertThat(new ResultValidator().validateAiProposal(request, convertedProposal))
+                .anyMatch(e -> e.startsWith("QUANTITY_LEVEL_MISMATCH"));
     }
 }

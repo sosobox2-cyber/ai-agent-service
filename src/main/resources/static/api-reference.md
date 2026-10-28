@@ -325,6 +325,8 @@ v39는 같은 구성 원문에 명시된 판매 포장 수의 `PACK_COUNT` 피�
 
 v40은 `50 ml × 30 포 × 4 세트`처럼 숫자와 단위 사이에 공백이 있는 구성과 `0.05L×30포×4세트`처럼 1보다 작은 양의 리터 수치를 인식합니다. 두 번째 식의 포장당 용량은 `1.5L`이며 `1500ml`와 동치입니다. 다른 출처의 용량은 ml로 환산해 비교하고, 실제로 다르면 자동 보완하지 않습니다. 원문 인용과 피연산자 단위는 보존합니다.
 
+v41은 `0.05L`을 `50ml`로 환산해 제출한 AI 제안도 낱개 용량으로 인식합니다. 판매 수량이 `4세트`이면 `4세트 + 개당 용량 50ml` 조합은 `QUANTITY_LEVEL_MISMATCH`로 반려합니다.
+
 검증 오류는 기존 `validationErrors`에 QUANTITY_EVIDENCE_REQUIRED, QUANTITY_SOURCE_MISMATCH, QUANTITY_SOURCE_CONFLICT, QUANTITY_MIXED_ITEMS, QUANTITY_SCOPE_MISMATCH 등의 접두어로 기록합니다. 기존 REVIEW_REQUIRED/RESULT_VALIDATION_FAILED 및 최종 빈 결과 계약을 유지합니다. AI가 검토하지 못한 원문을 NO_RELEVANT_FACT로 잘못 분류하는 등 사실 추출의 완전성을 보장하지는 못합니다.
 
 ### aiUsage

@@ -42,11 +42,18 @@ public class ResultValidator {
             var volumeValue = VALUE_NUMBER.matcher(volume.value());
             if (countValue.matches() && volumeValue.matches()
                     && new BigDecimal(countValue.group(1)).compareTo(new BigDecimal(matcher.group(5))) == 0
-                    && new BigDecimal(volumeValue.group(1)).compareTo(new BigDecimal(matcher.group(1))) == 0
-                    && volumeValue.group(2).equalsIgnoreCase(matcher.group(2)))
+                    && sameVolume(volumeValue.group(1), volumeValue.group(2), matcher.group(1), matcher.group(2)))
                 return List.of("QUANTITY_LEVEL_MISMATCH: 판매 포장 수와 개당 용량의 기준 계층이 다릅니다.");
         }
         return List.of();
+    }
+
+    private static boolean sameVolume(String firstAmount, String firstUnit, String secondAmount, String secondUnit) {
+        if (!Set.of("ml", "l", "cc").contains(firstUnit.toLowerCase(Locale.ROOT))
+                || !Set.of("ml", "l", "cc").contains(secondUnit.toLowerCase(Locale.ROOT))) return false;
+        var first = new BigDecimal(firstAmount).multiply(firstUnit.equalsIgnoreCase("l") ? new BigDecimal("1000") : BigDecimal.ONE);
+        var second = new BigDecimal(secondAmount).multiply(secondUnit.equalsIgnoreCase("l") ? new BigDecimal("1000") : BigDecimal.ONE);
+        return first.compareTo(second) == 0;
     }
 
     private static List<String> validatePreferredUnits(InferenceRequest request, MappingProposal proposal) {
