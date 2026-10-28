@@ -157,7 +157,7 @@ curl --request POST 'http://127.0.0.1:8081/api/v1/coupang/purchase-options/infer
 | `defaultUnit` | string | 예 | 공백뿐인 값·앞뒤 공백 불가, 최대 30자 |
 | `unitOptions` | string[] | 예 | 1~30개. 각 항목 공백뿐인 값·앞뒤 공백 불가·최대 30자, 중복 불가 |
 
-기본단위는 `unitOptions`에 없어도 됩니다. 색상·일반 사이즈는 단위 설정 없이 이름만 전달할 수 있습니다. 단위 선택지에 적합한 단위가 없으면 기본단위를 사용하도록 AI에 지시합니다. 서버가 단위를 자동 변환하거나 숫자를 재계산하지는 않습니다.
+기본단위는 `unitOptions`에 없어도 됩니다. 색상·일반 사이즈는 단위 설정 없이 이름만 전달할 수 있습니다. 같은 의미 차원에서 단위 선택지에 적합한 단위가 없으면 기본단위를 사용하도록 AI에 지시합니다. 중량·용량·길이 숫자를 개수로 바꾸는 기본단위 적용은 허용하지 않습니다. 서버가 단위를 자동 변환하거나 숫자를 재계산하지는 않습니다.
 
 단위 설정이 있는 결과는 숫자 바로 뒤에 선택지 또는 기본단위가 붙어야 합니다. 예: `6개`, `1,000ml`, `5.2kg`. `6 개`, 음수, 부호를 붙인 수, 지수 표기는 현재 검증 패턴에서 통과하지 않습니다. `calculation`이 있으면 `outputUnit`도 결과 값의 단위와 같아야 합니다.
 
@@ -301,7 +301,7 @@ AI가 매핑하지 않은 허용 구매옵션 중 기본단위 설정이 없는 
 | `operands` | object[] | 각 피연산자는 문자열 `amount`, 문자열 `unit`, 객체 `evidence` |
 | `context` | object 또는 null | 구성 판단의 근거 |
 
-`evidence`와 `context`는 문자열 `source`, `text`를 갖습니다. AI 스키마의 source는 `goodsName`, `productNoticeText`, `productCompositionText`, `optionName1` 중 하나입니다. DIRECT는 직접 추출, CONVERT는 단위 변환, SUM은 합산, PACK_COUNT는 묶음 수량, PACK_CONTENT는 묶음 내부 수량을 뜻합니다. 의미·원문 근거·연산 정확성은 AI의 판단이며 서버가 직접 재검증하지 않습니다.
+`evidence`와 `context`는 문자열 `source`, `text`를 갖습니다. AI 스키마의 source는 `goodsName`, `productNoticeText`, `productCompositionText`, `optionName1` 중 하나입니다. DIRECT는 직접 추출, CONVERT는 단위 변환, SUM은 합산, PACK_COUNT는 묶음 수량, PACK_CONTENT는 묶음 내부 수량을 뜻합니다. 원문 근거·연산 정확성은 AI의 판단이며 서버가 원문 대조·재계산하지 않습니다. 실제 AI 경로에서는 제한된 의미 계약도 검사합니다. 단위 설정이 있고 모든 계산 피연산자가 알려진 물리 단위인데 출력은 개수 단위인 제안, 인원 수 형식에 맞지 않는 사용 인원, 인증·등록번호 근거의 인증번호를 모델명으로 제출한 제안은 반려합니다. 계산 누락·미지 단위 등 모든 의미 오류를 검출하지는 못합니다.
 
 ### aiUsage
 
@@ -376,7 +376,7 @@ API 호출 중 예외가 발생하면 응답은 `aiUsage=[]`입니다. 첫 번�
   "validationErrors": [],
   "errorCode": null,
   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-  "promptVersion": "coupang-option-v27",
+  "promptVersion": "coupang-option-v28",
   "inferenceSource": "AI",
   "aiAssessment": {
     "certain": true,
@@ -580,7 +580,7 @@ AI가 돌려준 JSON을 파싱하지 못하거나 응답이 완료되지 않았�
   "reason": "입력 데이터를 확인하세요.",
   "validationErrors": ["optionId는 중복될 수 없습니다."],
   "errorCode": "INVALID_REQUEST", "inputHash": null,
-  "promptVersion": "coupang-option-v27", "inferenceSource": "NONE",
+  "promptVersion": "coupang-option-v28", "inferenceSource": "NONE",
   "aiAssessment": null,
   "serverAssessment": {"decisionCode": "INVALID_REQUEST", "reason": "입력 데이터를 확인하세요.", "confidenceThreshold": 0.8},
   "aiUsage": []

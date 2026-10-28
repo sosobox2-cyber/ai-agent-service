@@ -43,7 +43,7 @@ public class PurchaseOptionInferenceService {
     private InferenceResponse assess(InferenceRequest request, String hash, MappingProposal proposal) {
         // 응답의 추론 출처를 AI로 표시하고, 제안의 형식·단품 ID·허용 옵션명 등을 먼저 검증한다.
         String source = "AI";
-        List<String> errors = results.validateProposal(request, proposal);
+        List<String> errors = results.validateAiProposal(request, proposal);
         // 전체 신뢰도가 유효하지 않으면 0으로 처리하고, 유효한 개별 매핑 신뢰도 중 최솟값을 반영한다.
         // 잘못된 개별 신뢰도는 최솟값 계산에서 제외하되, 위의 제안 검증에서 오류로 처리한다.
         double confidence = proposal != null && ResultValidator.validConfidence(proposal.confidence()) ? proposal.confidence() : 0;

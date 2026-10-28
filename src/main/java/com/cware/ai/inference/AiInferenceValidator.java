@@ -61,7 +61,7 @@ public class AiInferenceValidator {
                 .forEach(id -> errors.add(error(MISSING_OPTION_MAPPING, "누락된 optionId: " + id)));
         checkCoverage(request, proposal, ids, errors);
         // 기존 구조·단위 검증을 재사용하고, 구조가 유효하면 조립한 단품 조합도 확인한다.
-        List<String> structural = results.validateProposal(request, proposal);
+        List<String> structural = results.validateAiProposal(request, proposal);
         structural.forEach(message -> errors.add(error(INVALID_RESPONSE, message)));
         if (structural.isEmpty()) results.validateItems(request, proposal, results.assemble(request, proposal))
                 .forEach(message -> errors.add(error(INVALID_RESPONSE, message)));

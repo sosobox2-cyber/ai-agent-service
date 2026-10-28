@@ -7,6 +7,13 @@ import java.util.*;
 @Component
 /** AI 제안의 기본 구조와 요청 단위 형식을 확인하고 단품별 결과를 조립·검증한다. */
 public class ResultValidator {
+    /** 실제 AI의 재추론 판단과 최종 승인에서 같은 의미 계약을 사용한다. 모의 추출에는 적용하지 않는다. */
+    public List<String> validateAiProposal(InferenceRequest request, MappingProposal proposal) {
+        List<String> errors = new ArrayList<>(validateProposal(request, proposal));
+        errors.addAll(AiValueContract.validate(request, proposal));
+        return errors.stream().distinct().toList();
+    }
+
     public List<String> validateProposal(InferenceRequest request, MappingProposal proposal) {
         // AI 응답의 필수 항목과 전체 판단의 confidence, 추론 사유 길이를 검증한다.
         List<String> errors = new ArrayList<>();
