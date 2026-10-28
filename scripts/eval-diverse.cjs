@@ -9,7 +9,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 const ROOT = path.resolve(__dirname, '..');
 const SIMPLE = new Set(['색상', '컬러', 'color', '사이즈', 'size', '패션의류/잡화 사이즈', '핏']);
 const MODEL = /^(gpt-4\.1-mini|gpt-4\.1-mini-2025-04-14)$/;
-// v27/v28/v29/v30/v31/v32/v34/v35/v36/v37/v38/v39/v40/v41, max_tokens=4096, 최대 2회 호출을 확인한 운영 환경 전용 상한.
+// v27/v28/v29/v30/v31/v32/v34/v35/v36/v37/v38/v39/v40/v41/v42, max_tokens=4096, 최대 2회 호출을 확인한 운영 환경 전용 상한.
 // 입력 65,536 tokens/회 + 출력 4,096 tokens/회를 비캐시 단가로 계산하면 $0.065536.
 const RESERVE_USD = 0.08;
 const BUDGET_USD = 1.45; // 사용자가 늘린 누적 $1.50 중 $0.05는 추가 여유로 남긴다.
@@ -73,6 +73,30 @@ function selectCases(cases, limit = 72) {
     selectedCombinations: combos.size };
 }
 
+// 버전 비교용 고정 평가셋. 다양성 선정은 희소 조합을 과대 표집하므로 비율 추정에는 해시 순서 무작위 표본을 쓴다.
+// 개선 작업에서 개별 시험한 사례(trialId가 caseId와 다른 실행)는 과적합 방지를 위해 제외한다.
+function sampleFixed(cases, n, seed, tuned = new Set()) {
+  const pool = cases.filter(c => !c.issues.length && c.request.options.length <= 8 && !tuned.has(c.id)
+    && Buffer.byteLength(JSON.stringify(c.request)) <= 8192);
+  const selected = pool.sort((a, b) => hash(seed + a.id).localeCompare(hash(seed + b.id))).slice(0, n)
+    .map(c => ({ caseId: c.id, targets: c.request.allowedPurchaseOptions, category: c.request.categoryName.split('>')[0].trim(),
+      tags: features(c), options: c.request.options.length, references: c.references.length,
+      requestHash: hash(JSON.stringify(c.request)) }));
+  return { seed, population: cases.length, eligible: pool.length, excludedTuned: tuned.size, selected };
+}
+
+function tunedCases(events) {
+  return new Set(events.filter(e => e.trialId && e.trialId !== e.caseId).map(e => e.caseId));
+}
+
+// 고정셋을 특정 버전 실행 계획으로 바꾼다. 같은 원장을 쓰므로 누적 예산 상한이 그대로 적용된다.
+function trialPlan(fixed, metadata, label, promptVersion) {
+  return { baseUrl: 'https://ai-agent-service-production-7624.up.railway.app/', datasetId: metadata.id,
+    sourceHash: metadata.sourceHash, promptVersion, reserveUsd: RESERVE_USD, budgetUsd: BUDGET_USD,
+    createdAt: new Date().toISOString(), fixedSet: label,
+    selected: fixed.selected.map(s => ({ ...s, trialId: `${label}-${promptVersion.replace(/^coupang-option-/, '')}-${s.caseId}` })) };
+}
+
 function costOf(run) {
   const calls = run?.response?.aiUsage;
   if (!Array.isArray(calls) || !calls.length || calls.length > 2) return null;
@@ -99,7 +123,7 @@ function accounting(events) {
 async function execute({ dir, plan, maxNew = 1, fetcher = fetch, pause = delay }) {
   const base = new URL(plan.baseUrl);
   if (base.protocol !== 'https:' || base.username || base.password || base.pathname !== '/') throw Error('HTTPS origin이 필요합니다.');
-  if (!['coupang-option-v27', 'coupang-option-v28', 'coupang-option-v29', 'coupang-option-v30', 'coupang-option-v31', 'coupang-option-v32', 'coupang-option-v34', 'coupang-option-v35', 'coupang-option-v36', 'coupang-option-v37', 'coupang-option-v38', 'coupang-option-v39', 'coupang-option-v40', 'coupang-option-v41'].includes(plan.promptVersion) || plan.reserveUsd !== RESERVE_USD || ![0.95, BUDGET_USD].includes(plan.budgetUsd)) throw Error('검증된 실행 설정과 다릅니다.');
+  if (!['coupang-option-v27', 'coupang-option-v28', 'coupang-option-v29', 'coupang-option-v30', 'coupang-option-v31', 'coupang-option-v32', 'coupang-option-v34', 'coupang-option-v35', 'coupang-option-v36', 'coupang-option-v37', 'coupang-option-v38', 'coupang-option-v39', 'coupang-option-v40', 'coupang-option-v41', 'coupang-option-v42'].includes(plan.promptVersion) || plan.reserveUsd !== RESERVE_USD || ![0.95, BUDGET_USD].includes(plan.budgetUsd)) throw Error('검증된 실행 설정과 다릅니다.');
   const ledger = path.join(dir, 'ledger.jsonl'), lock = path.join(dir, 'running.lock');
   const lockFd = fs.openSync(lock, 'wx');
   const append = e => fs.appendFileSync(ledger, JSON.stringify(e) + '\n', { flush: true });
@@ -152,11 +176,30 @@ async function execute({ dir, plan, maxNew = 1, fetcher = fetch, pause = delay }
 }
 
 async function main() {
-  const [command, folder, value] = process.argv.slice(2);
-  if (!folder || !['plan', 'run', 'status'].includes(command)) throw Error('사용법: node scripts/eval-diverse.cjs plan|run|status logs/<평가폴더> [최대상품수]');
+  const [command, folder, value, extra, more] = process.argv.slice(2);
+  if (!folder || !['plan', 'run', 'status', 'freeze', 'trial'].includes(command)) throw Error(
+    '사용법: node scripts/eval-diverse.cjs plan|run|status logs/<평가폴더> [최대상품수] [계획파일]\n'
+    + '       node scripts/eval-diverse.cjs freeze logs/<평가폴더> <표본수> <라벨>\n'
+    + '       node scripts/eval-diverse.cjs trial logs/<평가폴더> <라벨> <promptVersion>');
   const dir = path.resolve(folder);
   if (!dir.startsWith(path.join(ROOT, 'logs') + path.sep)) throw Error('산출물 폴더는 이 저장소 logs 아래여야 합니다.');
-  if (command === 'plan') {
+  const safeLabel = label => { if (!/^[a-z0-9-]{1,40}$/.test(label || '')) throw Error('라벨은 영소문자·숫자·하이픈 1~40자입니다.'); return label; };
+  if (command === 'freeze') {
+    const n = Number(value), label = safeLabel(extra);
+    if (!Number.isInteger(n) || n < 10 || n > 500) throw Error('표본 수는 10~500 정수여야 합니다.');
+    const cases = readLines(path.join(dir, 'cases.jsonl')), metadata = readJson(path.join(dir, 'metadata.json'));
+    const fixed = { label, datasetId: metadata.id, sourceHash: metadata.sourceHash, createdAt: new Date().toISOString(),
+      ...sampleFixed(cases, n, label, tunedCases(readLines(path.join(dir, 'ledger.jsonl')))) };
+    writeJson(path.join(dir, `fixed-${label}.json`), fixed);
+    console.log(JSON.stringify({ label, selected: fixed.selected.length, eligible: fixed.eligible, excludedTuned: fixed.excludedTuned }));
+  } else if (command === 'trial') {
+    const label = safeLabel(value);
+    if (!/^coupang-option-v\d+$/.test(extra || '')) throw Error('promptVersion 형식이 잘못되었습니다.');
+    const plan = trialPlan(readJson(path.join(dir, `fixed-${label}.json`)), readJson(path.join(dir, 'metadata.json')), label, extra);
+    const file = `plan-${label}-${extra.replace(/^coupang-option-/, '')}.json`;
+    writeJson(path.join(dir, file), plan);
+    console.log(JSON.stringify({ plan: file, selected: plan.selected.length }));
+  } else if (command === 'plan') {
     const cases = readLines(path.join(dir, 'cases.jsonl')), metadata = readJson(path.join(dir, 'metadata.json'));
     const plan = { baseUrl: 'https://ai-agent-service-production-7624.up.railway.app/', datasetId: metadata.id,
       sourceHash: metadata.sourceHash, promptVersion: 'coupang-option-v27', reserveUsd: RESERVE_USD, budgetUsd: BUDGET_USD,
@@ -167,9 +210,11 @@ async function main() {
   } else if (command === 'run') {
     const maxNew = Number(value || 1);
     if (!Number.isInteger(maxNew) || maxNew < 1 || maxNew > 100) throw Error('실행 수는 1~100 정수여야 합니다.');
-    await execute({ dir, plan: readJson(path.join(dir, 'plan.json')), maxNew });
+    const planFile = extra || 'plan.json';
+    if (!/^plan[a-z0-9-]*\.json$/.test(planFile)) throw Error('계획 파일 이름이 잘못되었습니다.');
+    await execute({ dir, plan: readJson(path.join(dir, planFile)), maxNew });
   } else console.log(JSON.stringify(accounting(readLines(path.join(dir, 'ledger.jsonl'))), null, 2));
 }
 
-module.exports = { features, selectCases, costOf, accounting, execute };
+module.exports = { features, selectCases, sampleFixed, tunedCases, trialPlan, costOf, accounting, execute, BUDGET_USD };
 if (require.main === module) main().catch(e => { console.error(e.message); process.exitCode = 1; });
