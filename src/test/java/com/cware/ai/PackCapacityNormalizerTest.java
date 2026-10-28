@@ -80,4 +80,20 @@ class PackCapacityNormalizerTest {
         assertThat(new ResultValidator().validateAiProposal(conflict, aiProposal()))
                 .anyMatch(e -> e.startsWith("QUANTITY_LEVEL_MISMATCH"));
     }
+
+    @Test void repairsExplicitOuterPackOperandWhenAiLeavesItEmpty() {
+        var request = request("상품 정보", "50ml×30포×4세트");
+        var correct = PackCapacityNormalizer.normalize(request, aiProposal());
+        var outer = correct.mappings().get(0);
+        var omitted = new MappingProposal.Entry("1", "수량", "4세트", .9, "productCompositionText", "4세트",
+                new Calculation(Calculation.Operation.PACK_COUNT, "세트", List.of(),
+                        new Calculation.Evidence("productCompositionText", "50ml×30포×4세트")));
+        var proposal = new MappingProposal(true, .9, List.of(omitted, correct.mappings().get(1)),
+                correct.reason(), correct.quantityEvidence());
+        assertThat(new ResultValidator().validateAiProposal(request, proposal)).isNotEmpty();
+        var fixed = PackCapacityNormalizer.normalize(request, proposal);
+        assertThat(fixed.mappings().get(0).calculation().operands()).hasSize(1);
+        assertThat(fixed.mappings().get(0).value()).isEqualTo(outer.value());
+        assertThat(new ResultValidator().validateAiProposal(request, fixed)).isEmpty();
+    }
 }

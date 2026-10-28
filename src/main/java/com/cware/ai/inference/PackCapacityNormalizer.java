@@ -48,16 +48,7 @@ public final class PackCapacityNormalizer {
                 && "개당 용량".equals(e.targetPurchaseOptionName())).toList();
         if (counts.size() != 1 || volumes.size() != 1) return proposal;
         var count = counts.get(0); var volume = volumes.get(0);
-        if (!Objects.equals(count.value(), x.packAmount() + x.packUnit())
-                || !Objects.equals(volume.value(), x.itemAmount() + x.itemUnit())
-                || volume.calculation() == null || volume.calculation().operation() != Calculation.Operation.DIRECT
-                || volume.calculation().operands() == null || volume.calculation().operands().size() != 1) return proposal;
-        var physicalOperand = volume.calculation().operands().get(0);
-        if (physicalOperand == null || !x.itemAmount().equals(physicalOperand.amount())
-                || !x.itemUnit().equalsIgnoreCase(physicalOperand.unit()) || physicalOperand.evidence() == null
-                || !"productCompositionText".equals(physicalOperand.evidence().source())
-                || physicalOperand.evidence().text() == null
-                || !physicalOperand.evidence().text().contains(x.itemQuote())) return proposal;
+        if (!Objects.equals(count.value(), x.packAmount() + x.packUnit())) return proposal;
         var facts = new ArrayList<>(proposal.quantityEvidence().facts());
         var physicalFacts = facts.stream().filter(f -> f != null && f.role() == Role.MAIN
                 && f.measure() == Measure.VOLUME && f.scope() == Scope.ITEM && optionId.equals(f.optionId())
@@ -71,6 +62,35 @@ public final class PackCapacityNormalizer {
                 && f.quote().contains(x.packAmount() + x.packUnit())).toList();
         if (physicalFacts.size() != 1 || outerFacts.size() != 1
                 || !physicalFacts.get(0).componentId().equals(outerFacts.get(0).componentId())) return proposal;
+        MappingProposal.Entry fixedCount = count;
+        var countCalc = count.calculation();
+        if (countCalc != null && countCalc.operation() == Calculation.Operation.PACK_COUNT
+                && countCalc.operands() != null && countCalc.operands().isEmpty()
+                && countCalc.context() != null && "productCompositionText".equals(countCalc.context().source())
+                && x.quote().equals(countCalc.context().text())) {
+            fixedCount = new MappingProposal.Entry(optionId, "수량", count.value(), count.confidence(),
+                    "productCompositionText", x.packAmount() + x.packUnit(),
+                    new Calculation(Calculation.Operation.PACK_COUNT, x.packUnit(),
+                            List.of(new Calculation.Operand(x.packAmount(), x.packUnit(),
+                                    new Calculation.Evidence("productCompositionText", x.packAmount() + x.packUnit()))),
+                            countCalc.context()));
+        }
+        if (volume.calculation() != null && volume.calculation().operation() == Calculation.Operation.PACK_CAPACITY
+                && Objects.equals(volume.value(), x.output())) {
+            MappingProposal.Entry replacement = fixedCount;
+            var entries = proposal.mappings().stream().map(e -> e == count ? replacement : e).toList();
+            return new MappingProposal(proposal.certain(), proposal.confidence(), entries, proposal.reason(),
+                    proposal.quantityEvidence());
+        }
+        if (!Objects.equals(volume.value(), x.itemAmount() + x.itemUnit())
+                || volume.calculation() == null || volume.calculation().operation() != Calculation.Operation.DIRECT
+                || volume.calculation().operands() == null || volume.calculation().operands().size() != 1) return proposal;
+        var physicalOperand = volume.calculation().operands().get(0);
+        if (physicalOperand == null || !x.itemAmount().equals(physicalOperand.amount())
+                || !x.itemUnit().equalsIgnoreCase(physicalOperand.unit()) || physicalOperand.evidence() == null
+                || !"productCompositionText".equals(physicalOperand.evidence().source())
+                || physicalOperand.evidence().text() == null
+                || !physicalOperand.evidence().text().contains(x.itemQuote())) return proposal;
         if (facts.stream().noneMatch(f -> f != null && f.role() == Role.MAIN && f.measure() == Measure.COUNT
                 && f.scope() == Scope.PACK && optionId.equals(f.optionId())
                 && physicalFacts.get(0).componentId().equals(f.componentId())
@@ -89,7 +109,8 @@ public final class PackCapacityNormalizer {
                 new Calculation.Evidence("productCompositionText", x.quote()));
         var updated = new MappingProposal.Entry(optionId, "개당 용량", x.output(), volume.confidence(),
                 "productCompositionText", x.quote(), calculation);
-        var entries = proposal.mappings().stream().map(e -> e == volume ? updated : e).toList();
+        MappingProposal.Entry replacement = fixedCount;
+        var entries = proposal.mappings().stream().map(e -> e == volume ? updated : e == count ? replacement : e).toList();
         String reason = "판매 포장 하나의 용량 " + x.itemAmount() + x.itemUnit() + " × "
                 + x.contentAmount() + x.contentUnit() + " = " + x.output() + "을 원문 구성에서 계산했습니다.";
         return new MappingProposal(proposal.certain(), proposal.confidence(), entries, reason,

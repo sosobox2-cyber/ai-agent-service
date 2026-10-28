@@ -321,6 +321,8 @@ v34는 AI 입력에 원문에서 찾은 숫자·단위 후보 `sourceHints`를 �
 
 v38은 단일 본품의 구성 원문에 `50ml×30포×4세트`처럼 낱개 용량·포장 내 개수·판매 포장 수가 모두 명시되면 `수량=4세트`, `개당 용량=1500ml`를 포장 기준으로 검증합니다. `PACK_CAPACITY` 계산은 낱개 용량과 포장 내 개수의 근거를 같은 본품에 연결하고 곱셈식·결과를 대조합니다. `4세트 + 50ml`처럼 계층이 어긋난 제안은 반려합니다. 다른 출처의 용량이 충돌하거나 근거가 불충분하면 자동 보완하지 않습니다.
 
+v39는 같은 구성 원문에 명시된 판매 포장 수의 `PACK_COUNT` 피연산자가 빈 경우에 한해, 연결된 `COUNT/TOTAL` 사실을 확인하고 이를 보완합니다.
+
 검증 오류는 기존 `validationErrors`에 QUANTITY_EVIDENCE_REQUIRED, QUANTITY_SOURCE_MISMATCH, QUANTITY_SOURCE_CONFLICT, QUANTITY_MIXED_ITEMS, QUANTITY_SCOPE_MISMATCH 등의 접두어로 기록합니다. 기존 REVIEW_REQUIRED/RESULT_VALIDATION_FAILED 및 최종 빈 결과 계약을 유지합니다. AI가 검토하지 못한 원문을 NO_RELEVANT_FACT로 잘못 분류하는 등 사실 추출의 완전성을 보장하지는 못합니다.
 
 ### aiUsage
