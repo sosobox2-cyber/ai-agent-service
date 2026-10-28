@@ -303,19 +303,19 @@ AI가 매핑하지 않은 허용 구매옵션 중 기본단위 설정이 없는 
 
 `evidence`와 `context`는 문자열 `source`, `text`를 갖습니다. AI 스키마의 source는 `goodsName`, `productNoticeText`, `productCompositionText`, `optionName1` 중 하나입니다. DIRECT는 직접 추출, CONVERT는 단위 변환, SUM은 합산, PACK_COUNT는 묶음 수량, PACK_CONTENT는 묶음 내부 수량을 뜻합니다. 수량 계열에는 아래 출처·계층 검증을 추가 적용합니다. 일반 SUM 산술을 서버에서 다시 계산하지는 않습니다. 인원 수 형식과 인증·등록번호를 모델명으로 사용하는 오류에 대한 기존 검사도 유지합니다.
 
-### aiAssessment.quantityEvidence (v29)
+### aiAssessment.quantityEvidence (v31)
 
 실제 AI가 수량·개당 수량·개당 중량·개당 용량 중 하나라도 요청받으면 FULL 응답에서 이 객체를 필수 제출합니다. 호출자가 요청에 넣는 필드는 아닙니다. 승인·반려 모두 `aiAssessment.quantityEvidence`에 보존합니다. 과거 이력과 비대상 응답에는 필드가 없을 수 있습니다. 새로운 응답 필드를 거부하는 엄격한 클라이언트 DTO는 갱신해야 합니다.
 
 | 목록 | 필드 | 의미 |
 |---|---|---|
 | `facts` | `id`, `optionId`, `componentId`, `role`, `measure`, `scope`, `amount`, `unit`, `source`, `quote` | 매핑과 독립된 원문 사실. 충돌 때문에 매핑을 생략해도 유지 |
-| `bindings` | `optionId`, `targetPurchaseOptionName`, `componentId`, `scope`, `evidenceIds` | 최종 매핑과 사실 ID의 연결 |
+| `bindings` | `optionId`, `targetPurchaseOptionName`, `componentId`, `scope`, `evidenceIds` | v29~v30 이력에만 있을 수 있는 이전 연결 형식. v31부터 AI는 이 목록을 출력하지 않음 |
 | `sourceReviews` | `optionId`, `source`, `status` | 각 단품의 비어 있지 않은 입력 출처 검토. EXTRACTED / NO_RELEVANT_FACT / AMBIGUOUS |
 
-`role`은 MAIN(대상 본품), EXTRA(명시된 사은품·추가 구성)입니다. `measure`는 COUNT/WEIGHT/VOLUME, `scope`는 ITEM/PACK/TOTAL입니다. 수량은 COUNT/TOTAL(판매 포장 수), 개당 수량은 COUNT/PACK(포장 하나의 내용물 수), 개당 중량·용량은 WEIGHT·VOLUME/ITEM입니다. 여러 본품의 판매 전체 개수 SUM에만 binding.componentId=`*`를 허용합니다.
+`role`은 MAIN(대상 본품), EXTRA(명시된 사은품·추가 구성)입니다. `measure`는 COUNT/WEIGHT/VOLUME, `scope`는 ITEM/PACK/TOTAL입니다. 수량은 COUNT/TOTAL(판매 포장 수), 개당 수량은 COUNT/PACK(포장 하나의 내용물 수), 개당 중량·용량은 WEIGHT·VOLUME/ITEM입니다. v31은 계산 피연산자의 원문 숫자·단위·출처와 `facts`를 서버가 대조해 연결합니다. 두 개 이상의 사실에 동일하게 맞아 연결이 모호하면 검토로 보냅니다.
 
-서버는 인용문과 제출 수치의 원문 존재, 단품·출처 연결, 단위 동치, 같은 본품·계층의 충돌, 다른 본품의 개당 물리량 합산·대표값 선택을 검사합니다. 수량 근거가 없으면 새 AI 응답은 승인하지 않습니다. `amount=null`은 판매 세트 수가 생략된 명시적 세트 구성에서 PACK_COUNT=1세트에만 허용합니다.
+서버는 인용문과 제출 수치의 원문 존재, 단품·출처 연결, 단위 동치, 같은 본품·계층의 충돌, 다른 본품의 개당 물리량 합산·대표값 선택을 검사합니다. 상품명과 구성에서 명시한 팩·롤·매 수가 다르면 AI가 한쪽 사실을 누락해도 반려합니다. 수량 근거가 없으면 새 AI 응답은 승인하지 않습니다. `amount=null`은 판매 세트 수가 생략된 명시적 세트 구성에서 PACK_COUNT=1세트에만 허용합니다.
 
 검증 오류는 기존 `validationErrors`에 QUANTITY_EVIDENCE_REQUIRED, QUANTITY_SOURCE_MISMATCH, QUANTITY_SOURCE_CONFLICT, QUANTITY_MIXED_ITEMS, QUANTITY_SCOPE_MISMATCH 등의 접두어로 기록합니다. 기존 REVIEW_REQUIRED/RESULT_VALIDATION_FAILED 및 최종 빈 결과 계약을 유지합니다. AI가 검토하지 못한 원문을 NO_RELEVANT_FACT로 잘못 분류하는 등 사실 추출의 완전성을 보장하지는 못합니다.
 
@@ -392,7 +392,7 @@ API 호출 중 예외가 발생하면 응답은 `aiUsage=[]`입니다. 첫 번�
   "validationErrors": [],
   "errorCode": null,
   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-  "promptVersion": "coupang-option-v30",
+  "promptVersion": "coupang-option-v31",
   "inferenceSource": "AI",
   "aiAssessment": {
     "certain": true,
@@ -596,7 +596,7 @@ AI가 돌려준 JSON을 파싱하지 못하거나 응답이 완료되지 않았�
   "reason": "입력 데이터를 확인하세요.",
   "validationErrors": ["optionId는 중복될 수 없습니다."],
   "errorCode": "INVALID_REQUEST", "inputHash": null,
-  "promptVersion": "coupang-option-v30", "inferenceSource": "NONE",
+  "promptVersion": "coupang-option-v31", "inferenceSource": "NONE",
   "aiAssessment": null,
   "serverAssessment": {"decisionCode": "INVALID_REQUEST", "reason": "입력 데이터를 확인하세요.", "confidenceThreshold": 0.8},
   "aiUsage": []

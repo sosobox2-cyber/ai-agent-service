@@ -11,7 +11,7 @@ public final class QuantityEvidenceValidator {
     private QuantityEvidenceValidator() {}
     public static final Set<String> TARGETS = Set.of("수량", "개당 수량", "개당 중량", "개당 용량");
     private static final List<String> SOURCES = List.of("goodsName", "productNoticeText", "productCompositionText", "optionName1");
-    private static final Set<String> COUNTS = Set.of("개", "개입", "매", "매입", "장", "정", "정입", "캡슐", "포", "봉", "병", "팩", "롤", "박스", "세트", "묶음", "통", "대", "마리", "미", "패치", "피스", "ea", "p", "t");
+    static final Set<String> COUNTS = Set.of("개", "개입", "매", "매입", "장", "정", "정입", "캡슐", "포", "봉", "병", "팩", "롤", "박스", "세트", "묶음", "통", "대", "마리", "미", "패치", "피스", "ea", "p", "t");
     private static final Pattern NUMBER = Pattern.compile("(?:0|[1-9][0-9]{0,11}|[1-9][0-9]{0,2}(?:,[0-9]{3}){1,3})(?:\\.[0-9]{1,6})?");
 
     public static boolean required(InferenceRequest request) {
@@ -21,9 +21,9 @@ public final class QuantityEvidenceValidator {
     public static List<String> validate(InferenceRequest request, MappingProposal proposal) {
         if (!required(request) || proposal == null) return List.of();
         var context = proposal.quantityEvidence();
-        if (context == null || context.facts() == null || context.bindings() == null || context.sourceReviews() == null)
+        if (context == null || context.facts() == null || context.sourceReviews() == null)
             return List.of("QUANTITY_EVIDENCE_REQUIRED: 수량 계열의 출처·계층 근거가 필요합니다.");
-        if (context.facts().size() > 1000 || context.bindings().size() > 800 || context.sourceReviews().size() > 800)
+        if (context.facts().size() > 1000 || (context.bindings() != null && context.bindings().size() > 800) || context.sourceReviews().size() > 800)
             return List.of("QUANTITY_EVIDENCE_INVALID: 근거 개수 상한을 초과했습니다.");
         List<String> errors = new ArrayList<>();
         Map<String, Fact> facts = new LinkedHashMap<>();
@@ -62,6 +62,7 @@ public final class QuantityEvidenceValidator {
             values.put(fact.id(), canonical);
         }
         validateReviews(request, context, facts, errors);
+        validateExplicitCrossSourceCounts(request, errors);
         // 매핑에서 빠진 항목의 충돌도 검사한다. 같은 본품·같은 측정 계층만 비교한다.
         Map<List<Object>, String> observations = new HashMap<>();
         for (Fact fact : facts.values()) {
@@ -83,7 +84,8 @@ public final class QuantityEvidenceValidator {
                 errors.add("QUANTITY_MIXED_ITEMS: 서로 다른 본품의 개당 물리량을 하나로 적용할 수 없습니다.");
         }
         Map<String, Binding> bindings = new HashMap<>();
-        for (Binding binding : context.bindings()) {
+        List<Binding> supplied = context.bindings() == null ? deriveBindings(proposal, facts, errors) : context.bindings();
+        for (Binding binding : supplied) {
             if (binding == null || blank(binding.optionId()) || !TARGETS.contains(Objects.toString(binding.targetPurchaseOptionName(), ""))
                     || blank(binding.componentId()) || binding.scope() == null || binding.evidenceIds() == null
                     || binding.evidenceIds().isEmpty() || binding.evidenceIds().stream().anyMatch(QuantityEvidenceValidator::blank)) {
@@ -100,6 +102,71 @@ public final class QuantityEvidenceValidator {
         }
         if (!bindings.isEmpty()) errors.add("QUANTITY_BINDING_INVALID: 존재하지 않는 매핑에 근거를 연결했습니다.");
         return errors.stream().distinct().toList();
+    }
+
+    /** 서로 다른 출처가 명시한 포장 수와 매수의 충돌은 AI의 사실 누락과 무관하게 확인한다. */
+    private static void validateExplicitCrossSourceCounts(InferenceRequest request, List<String> errors) {
+        if (request.options().size() != 1 || request.goodsName() == null || request.productCompositionText() == null
+                || request.allowedPurchaseOptions().stream().noneMatch(t -> t.equals("수량") || t.equals("개당 수량"))) return;
+        String name = request.goodsName(), composition = request.productCompositionText();
+        for (String unit : List.of("팩", "롤", "매")) {
+            var pattern = Pattern.compile("(?<![0-9])([1-9][0-9]{0,5})\\s*" + unit);
+            Set<String> left = new HashSet<>(), right = new HashSet<>();
+            var a = pattern.matcher(name); while (a.find()) left.add(a.group(1));
+            var b = pattern.matcher(composition); while (b.find()) right.add(b.group(1));
+            if (left.size() == 1 && right.size() == 1 && !left.equals(right))
+                errors.add("QUANTITY_SOURCE_CONFLICT: 상품명과 구성의 명시된 " + unit + " 수가 다릅니다.");
+        }
+        // 단위가 생략된 '16x6'은 구성의 '17매 6팩'처럼 뒤쪽 포장 수가 일치할 때만 매수로 해석한다.
+        var compact = Pattern.compile("(?<![0-9])([1-9][0-9]{0,5})\\s*[xX×*]\\s*([1-9][0-9]{0,5})(?![0-9])").matcher(name);
+        var explicit = Pattern.compile("(?<![0-9])([1-9][0-9]{0,5})\\s*매\\s*[xX×*]?\\s*([1-9][0-9]{0,5})\\s*팩").matcher(composition);
+        while (compact.find()) {
+            explicit.reset();
+            while (explicit.find()) if (compact.group(2).equals(explicit.group(2)) && !compact.group(1).equals(explicit.group(1)))
+                errors.add("QUANTITY_SOURCE_CONFLICT: 상품명과 구성의 포장당 매수가 다릅니다.");
+        }
+    }
+
+    /** AI가 이미 낸 피연산자와 인용 출처를 원문 사실에 정확히 대조해 연결한다. 모호하면 임의 선택하지 않는다. */
+    private static List<Binding> deriveBindings(MappingProposal proposal, Map<String, Fact> facts, List<String> errors) {
+        List<Binding> result = new ArrayList<>();
+        if (proposal.mappings() == null) return result;
+        for (var entry : proposal.mappings()) {
+            if (entry == null || !TARGETS.contains(Objects.toString(entry.targetPurchaseOptionName(), ""))) continue;
+            var calc = entry.calculation();
+            if (calc == null || calc.operands() == null) continue;
+            Scope expectedScope = scope(entry.targetPurchaseOptionName());
+            Measure expectedMeasure = measure(entry.targetPurchaseOptionName());
+            List<String> ids = new ArrayList<>();
+            if (calc.operands().isEmpty()) {
+                var source = calc.context() == null ? entry.evidenceSource() : calc.context().source();
+                var quote = calc.context() == null ? entry.evidenceText() : calc.context().text();
+                var matches = facts.values().stream().filter(f -> f.amount() == null && f.role() == Role.MAIN
+                        && Objects.equals(f.optionId(), entry.optionId()) && f.scope() == expectedScope
+                        && f.measure() == expectedMeasure && Objects.equals(f.source(), source)
+                        && !blank(quote) && normalize(f.quote()).contains(normalize(quote))).toList();
+                if (matches.size() == 1) ids.add(matches.get(0).id());
+            } else {
+                for (var operand : calc.operands()) {
+                    if (operand == null || operand.evidence() == null || blank(operand.evidence().text())) break;
+                    var matches = facts.values().stream().filter(f -> f.role() == Role.MAIN
+                            && Objects.equals(f.optionId(), entry.optionId()) && f.scope() == expectedScope
+                            && f.measure() == expectedMeasure && Objects.equals(f.amount(), operand.amount())
+                            && Objects.equals(f.unit(), operand.unit()) && Objects.equals(f.source(), operand.evidence().source())
+                            && normalize(f.quote()).contains(normalize(operand.evidence().text()))).toList();
+                    if (matches.size() != 1) break;
+                    ids.add(matches.get(0).id());
+                }
+            }
+            if (ids.size() != Math.max(1, calc.operands().size())) {
+                errors.add("QUANTITY_BINDING_REQUIRED: 계산 피연산자와 일치하는 고유한 원문 사실이 없습니다.");
+                continue;
+            }
+            String component = ids.stream().map(id -> facts.get(id).componentId()).distinct().count() == 1
+                    ? facts.get(ids.get(0)).componentId() : "*";
+            result.add(new Binding(entry.optionId(), entry.targetPurchaseOptionName(), component, expectedScope, ids));
+        }
+        return result;
     }
 
     private static void validateReviews(InferenceRequest request, QuantityEvidence context, Map<String, Fact> facts, List<String> errors) {

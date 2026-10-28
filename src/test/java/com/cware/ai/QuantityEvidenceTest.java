@@ -54,10 +54,37 @@ class QuantityEvidenceTest {
         var p = new MappingProposal(true, .95, List.of(new MappingProposal.Entry("1", "수량", "4개", .95)), "수량 추출");
         assertThat(errors(r, p)).anyMatch(e -> e.startsWith("QUANTITY_EVIDENCE_REQUIRED"));
         var mapper = new ObjectMapper();
-        assertThat(mapper.valueToTree(PurchaseOptionAiService.schema(r)).at("/properties/quantityEvidence/properties/facts/items/properties/scope/enum").size()).isEqualTo(3);
+        var schema = mapper.valueToTree(PurchaseOptionAiService.schema(r));
+        assertThat(schema.at("/properties/quantityEvidence/properties/bindings").isMissingNode()).isTrue();
+        assertThat(schema.at("/properties/quantityEvidence/properties/facts/items/anyOf/0/properties/scope/enum").size()).isEqualTo(2);
+        assertThat(schema.at("/properties/quantityEvidence/properties/facts/items/anyOf/1/properties/unit/enum").toString()).doesNotContain("\"m\"");
         assertThat(mapper.valueToTree(PurchaseOptionAiService.schema(Fixtures.request(), PurchaseOptionPromptMode.LIGHT))
                 .at("/properties/quantityEvidence").isMissingNode()).isTrue();
         assertThat(mapper.readValue(mapper.writeValueAsString(p), MappingProposal.class).quantityEvidence()).isNull();
+    }
+    @Test void derivesLinksFromOperandsWithoutAcceptingMissingOrAmbiguousFacts() {
+        var r = request(List.of("수량"), "판매 4팩", "판매 4팩");
+        var f = fact("a", "main", Measure.COUNT, Scope.TOTAL, "4", "팩", "goodsName", "판매 4팩");
+        var old = proposal(r, List.of(f), "수량", "4개", Calculation.Operation.PACK_COUNT, "개", "a");
+        var q = old.quantityEvidence();
+        var linked = new MappingProposal(true, .95, old.mappings(), old.reason(), new QuantityEvidence(q.facts(), null, q.sourceReviews()));
+        assertThat(errors(r, linked)).isEmpty();
+        var wrong = new MappingProposal(true, .95, old.mappings(), old.reason(),
+                new QuantityEvidence(List.of(fact("b", "main", Measure.COUNT, Scope.TOTAL, "6", "팩", "goodsName", "판매 4팩")), null, q.sourceReviews()));
+        assertThat(errors(r, wrong)).anyMatch(e -> e.startsWith("QUANTITY_BINDING_REQUIRED"));
+        var ambiguous = new MappingProposal(true, .95, old.mappings(), old.reason(),
+                new QuantityEvidence(List.of(f, fact("b", "other", Measure.COUNT, Scope.TOTAL, "4", "팩", "goodsName", "판매 4팩")), null, q.sourceReviews()));
+        assertThat(errors(r, ambiguous)).anyMatch(e -> e.startsWith("QUANTITY_BINDING_REQUIRED"));
+    }
+    @Test void checksPackConflictEvenWhenAiOmitsTheConflictingSourceFact() {
+        for (String[] pair : List.of(new String[]{"9매x4팩", "9매x3팩"},
+                new String[]{"생리대 16x6", "생리대 17매 6팩"})) {
+            var r = request(List.of("수량", "개당 수량"), pair[0], pair[1]);
+            var f = fact("a", "main", Measure.COUNT, Scope.TOTAL, "3", "팩", "productCompositionText", "9매x3팩");
+            var p = new MappingProposal(false, .9, List.of(), "충돌 검토",
+                    new QuantityEvidence(List.of(f), null, context(r, List.of(f), List.of()).sourceReviews()));
+            assertThat(errors(r, p)).anyMatch(e -> e.startsWith("QUANTITY_SOURCE_CONFLICT"));
+        }
     }
     @Test void blocksConflictsEvenWhenMappingIsOmittedAndPreservesEvidence() {
         var r = request(List.of("개당 수량", "색상"), "16매", "17매");

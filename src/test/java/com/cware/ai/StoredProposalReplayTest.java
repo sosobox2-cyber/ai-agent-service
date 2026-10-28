@@ -1,6 +1,7 @@
 package com.cware.ai;
 
 import com.cware.ai.dto.InferenceRequest;
+import com.cware.ai.dto.QuantityEvidence;
 import com.cware.ai.inference.MappingProposal;
 import com.cware.ai.inference.QuantityEvidenceValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,6 +14,30 @@ import static org.assertj.core.api.Assertions.*;
 /** 명시한 로컬 이력만 읽는다. AI·운영 API 호출 없이 최종 승인 변경을 비교한다. */
 @EnabledIfSystemProperty(named = "evaluation.replay.dir", matches = ".+")
 class StoredProposalReplayTest {
+    @Test void replayV30FactsWithServerDerivedLinks() throws Exception {
+        var mapper = new ObjectMapper();
+        var directory = Path.of(System.getProperty("evaluation.replay.dir"));
+        var rows = new ArrayList<Map<String, Object>>();
+        for (String line : Files.readAllLines(directory.resolve("ledger.jsonl"))) {
+            var event = mapper.readTree(line);
+            if (!"completed".equals(event.path("event").asText())
+                    || !event.path("trialId").asText().startsWith("v30-paired-")) continue;
+            var run = mapper.readTree(Files.readString(directory.resolve(event.path("id").asText() + ".json")));
+            var request = mapper.treeToValue(run.path("request"), InferenceRequest.class);
+            var old = mapper.treeToValue(run.path("response").path("aiAssessment"), MappingProposal.class);
+            var q = old.quantityEvidence();
+            var proposal = new MappingProposal(old.certain(), old.confidence(), old.mappings(), old.reason(),
+                    q == null ? null : new QuantityEvidence(q.facts(), null, q.sourceReviews()));
+            var response = AiValueContractTest.assess(request, proposal);
+            rows.add(Map.of("caseId", event.path("caseId").asText(), "before", run.path("response").path("success").asBoolean(),
+                    "after", response.success(), "errors", response.validationErrors()));
+        }
+        assertThat(rows).hasSize(24);
+        for (String bad : List.of("c00040", "c00611", "c00168"))
+            assertThat(rows.stream().filter(row -> bad.equals(row.get("caseId"))).findFirst().orElseThrow().get("after")).isEqualTo(false);
+        Files.createDirectories(Path.of("target"));
+        mapper.writerWithDefaultPrettyPrinter().writeValue(Path.of("target/stored-proposal-replay-v31.json").toFile(), rows);
+    }
     @Test void replaySavedProposalsThroughFinalApproval() throws Exception {
         var mapper = new ObjectMapper();
         var directory = Path.of(System.getProperty("evaluation.replay.dir"));
