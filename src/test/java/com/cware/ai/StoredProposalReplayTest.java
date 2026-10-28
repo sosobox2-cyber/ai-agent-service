@@ -4,6 +4,7 @@ import com.cware.ai.dto.InferenceRequest;
 import com.cware.ai.dto.QuantityEvidence;
 import com.cware.ai.inference.MappingProposal;
 import com.cware.ai.inference.QuantityEvidenceValidator;
+import com.cware.ai.inference.ImplicitSingleQuantityPolicy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -55,7 +56,8 @@ class StoredProposalReplayTest {
             var request = mapper.treeToValue(run.path("request"), InferenceRequest.class);
             var proposal = mapper.treeToValue(run.path("response").path("aiAssessment"), MappingProposal.class);
             var result = AiValueContractTest.assess(request, proposal);
-            if (QuantityEvidenceValidator.required(request) && proposal.quantityEvidence() == null) {
+            if (QuantityEvidenceValidator.required(request) && proposal.quantityEvidence() == null
+                    && !ImplicitSingleQuantityPolicy.eligible(request)) {
                 assertThat(result.success()).isFalse();
                 assertThat(result.validationErrors()).anyMatch(e -> e.startsWith("QUANTITY_EVIDENCE_REQUIRED"));
             }

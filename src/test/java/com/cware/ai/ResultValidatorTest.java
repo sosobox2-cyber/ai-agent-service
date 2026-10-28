@@ -12,6 +12,22 @@ import static org.assertj.core.api.Assertions.*;
 class ResultValidatorTest {
     private final ResultValidator validator = new ResultValidator();
 
+    @Test void rejectsPackCountPairedWithInnerPouchVolume() {
+        var request = new InferenceRequest("nested", "음료 4박스", null, List.of("수량", "개당 용량"),
+                List.of(new SourceOption("1", "단일상품")), "상품 정보",
+                List.of(new PurchaseOptionUnit("수량", "개", List.of("개", "박스", "세트")),
+                        new PurchaseOptionUnit("개당 용량", "ml", List.of("ml"))), "50ml×30포×4세트");
+        var proposal = new MappingProposal(true, .9, List.of(
+                new MappingProposal.Entry("1", "수량", "4세트", .9),
+                new MappingProposal.Entry("1", "개당 용량", "50ml", .9)), "포장 구성");
+        assertThat(validator.validateAiProposal(request, proposal))
+                .anyMatch(e -> e.startsWith("QUANTITY_LEVEL_MISMATCH"));
+        var direct = new InferenceRequest("simple", "음료 4병", null, request.allowedPurchaseOptions(),
+                request.options(), "상품 정보", request.purchaseOptionUnits(), "50ml×4병");
+        assertThat(validator.validateAiProposal(direct, proposal))
+                .noneMatch(e -> e.startsWith("QUANTITY_LEVEL_MISMATCH"));
+    }
+
     @Test void extractsMultipleAllowedValuesFromOneOriginalName() {
         var request = Fixtures.request();
         var proposal = Fixtures.proposal();

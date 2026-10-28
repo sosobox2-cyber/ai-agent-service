@@ -54,6 +54,19 @@ class AiFailoverTest {
                         .usage(new DefaultUsage(1000, 200, 1200, nativeUsage)).build());
     }
 
+    @Test void implicitSingleCountIsApprovedAfterOneAiCallWithoutFullRetry() throws Exception {
+        var single = new InferenceRequest("single-count", "가자미 세꼬시 300g", null,
+                List.of("수량"), List.of(new SourceOption("1", "단일상품")), "중량 300g",
+                List.of(new PurchaseOptionUnit("수량", "개", List.of("개"))));
+        when(model.call(any(Prompt.class))).thenReturn(response(new MappingProposal(true, .9,
+                List.of(), "수량은 서버의 단일상품 정책 대상")));
+        var result = service("AUTO", AiRetryProperties.defaults()).infer(single);
+        assertThat(result.success()).isTrue();
+        assertThat(result.items().get(0).purchaseOptions()).containsEntry("수량", "1개");
+        assertThat(result.aiUsage()).hasSize(1);
+        verify(model, times(1)).call(any(Prompt.class));
+    }
+
     PurchaseOptionInferenceService service(String mode, AiRetryProperties settings) throws Exception {
         var provider = new PurchaseOptionPromptProvider(mode);
         var logger = Fixtures.usageLogger(false, temp.resolve("usage.jsonl"));

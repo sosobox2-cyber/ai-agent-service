@@ -145,7 +145,8 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
         InferenceException truncated = null;
         try {
             // 응답을 파싱하고 개수 단위를 정규화한 뒤, 요청에 맞는 매핑인지 검증한다.
-            proposal = CountUnitNormalizer.normalize(request, parse(response));
+            proposal = ImplicitSingleQuantityPolicy.normalize(request,
+                    CountUnitNormalizer.normalize(request, parse(response)));
             validation = validator.validate(request, proposal);
         } catch (JsonProcessingException | InferenceException e) {
             if (e instanceof InferenceException failure && TRUNCATED_CODE.equals(failure.code())) truncated = failure;

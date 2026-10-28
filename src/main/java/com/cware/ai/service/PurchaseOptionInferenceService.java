@@ -36,6 +36,7 @@ public class PurchaseOptionInferenceService {
         // AI 추론 과정에서 발생한 호출별 사용량을 수집한다.
         List<AiCallUsage> usage = new ArrayList<>();
         MappingProposal proposal = ai.infer(request, usage::add);
+        proposal = ImplicitSingleQuantityPolicy.normalize(request, proposal);
         // 제안된 매핑을 검증하고 신뢰도를 평가한 응답에 AI 사용량을 포함한다.
         return assess(request, hash, proposal).withUsage(usage);
     }

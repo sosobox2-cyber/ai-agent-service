@@ -3,6 +3,8 @@ package com.cware.ai.inference;
 import com.cware.ai.dto.*;
 import org.springframework.stereotype.Component;
 import java.util.*;
+import java.math.BigDecimal;
+import java.util.regex.Pattern;
 
 @Component
 /** AI 제안의 기본 구조와 요청 단위 형식을 확인하고 단품별 결과를 조립·검증한다. */
@@ -13,7 +15,37 @@ public class ResultValidator {
         errors.addAll(AiValueContract.validate(request, proposal));
         errors.addAll(QuantityEvidenceValidator.validate(request, proposal));
         errors.addAll(validatePreferredUnits(request, proposal));
+        errors.addAll(validatePackLevelCapacity(request, proposal));
         return errors.stream().distinct().toList();
+    }
+
+    private static final Pattern PACKED_VOLUME = Pattern.compile(
+            "(?i)(?<![0-9])([1-9][0-9]*(?:\\.[0-9]+)?)\\s*(ml|l|cc)\\s*[x×*]\\s*([1-9][0-9]*)\\s*(포|개|병|캡슐|정)\\s*[x×*]\\s*([1-9][0-9]*)\\s*(세트|박스|팩|묶음)");
+    private static final Pattern VALUE_NUMBER = Pattern.compile("^([1-9][0-9]*(?:\\.[0-9]+)?)(.+)$");
+
+    /** 판매 포장 수와 내용물 한 포의 용량을 서로 다른 '개당' 계층으로 섞으면 보류한다. */
+    private static List<String> validatePackLevelCapacity(InferenceRequest request, MappingProposal proposal) {
+        if (proposal == null || proposal.mappings() == null || request.options().size() != 1
+                || !request.allowedPurchaseOptions().containsAll(List.of("수량", "개당 용량"))) return List.of();
+        String composition = request.productCompositionText();
+        if (composition == null || composition.isBlank()) return List.of();
+        var matcher = PACKED_VOLUME.matcher(composition);
+        while (matcher.find()) {
+            String optionId = request.options().get(0).optionId();
+            var count = proposal.mappings().stream().filter(e -> e != null && optionId.equals(e.optionId())
+                    && "수량".equals(e.targetPurchaseOptionName())).findFirst().orElse(null);
+            var volume = proposal.mappings().stream().filter(e -> e != null && optionId.equals(e.optionId())
+                    && "개당 용량".equals(e.targetPurchaseOptionName())).findFirst().orElse(null);
+            if (count == null || volume == null || count.value() == null || volume.value() == null) continue;
+            var countValue = VALUE_NUMBER.matcher(count.value());
+            var volumeValue = VALUE_NUMBER.matcher(volume.value());
+            if (countValue.matches() && volumeValue.matches()
+                    && new BigDecimal(countValue.group(1)).compareTo(new BigDecimal(matcher.group(5))) == 0
+                    && new BigDecimal(volumeValue.group(1)).compareTo(new BigDecimal(matcher.group(1))) == 0
+                    && volumeValue.group(2).equalsIgnoreCase(matcher.group(2)))
+                return List.of("QUANTITY_LEVEL_MISMATCH: 판매 포장 수와 개당 용량의 기준 계층이 다릅니다.");
+        }
+        return List.of();
     }
 
     private static List<String> validatePreferredUnits(InferenceRequest request, MappingProposal proposal) {

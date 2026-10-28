@@ -47,10 +47,15 @@ public final class QuantityEvidenceValidator {
             Role priorRole = roles.putIfAbsent(roleKey, fact.role());
             if (priorRole != null && priorRole != fact.role()) errors.add("QUANTITY_EVIDENCE_INVALID: 같은 구성품의 본품/추가 구분이 다릅니다.");
             if (fact.amount() == null) {
-                // 명시적 한 세트 구성의 1세트 판단만 허용한다. 원문에 없는 숫자를 추출 사실로 만들지 않는다.
-                if (fact.measure() != Measure.COUNT || fact.scope() != Scope.TOTAL || !fact.unit().equals("세트")
-                        || !fact.quote().contains("세트") || Pattern.compile("[0-9]\\s*세트|세트\\s*[0-9]").matcher(fact.quote()).find())
-                    errors.add("QUANTITY_EVIDENCE_INVALID: 숫자 없는 근거는 판매 세트 수가 없는 명시적 세트 구성에만 허용합니다.");
+                boolean implicitSingle = ImplicitSingleQuantityPolicy.eligible(request)
+                        && fact.measure() == Measure.COUNT && fact.scope() == Scope.TOTAL
+                        && fact.unit().equals("개") && fact.source().equals("optionName1")
+                        && fact.quote().strip().equals(request.options().get(0).optionName1().strip());
+                boolean explicitSet = fact.measure() == Measure.COUNT && fact.scope() == Scope.TOTAL
+                        && fact.unit().equals("세트") && fact.quote().contains("세트")
+                        && !Pattern.compile("[0-9]\\s*세트|세트\\s*[0-9]").matcher(fact.quote()).find();
+                if (!implicitSingle && !explicitSet)
+                    errors.add("QUANTITY_EVIDENCE_INVALID: 숫자 없는 근거는 명시적 세트 또는 단일상품 1개 정책에만 허용합니다.");
                 else values.put(fact.id(), "1");
                 continue;
             }
@@ -218,9 +223,14 @@ public final class QuantityEvidenceValidator {
         if (binding.componentId().equals("*") && calc.operation() != Calculation.Operation.SUM)
             errors.add("QUANTITY_OPERATION_MISMATCH: 여러 본품의 전체 개수는 SUM으로 설명해야 합니다.");
         if (selected.stream().anyMatch(f -> f.amount() == null)) {
+            boolean implicitSingle = selected.size() == 1 && selected.get(0).unit().equals("개")
+                    && selected.get(0).source().equals("optionName1")
+                    && "1개".equals(entry.value()) && "개".equals(calc.outputUnit());
+            boolean explicitSet = selected.size() == 1 && selected.get(0).unit().equals("세트")
+                    && "1세트".equals(entry.value()) && "세트".equals(calc.outputUnit());
             if (selected.size() != 1 || calc.operation() != Calculation.Operation.PACK_COUNT || !calc.operands().isEmpty()
-                    || !"1세트".equals(entry.value()) || !"세트".equals(calc.outputUnit()))
-                errors.add("QUANTITY_BINDING_INVALID: 숫자 없는 세트 근거는 1세트 구성 판단에만 사용할 수 있습니다.");
+                    || (!implicitSingle && !explicitSet))
+                errors.add("QUANTITY_BINDING_INVALID: 숫자 없는 근거는 단일상품 1개 또는 명시적 1세트에만 사용할 수 있습니다.");
             return;
         }
         Set<Calculation.Operand> operandsSeen = new HashSet<>();

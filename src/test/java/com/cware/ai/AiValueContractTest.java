@@ -70,7 +70,13 @@ class AiValueContractTest {
         assertThat(validator.validateProposal(request("수량", "개"), p)).isEmpty();
         assertThat(validator.validateAiProposal(request("수량", null), p))
                 .anyMatch(e -> e.startsWith("QUANTITY_EVIDENCE_REQUIRED"));
-        assertThat(assess(request("수량", "개"), proposal("수량", "12개", "병", "개", "70병")).success()).isFalse();
+        var implicit = assess(request("수량", "개"), proposal("수량", "12개", "병", "개", "70병"));
+        assertThat(implicit.success()).isTrue();
+        assertThat(implicit.items().get(0).purchaseOptions()).containsEntry("수량", "1개");
+        var explicit = new InferenceRequest("contract-explicit", "평가 상품 12병", null, List.of("수량"),
+                List.of(new SourceOption("1", "단일상품")), "검증용 상품 정보",
+                List.of(new PurchaseOptionUnit("수량", "개", List.of("개"))));
+        assertThat(assess(explicit, proposal("수량", "12개", "병", "개", "70병")).success()).isFalse();
         assertThat(assess(Fixtures.request(), Fixtures.proposal()).success()).isTrue();
     }
 }
