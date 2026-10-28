@@ -9,11 +9,13 @@ import java.util.regex.Pattern;
 /** 명시적인 낱개 용량 × 포장 내 개수 × 판매 포장 수만 포장당 용량으로 계산한다. */
 public final class PackCapacityNormalizer {
     private PackCapacityNormalizer() {}
+    private static final String POSITIVE_VOLUME = "(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)";
     private static final Pattern EXPRESSION = Pattern.compile(
-            "(?i)(?<![0-9])([1-9][0-9]*(?:\\.[0-9]+)?)\\s*(ml|l|cc)\\s*[x×*]\\s*([1-9][0-9]*)\\s*(포|개|병|캡슐|정)\\s*[x×*]\\s*([1-9][0-9]*)\\s*(세트|박스|팩|묶음)");
-    private static final Pattern VOLUME = Pattern.compile("(?i)(?<![0-9])([1-9][0-9]*(?:\\.[0-9]+)?)\\s*(ml|l|cc)");
+            "(?i)(?<![0-9.])(" + POSITIVE_VOLUME + ")\\s*(ml|l|cc)\\s*[x×*]\\s*([1-9][0-9]*)\\s*(포|개|병|캡슐|정)\\s*[x×*]\\s*([1-9][0-9]*)\\s*(세트|박스|팩|묶음)");
+    private static final Pattern VOLUME = Pattern.compile("(?i)(?<![0-9.])(" + POSITIVE_VOLUME + ")\\s*(ml|l|cc)");
     record Expression(String itemAmount, String itemUnit, String contentAmount, String contentUnit,
-                      String packAmount, String packUnit, String quote, String itemQuote, String contentQuote) {
+                      String packAmount, String packUnit, String quote, String itemQuote, String contentQuote,
+                      String packQuote) {
         String output() { return new BigDecimal(itemAmount).multiply(new BigDecimal(contentAmount))
                 .stripTrailingZeros().toPlainString() + itemUnit; }
     }
@@ -23,16 +25,23 @@ public final class PackCapacityNormalizer {
         var matcher = EXPRESSION.matcher(request.productCompositionText());
         if (!matcher.find()) return null;
         var result = new Expression(matcher.group(1), matcher.group(2), matcher.group(3), matcher.group(4),
-                matcher.group(5), matcher.group(6), matcher.group(), matcher.group(1) + matcher.group(2),
-                matcher.group(3) + matcher.group(4));
+                matcher.group(5), matcher.group(6), matcher.group(),
+                request.productCompositionText().substring(matcher.start(1), matcher.end(2)),
+                request.productCompositionText().substring(matcher.start(3), matcher.end(4)),
+                request.productCompositionText().substring(matcher.start(5), matcher.end(6)));
         if (matcher.find()) return null; // 여러 포장식 중 임의 선택하지 않는다.
         for (String source : List.of(Objects.toString(request.goodsName(), ""),
                 Objects.toString(request.productNoticeText(), ""))) {
             var physical = VOLUME.matcher(source);
-            while (physical.find()) if (!physical.group(1).equals(result.itemAmount())
-                    || !physical.group(2).equalsIgnoreCase(result.itemUnit())) return null;
+            while (physical.find()) if (milliliters(physical.group(1), physical.group(2))
+                    .compareTo(milliliters(result.itemAmount(), result.itemUnit())) != 0) return null;
         }
         return result;
+    }
+
+    private static BigDecimal milliliters(String amount, String unit) {
+        return new BigDecimal(amount).multiply(unit.equalsIgnoreCase("l")
+                ? new BigDecimal("1000") : BigDecimal.ONE);
     }
 
     public static MappingProposal normalize(InferenceRequest request, MappingProposal proposal) {
@@ -59,7 +68,7 @@ public final class PackCapacityNormalizer {
                 && f.measure() == Measure.COUNT && f.scope() == Scope.TOTAL && optionId.equals(f.optionId())
                 && x.packAmount().equals(f.amount()) && x.packUnit().equals(f.unit())
                 && "productCompositionText".equals(f.source()) && f.quote() != null
-                && f.quote().contains(x.packAmount() + x.packUnit())).toList();
+                && f.quote().contains(x.packQuote())).toList();
         if (physicalFacts.size() != 1 || outerFacts.size() != 1
                 || !physicalFacts.get(0).componentId().equals(outerFacts.get(0).componentId())) return proposal;
         MappingProposal.Entry fixedCount = count;
@@ -69,10 +78,10 @@ public final class PackCapacityNormalizer {
                 && countCalc.context() != null && "productCompositionText".equals(countCalc.context().source())
                 && x.quote().equals(countCalc.context().text())) {
             fixedCount = new MappingProposal.Entry(optionId, "수량", count.value(), count.confidence(),
-                    "productCompositionText", x.packAmount() + x.packUnit(),
+                    "productCompositionText", x.packQuote(),
                     new Calculation(Calculation.Operation.PACK_COUNT, x.packUnit(),
                             List.of(new Calculation.Operand(x.packAmount(), x.packUnit(),
-                                    new Calculation.Evidence("productCompositionText", x.packAmount() + x.packUnit()))),
+                                    new Calculation.Evidence("productCompositionText", x.packQuote()))),
                             countCalc.context()));
         }
         if (volume.calculation() != null && volume.calculation().operation() == Calculation.Operation.PACK_CAPACITY

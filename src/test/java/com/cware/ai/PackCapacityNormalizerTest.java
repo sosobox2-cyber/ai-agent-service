@@ -19,17 +19,21 @@ class PackCapacityNormalizerTest {
                         new PurchaseOptionUnit("개당 용량", "ml", List.of("ml", "L"))), composition);
     }
     private MappingProposal aiProposal() {
-        var source = new Calculation.Evidence("productCompositionText", "50ml×30포×4세트");
-        var count = new MappingProposal.Entry("1", "수량", "4세트", .9, source.source(), "4세트",
+        return aiProposal("50ml×30포×4세트", "50", "ml", "50ml", "30포", "4세트");
+    }
+    private MappingProposal aiProposal(String expression, String itemAmount, String itemUnit,
+                                       String itemQuote, String contentQuote, String outerQuote) {
+        var source = new Calculation.Evidence("productCompositionText", expression);
+        var count = new MappingProposal.Entry("1", "수량", "4세트", .9, source.source(), outerQuote,
                 new Calculation(Calculation.Operation.PACK_COUNT, "세트", List.of(
-                        new Calculation.Operand("4", "세트", new Calculation.Evidence(source.source(), "4세트"))), source));
-        var volume = new MappingProposal.Entry("1", "개당 용량", "50ml", .9, source.source(), "50ml",
-                new Calculation(Calculation.Operation.DIRECT, "ml", List.of(
-                        new Calculation.Operand("50", "ml", new Calculation.Evidence(source.source(), "50ml"))), null));
+                        new Calculation.Operand("4", "세트", new Calculation.Evidence(source.source(), outerQuote))), source));
+        var volume = new MappingProposal.Entry("1", "개당 용량", itemAmount + itemUnit, .9, source.source(), itemQuote,
+                new Calculation(Calculation.Operation.DIRECT, itemUnit, List.of(
+                        new Calculation.Operand(itemAmount, itemUnit, new Calculation.Evidence(source.source(), itemQuote))), null));
         var facts = List.of(new Fact("item", "1", "main", Role.MAIN, Measure.VOLUME, Scope.ITEM,
-                "50", "ml", source.source(), "50ml"),
+                itemAmount, itemUnit, source.source(), itemQuote),
                 new Fact("outer", "1", "main", Role.MAIN, Measure.COUNT, Scope.TOTAL,
-                        "4", "세트", source.source(), "4세트"));
+                        "4", "세트", source.source(), outerQuote));
         var reviews = List.of(new SourceReview("1", "goodsName", Status.NO_RELEVANT_FACT),
                 new SourceReview("1", "productNoticeText", Status.NO_RELEVANT_FACT),
                 new SourceReview("1", "productCompositionText", Status.EXTRACTED),
@@ -95,5 +99,48 @@ class PackCapacityNormalizerTest {
         assertThat(fixed.mappings().get(0).calculation().operands()).hasSize(1);
         assertThat(fixed.mappings().get(0).value()).isEqualTo(outer.value());
         assertThat(new ResultValidator().validateAiProposal(request, fixed)).isEmpty();
+    }
+
+    @Test void acceptsEquivalentMultiplicationMarksAndRejectsConflictingSources() {
+        for (String expression : List.of("50ml x 30포 x 4세트", "50ml * 30포 * 4세트")) {
+            var raw = aiProposal();
+            var count = raw.mappings().get(0);
+            var old = count.calculation();
+            var revised = new MappingProposal.Entry(count.optionId(), count.targetPurchaseOptionName(),
+                    count.value(), count.confidence(), count.evidenceSource(), count.evidenceText(),
+                    new Calculation(old.operation(), old.outputUnit(), old.operands(),
+                            new Calculation.Evidence("productCompositionText", expression)));
+            var proposal = new MappingProposal(raw.certain(), raw.confidence(),
+                    List.of(revised, raw.mappings().get(1)), raw.reason(), raw.quantityEvidence());
+            var request = request("상품 정보", expression);
+            assertThat(new ResultValidator().validateAiProposal(request,
+                    PackCapacityNormalizer.normalize(request, proposal))).isEmpty();
+            assertThat(PackCapacityNormalizer.normalize(request("다른 용량 40ml", expression), proposal))
+                    .isEqualTo(proposal);
+        }
+    }
+
+    @Test void computesCapacityWithSpacesInsideUnits() {
+        String expression = "50 ml × 30 포 × 4 세트";
+        var request = request("상품 정보", expression);
+        var proposal = aiProposal(expression, "50", "ml", "50 ml", "30 포", "4 세트");
+        var normalized = PackCapacityNormalizer.normalize(request, proposal);
+        assertThat(normalized.mappings().get(1).value()).isEqualTo("1500ml");
+        assertThat(new ResultValidator().validateAiProposal(request, normalized)).isEmpty();
+    }
+
+    @Test void convertsSubunitLiterExpressionAndChecksEquivalentSource() {
+        String expression = "0.05L×30포×4세트";
+        var request = request("동일 본품 50ml", expression);
+        var proposal = aiProposal(expression, "0.05", "L", "0.05L", "30포", "4세트");
+        assertThat(new ResultValidator().validateAiProposal(request, proposal))
+                .anyMatch(e -> e.startsWith("QUANTITY_LEVEL_MISMATCH"));
+        var normalized = PackCapacityNormalizer.normalize(request, proposal);
+        assertThat(normalized.mappings().get(1).value()).isEqualTo("1.5L");
+        assertThat(new ResultValidator().validateAiProposal(request, normalized)).isEmpty();
+        var conflict = request("상충하는 본품 60ml", expression);
+        assertThat(PackCapacityNormalizer.normalize(conflict, proposal)).isEqualTo(proposal);
+        assertThat(new ResultValidator().validateAiProposal(conflict, proposal))
+                .anyMatch(e -> e.startsWith("QUANTITY_LEVEL_MISMATCH"));
     }
 }
