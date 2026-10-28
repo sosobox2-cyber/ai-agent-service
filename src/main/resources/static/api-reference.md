@@ -307,6 +307,8 @@ AI가 매핑하지 않은 허용 구매옵션 중 기본단위 설정이 없는 
 
 실제 AI가 수량·개당 수량·개당 중량·개당 용량 중 하나라도 요청받으면 FULL 응답에서 이 객체를 필수 제출합니다. 호출자가 요청에 넣는 필드는 아닙니다. 승인·반려 모두 `aiAssessment.quantityEvidence`에 보존합니다. 과거 이력과 비대상 응답에는 필드가 없을 수 있습니다. 새로운 응답 필드를 거부하는 엄격한 클라이언트 DTO는 갱신해야 합니다.
 
+v34는 AI 입력에 원문에서 찾은 숫자·단위 후보 `sourceHints`를 추가합니다. 후보는 실제 상품 원문에서 추출하지만 대상 본품·판매 계층의 확정값이 아닙니다. 요청과 공개 응답의 필드는 바뀌지 않습니다.
+
 | 목록 | 필드 | 의미 |
 |---|---|---|
 | `facts` | `id`, `optionId`, `componentId`, `role`, `measure`, `scope`, `amount`, `unit`, `source`, `quote` | 매핑과 독립된 원문 사실. 충돌 때문에 매핑을 생략해도 유지 |
@@ -392,7 +394,7 @@ API 호출 중 예외가 발생하면 응답은 `aiUsage=[]`입니다. 첫 번�
   "validationErrors": [],
   "errorCode": null,
   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-  "promptVersion": "coupang-option-v32",
+  "promptVersion": "coupang-option-v34",
   "inferenceSource": "AI",
   "aiAssessment": {
     "certain": true,
@@ -596,7 +598,7 @@ AI가 돌려준 JSON을 파싱하지 못하거나 응답이 완료되지 않았�
   "reason": "입력 데이터를 확인하세요.",
   "validationErrors": ["optionId는 중복될 수 없습니다."],
   "errorCode": "INVALID_REQUEST", "inputHash": null,
-  "promptVersion": "coupang-option-v32", "inferenceSource": "NONE",
+  "promptVersion": "coupang-option-v34", "inferenceSource": "NONE",
   "aiAssessment": null,
   "serverAssessment": {"decisionCode": "INVALID_REQUEST", "reason": "입력 데이터를 확인하세요.", "confidenceThreshold": 0.8},
   "aiUsage": []

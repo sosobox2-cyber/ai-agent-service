@@ -56,7 +56,7 @@ test('v28도 이전 비용 원장을 이어 쓰며 미검증 버전은 호출하
     return { ok: true, status: 200, json: async () => run };
   } });
   assert.ok(Math.abs(state.spent - 0.3309184) < 1e-10);
-  x.plan.promptVersion = 'coupang-option-v33';
+  x.plan.promptVersion = 'coupang-option-v35';
   await assert.rejects(execute({ ...x, fetcher: async () => assert.fail('must not call') }), /검증된 실행 설정/);
 });
 test('v29의 늘어난 예산도 기존 비용을 포함하며 1.45달러에서 중단한다', async t => {

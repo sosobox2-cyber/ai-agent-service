@@ -79,7 +79,9 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
     public MappingProposal infer(InferenceRequest request, Consumer<AiCallUsage> usage) {
         try {
             // 사용자 프롬프트와 상품 JSON을 결합해 최초 호출과 재시도에서 사용할 입력을 구성한다.
-            String input = userPrompt + "\n" + mapper.writeValueAsString(Map.of("product", AiProductData.from(request)));
+            String input = userPrompt + "\n" + mapper.writeValueAsString(QuantityEvidenceValidator.required(request)
+                    ? Map.of("product", AiProductData.from(request), "sourceHints", QuantitySourceHints.from(request))
+                    : Map.of("product", AiProductData.from(request)));
             // 최초 모드는 한 번만 선택하고, 동일한 추론 ID로 두 호출의 사용량과 로그를 연결한다.
             PurchaseOptionPromptMode initial = prompts.select(request);
             String inferenceId = UUID.randomUUID().toString();

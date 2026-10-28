@@ -268,7 +268,7 @@ AI가 `allowedPurchaseOptions`에 포함된 모든 구매옵션을 반드시 반
 
 실제 AI의 재추론 판단과 최종 승인에는 `ResultValidator.validateAiProposal`을 함께 사용합니다. v29부터 수량·개당 수량·개당 중량·개당 용량은 `QuantityEvidenceValidator`로 원문 인용·수치 존재, 단위 동치, 출처 충돌 및 계층을 검사합니다. 이 4옵션은 단위 미설정이어도 근거가 필수이며 임의의 기본 단위를 붙이지 않습니다. 일반 SUM 산술은 재계산하지 않습니다. 모의 추출은 기존 구조 검증을 사용합니다.
 
-FULL의 대상 요청에는 quantityEvidence(facts/sourceReviews) 스키마를 추가합니다. v31부터 AI는 중복이 잦았던 bindings를 작성하지 않고 서버가 계산 피연산자와 사실을 정확히 대조해 연결합니다. COUNT/PACK·TOTAL과 WEIGHT·VOLUME/ITEM의 단위 조합을 스키마로 제한합니다. LIGHT 및 수량 계열이 없는 FULL 스키마는 유지합니다. AI 응답 파싱 → CountUnitNormalizer → AiInferenceValidator와 최종 승인 흐름에서 근거를 보존하며, 반려 변환 후에도 AiAssessment에서 확인할 수 있습니다. 재추론·통신 재시도·출력 토큰 상한은 변경하지 않습니다.
+FULL의 대상 요청에는 quantityEvidence(facts/sourceReviews) 스키마를 추가합니다. v31부터 AI는 중복이 잦았던 bindings를 작성하지 않고 서버가 계산 피연산자와 사실을 정확히 대조해 연결합니다. COUNT/PACK·TOTAL과 WEIGHT·VOLUME/ITEM의 단위 조합을 스키마로 제한합니다. v34부터 수량 대상 요청에는 서버가 원문에서 찾은 최대 32개의 숫자·단위 후보를 별도 sourceHints로 전달합니다. 힌트는 판단 근거가 아니며 기존 원문과 서버 검증을 유지합니다. LIGHT 및 수량 계열이 없는 FULL 스키마는 유지합니다. AI 응답 파싱 → CountUnitNormalizer → AiInferenceValidator와 최종 승인 흐름에서 근거를 보존하며, 반려 변환 후에도 AiAssessment에서 확인할 수 있습니다. 재추론·통신 재시도·출력 토큰 상한은 변경하지 않습니다.
 
 같은 optionId·componentId·measure·scope의 서로 다른 원문 값은 충돌입니다. g/kg/mg는 g 기준, ml/L/cc는 ml 기준으로 비교하므로 1kg과 1000g은 동일합니다. 알려진 개수 단위는 같은 측정 계층에서 개수로 비교합니다. 그 밖의 단위는 임의 환산하지 않고 검토로 보냅니다. 다른 MAIN 본품의 개당 물리량이 다르면 매핑 생략 여부와 관계없이 보류하며, 추가 구성은 실제 인용문의 사은품·증정 등의 표현이 필요합니다.
 
