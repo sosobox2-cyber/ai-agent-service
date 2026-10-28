@@ -9,6 +9,19 @@ import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 
 class QuantityEvidenceTest {
+    @Test void fullPromptExampleIncludesValidQuantityEvidence() throws Exception {
+        String prompt;
+        try (var stream = getClass().getResourceAsStream("/prompts/coupang-purchase-option-system.txt")) {
+            prompt = new String(Objects.requireNonNull(stream).readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+        String json = prompt.lines().filter(line -> line.startsWith("{\"quantityEvidence\":")).findFirst().orElseThrow();
+        var proposal = new ObjectMapper().readValue(json, MappingProposal.class);
+        var request = new InferenceRequest("example", "[해즈픽]시그니처 케어 칫솔 10개", null,
+                List.of("개당 수량", "수량"), List.of(new SourceOption("1", "단일상품")),
+                "[해즈픽] 시그니처 케어 칫솔 10개 세트", List.of(), null);
+        assertThat(proposal.quantityEvidence()).isNotNull();
+        assertThat(errors(request, proposal)).isEmpty();
+    }
     static InferenceRequest request(List<String> targets, String name, String composition) {
         return new InferenceRequest("quantity-fixture", name, null, targets,
                 List.of(new SourceOption("1", "단일상품")), "검증용 정보", List.of(), composition);
