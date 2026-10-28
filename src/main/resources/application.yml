@@ -42,7 +42,7 @@ app:
   # 최종 자동 적용 기준과 공급자 HTTP 연결·읽기 제한 시간을 설정한다.
   inference:
     confidence-threshold: 0.80
-    prompt-version: coupang-option-v41
+    prompt-version: coupang-option-v42
     connect-timeout: 5s
     read-timeout: 30s
   ai:
