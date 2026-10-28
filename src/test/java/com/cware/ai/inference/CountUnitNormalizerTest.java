@@ -58,6 +58,24 @@ class CountUnitNormalizerTest {
         assertThat(normalized.mappings().get(0).evidenceText()).isEqualTo("250M");
     }
 
+    @Test void alignsDirectPhysicalOutputWithExplicitValueAndOperand() {
+        var request = new InferenceRequest("paper", "37m", null, List.of("길이"),
+                List.of(new SourceOption("1", "단일상품")), "37m",
+                List.of(new PurchaseOptionUnit("길이", "cm", List.of("cm", "m", "mm"))));
+        var operand = new Calculation.Operand("37", "m", new Calculation.Evidence("goodsName", "37m"));
+        var calculation = new Calculation(Calculation.Operation.DIRECT, "cm", List.of(operand), null);
+        var entry = new MappingProposal.Entry("1", "길이", "37m", .9, "goodsName", "37m", calculation);
+        var normalized = CountUnitNormalizer.normalize(request, new MappingProposal(true, .9, List.of(entry), "길이"));
+        assertThat(normalized.mappings().get(0).calculation().outputUnit()).isEqualTo("m");
+        assertThat(normalized.mappings().get(0).calculation().operands()).containsExactly(operand);
+        assertThat(new ResultValidator().validateProposal(request, normalized)).isEmpty();
+        var inconsistent = new MappingProposal.Entry("1", "길이", "37m", .9, "goodsName", "37m",
+                new Calculation(Calculation.Operation.DIRECT, "cm", List.of(
+                        new Calculation.Operand("37", "mm", operand.evidence())), null));
+        assertThat(CountUnitNormalizer.normalize(request, new MappingProposal(true, .9, List.of(inconsistent), "길이"))
+                .mappings().get(0)).isEqualTo(inconsistent);
+    }
+
     private MappingProposal.Entry countEntry(String target, String amount, String originalUnit, Calculation.Operation operation) {
         return new MappingProposal.Entry("1", target, amount + "개", .9, "goodsName", amount + originalUnit,
                 new Calculation(operation, "개", List.of(new Calculation.Operand(amount, originalUnit,

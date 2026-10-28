@@ -100,6 +100,17 @@ class QuantityEvidenceTest {
                 .anyMatch(e -> e.startsWith("QUANTITY_UNIT_PREFERENCE"));
         assertThat(errors(r, proposal(r, List.of(box), "수량", "2박스", Calculation.Operation.PACK_COUNT, "박스", "box"))).isEmpty();
     }
+    @Test void acceptsSheetPackagingSuffixButStillRejectsOtherCountUnitChanges() {
+        var r = new InferenceRequest("sheet", "70매X10팩", null, List.of("개당 수량"),
+                List.of(new SourceOption("1", "단일상품")), "70매X10팩",
+                List.of(new PurchaseOptionUnit("개당 수량", "개", List.of("개", "매", "매입", "팩"))));
+        var sheet = fact("sheet", "main", Measure.COUNT, Scope.PACK, "70", "매", "goodsName", "70매X10팩");
+        assertThat(errors(r, proposal(r, List.of(sheet), "개당 수량", "70매입",
+                Calculation.Operation.PACK_CONTENT, "매입", "sheet"))).isEmpty();
+        assertThat(errors(r, proposal(r, List.of(sheet), "개당 수량", "70팩",
+                Calculation.Operation.PACK_CONTENT, "팩", "sheet")))
+                .anyMatch(e -> e.startsWith("QUANTITY_UNIT_PREFERENCE"));
+    }
     @Test void blocksConflictsEvenWhenMappingIsOmittedAndPreservesEvidence() {
         var r = request(List.of("개당 수량", "색상"), "16매", "17매");
         var facts = List.of(fact("a", "main", Measure.COUNT, Scope.PACK, "16", "매", "goodsName", "16매"),

@@ -52,6 +52,17 @@ final class CountUnitNormalizer {
 
     private static MappingProposal.Entry normalizeConfiguredUnit(MappingProposal.Entry entry, PurchaseOptionUnit units) {
         var calculation = entry.calculation();
+        if (calculation != null && calculation.operation() == Calculation.Operation.DIRECT
+                && calculation.operands() != null && calculation.operands().size() == 1) {
+            var operand = calculation.operands().get(0);
+            if (operand != null && operand.amount() != null && operand.unit() != null
+                    && operand.unit().matches("(?i:mg|kg|g|ml|l|cc|mm|cm|m)")
+                    && units.unitOptions().contains(operand.unit())
+                    && units.defaultUnit().equals(calculation.outputUnit())
+                    && !operand.unit().equals(calculation.outputUnit())
+                    && entry.value().equals(operand.amount() + operand.unit()))
+                return withOutput(entry, entry.value(), operand.unit());
+        }
         if (calculation != null && calculation.operands() != null && calculation.operands().size() == 1
                 && DISPLAY_OPERATIONS.contains(calculation.operation())) {
             var operand = calculation.operands().get(0);

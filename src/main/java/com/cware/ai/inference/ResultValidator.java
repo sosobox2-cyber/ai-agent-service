@@ -29,7 +29,8 @@ public class ResultValidator {
                     .filter(u -> Objects.equals(u.purchaseOptionName(), entry.targetPurchaseOptionName()))
                     .findFirst().ifPresent(u -> {
                         if (u.unitOptions().contains(operand.unit()) && QuantityEvidenceValidator.COUNTS.contains(operand.unit().toLowerCase(Locale.ROOT))
-                                && !operand.unit().equals(entry.calculation().outputUnit()))
+                                && !operand.unit().equals(entry.calculation().outputUnit())
+                                && !(operand.unit().equals("매") && entry.calculation().outputUnit().equals("매입")))
                             errors.add("QUANTITY_UNIT_PREFERENCE: 원문 개수 단위가 선택지에 있으면 해당 단위를 유지해야 합니다.");
                     });
         }
