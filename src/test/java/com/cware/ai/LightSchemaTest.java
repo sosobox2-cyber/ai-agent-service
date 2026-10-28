@@ -35,7 +35,7 @@ class LightSchemaTest {
         assertThat(light).isEqualTo(expected);
         assertThat(light.at("/properties/mappings/items/required")).isEqualTo(full.at("/properties/mappings/items/required"));
         assertThat(full.at("/properties/mappings/items/properties/calculation/anyOf/0/properties/operation/enum"))
-                .isEqualTo(mapper.valueToTree(List.of("DIRECT", "CONVERT", "SUM", "PACK_COUNT", "PACK_CONTENT")));
+                .isEqualTo(mapper.valueToTree(List.of("DIRECT", "CONVERT", "SUM", "PACK_COUNT", "PACK_CONTENT", "PACK_CAPACITY")));
         for (var mode : PurchaseOptionPromptMode.values()) {
             var schema = PurchaseOptionAiService.schema(request, mode);
             assertOrdered(schema);

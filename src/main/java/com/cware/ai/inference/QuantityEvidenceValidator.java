@@ -104,6 +104,10 @@ public final class QuantityEvidenceValidator {
         }
         if (proposal.mappings() != null) for (var entry : proposal.mappings()) {
             if (entry == null || !TARGETS.contains(Objects.toString(entry.targetPurchaseOptionName(), ""))) continue;
+            if (entry.calculation() != null && entry.calculation().operation() == Calculation.Operation.PACK_CAPACITY) {
+                validatePackCapacity(request, proposal, entry, facts, values, errors);
+                continue;
+            }
             Binding binding = bindings.remove(key(entry.optionId(), entry.targetPurchaseOptionName()));
             if (binding == null) { errors.add("QUANTITY_BINDING_REQUIRED: 수량 매핑에 원문 근거 연결이 없습니다."); continue; }
             validateBinding(entry, binding, facts, values, errors);
@@ -143,6 +147,7 @@ public final class QuantityEvidenceValidator {
             if (entry == null || !TARGETS.contains(Objects.toString(entry.targetPurchaseOptionName(), ""))) continue;
             var calc = entry.calculation();
             if (calc == null || calc.operands() == null) continue;
+            if (calc.operation() == Calculation.Operation.PACK_CAPACITY) continue;
             Scope expectedScope = scope(entry.targetPurchaseOptionName());
             Measure expectedMeasure = measure(entry.targetPurchaseOptionName());
             List<String> ids = new ArrayList<>();
@@ -175,6 +180,52 @@ public final class QuantityEvidenceValidator {
             result.add(new Binding(entry.optionId(), entry.targetPurchaseOptionName(), component, expectedScope, ids));
         }
         return result;
+    }
+
+    private static void validatePackCapacity(InferenceRequest request, MappingProposal proposal,
+            MappingProposal.Entry entry, Map<String, Fact> facts, Map<String, String> values, List<String> errors) {
+        var x = PackCapacityNormalizer.expression(request);
+        var calc = entry.calculation();
+        if (x == null || !"개당 용량".equals(entry.targetPurchaseOptionName()) || calc.operands() == null
+                || calc.operands().size() != 2 || calc.context() == null
+                || !"productCompositionText".equals(calc.context().source())
+                || !Objects.equals(calc.context().text(), x.quote())
+                || !Objects.equals(calc.outputUnit(), x.itemUnit()) || !Objects.equals(entry.value(), x.output())) {
+            errors.add("QUANTITY_PACK_CAPACITY_INVALID: 포장당 용량 계산의 원문·단위·결과가 맞지 않습니다."); return;
+        }
+        var item = calc.operands().get(0); var content = calc.operands().get(1);
+        if (item == null || content == null || item.evidence() == null || content.evidence() == null
+                || blank(item.evidence().text()) || blank(content.evidence().text())
+                || !Objects.equals(item.amount(), x.itemAmount()) || !Objects.equals(item.unit(), x.itemUnit())
+                || !Objects.equals(content.amount(), x.contentAmount()) || !Objects.equals(content.unit(), x.contentUnit())
+                || !"productCompositionText".equals(item.evidence().source())
+                || !"productCompositionText".equals(content.evidence().source())
+                || !x.quote().contains(item.evidence().text()) || !x.quote().contains(content.evidence().text())) {
+            errors.add("QUANTITY_PACK_CAPACITY_INVALID: 포장당 용량 피연산자가 원문과 다릅니다."); return;
+        }
+        var physical = facts.values().stream().filter(f -> f.role() == Role.MAIN && f.measure() == Measure.VOLUME
+                && f.scope() == Scope.ITEM && Objects.equals(f.optionId(), entry.optionId())
+                && Objects.equals(f.amount(), item.amount()) && Objects.equals(f.unit(), item.unit())
+                && Objects.equals(f.source(), item.evidence().source())
+                && f.quote() != null && f.quote().contains(item.evidence().text()) && values.containsKey(f.id())).toList();
+        var inside = facts.values().stream().filter(f -> f.role() == Role.MAIN && f.measure() == Measure.COUNT
+                && f.scope() == Scope.PACK && Objects.equals(f.optionId(), entry.optionId())
+                && Objects.equals(f.amount(), content.amount()) && Objects.equals(f.unit(), content.unit())
+                && Objects.equals(f.source(), content.evidence().source())
+                && f.quote() != null && f.quote().contains(content.evidence().text()) && values.containsKey(f.id())).toList();
+        if (physical.size() != 1 || inside.size() != 1
+                || !physical.get(0).componentId().equals(inside.get(0).componentId())) {
+            errors.add("QUANTITY_PACK_CAPACITY_INVALID: 낱개 용량과 포장 내 개수의 본품 근거가 연결되지 않습니다."); return;
+        }
+        var outer = proposal.mappings().stream().filter(e -> e != null && Objects.equals(e.optionId(), entry.optionId())
+                && "수량".equals(e.targetPurchaseOptionName()) && Objects.equals(e.value(), x.packAmount() + x.packUnit())).toList();
+        boolean outerFact = facts.values().stream().anyMatch(f -> f.role() == Role.MAIN && f.measure() == Measure.COUNT
+                && f.scope() == Scope.TOTAL && Objects.equals(f.optionId(), entry.optionId())
+                && Objects.equals(f.componentId(), physical.get(0).componentId())
+                && Objects.equals(f.amount(), x.packAmount()) && Objects.equals(f.unit(), x.packUnit())
+                && "productCompositionText".equals(f.source()) && values.containsKey(f.id()));
+        if (outer.size() != 1 || !outerFact)
+            errors.add("QUANTITY_PACK_CAPACITY_INVALID: 판매 포장 수와 포장당 용량의 계층이 다릅니다.");
     }
 
     private static void validateReviews(InferenceRequest request, QuantityEvidence context, Map<String, Fact> facts, List<String> errors) {

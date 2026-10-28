@@ -53,7 +53,8 @@
                       "CONVERT",
                       "SUM",
                       "PACK_COUNT",
-                      "PACK_CONTENT"
+                      "PACK_CONTENT",
+                      "PACK_CAPACITY"
                     ]
                   },
                   "context": {
