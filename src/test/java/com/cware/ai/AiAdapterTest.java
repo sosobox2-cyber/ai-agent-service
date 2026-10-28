@@ -48,13 +48,14 @@ class AiAdapterTest {
                         new com.cware.ai.dto.Calculation(com.cware.ai.dto.Calculation.Operation.DIRECT, "롤",
                                 List.of(new com.cware.ai.dto.Calculation.Operand("12", "롤", evidence)), evidence))),
                 "상품명의 롤당 매수와 판매 롤 수를 구분했습니다.");
-        when(model.call(any(Prompt.class))).thenReturn(response(proposal));
+        when(model.call(any(Prompt.class))).thenReturn(response(Fixtures.grounded(request, proposal)));
         var result = service().infer(request);
         assertThat(result.success()).isTrue();
         assertThat(result.items().get(0).purchaseOptions()).containsExactlyInAnyOrderEntriesOf(
                 java.util.Map.of("개당 수량", "140매", "수량", "12개"));
         assertThat(result.optionMappings().get(1).calculation().outputUnit()).isEqualTo("개");
         assertThat(result.optionMappings().get(1).calculation().operands().get(0).unit()).isEqualTo("롤");
+        assertThat(result.aiAssessment().quantityEvidence()).isEqualTo(Fixtures.grounded(request, proposal).quantityEvidence());
         var sent = ArgumentCaptor.forClass(Prompt.class);
         verify(model).call(sent.capture());
         assertThat(sent.getValue().getInstructions().get(0).getText()).contains(
@@ -74,7 +75,7 @@ class AiAdapterTest {
                     new com.cware.ai.dto.Calculation.Operand(row[1], row[2], evidence)), null)));
         }
         var proposal = new MappingProposal(true, .95, entries, "원문 화면크기 추출");
-        when(model.call(any(Prompt.class))).thenReturn(response(proposal));
+        when(model.call(any(Prompt.class))).thenReturn(response(Fixtures.grounded(request, proposal)));
         var result = service().infer(request);
         assertThat(result.success()).isTrue();
         assertThat(result.items().get(0).purchaseOptions()).containsEntry("화면크기(cm)", "109cm")
@@ -104,7 +105,7 @@ class AiAdapterTest {
                 new MappingProposal.Entry("1", "길이", dimensions, .95,
                         "productNoticeText", "치수: " + dimensions, null),
                 new MappingProposal.Entry("1", "수량", "10개", .95)), "제품 치수 전체를 길이 규격으로 추출했습니다.");
-        when(model.call(any(Prompt.class))).thenReturn(response(proposal));
+        when(model.call(any(Prompt.class))).thenReturn(response(Fixtures.grounded(request, proposal)));
         var result = service().infer(request);
         assertThat(result.success()).isTrue();
         assertThat(result.items().get(0).purchaseOptions()).containsEntry("길이", dimensions)
@@ -142,8 +143,8 @@ class AiAdapterTest {
             entries.add(new MappingProposal.Entry("1", entry[0], entry[1] + entry[3], .95,
                     evidence.source(), evidence.text(), calculation));
         }
-        when(model.call(any(Prompt.class))).thenReturn(response(new MappingProposal(true, .95, entries,
-                "한 팩은 30롤, 한 롤의 길이는 22m이며 판매 4팩은 기본단위로 4개입니다.")));
+        when(model.call(any(Prompt.class))).thenReturn(response(Fixtures.grounded(request, new MappingProposal(true, .95, entries,
+                "한 팩은 30롤, 한 롤의 길이는 22m이며 판매 4팩은 기본단위로 4개입니다."))));
         var result = service().infer(request);
         assertThat(result.success()).isTrue();
         assertThat(result.validationErrors()).isEmpty();
@@ -250,9 +251,10 @@ class AiAdapterTest {
                         new com.cware.ai.dto.Calculation.Evidence("goodsName", "50ml"))), null);
         var proposal = new MappingProposal(true, .90, List.of(new MappingProposal.Entry("1", "개당 용량", "50ml", .90,
                 "goodsName", "50ml", calculation)), "용량을 추출했습니다.");
-        String json = new ObjectMapper().writeValueAsString(proposal);
         var request = new com.cware.ai.dto.InferenceRequest("1", "50ml", "뷰티",
                 List.of("개당 용량"), List.of(new com.cware.ai.dto.SourceOption("1", "50ml")), "제조국: 한국");
+        proposal = Fixtures.grounded(request, proposal);
+        String json = new ObjectMapper().writeValueAsString(proposal);
         respond(json, "stop");
         assertThat(ai.infer(request)).isEqualTo(proposal);
         respond(json.replace("DIRECT", "RUN_CODE"), "stop");

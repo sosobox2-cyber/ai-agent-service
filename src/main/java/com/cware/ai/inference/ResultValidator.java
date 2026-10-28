@@ -11,6 +11,7 @@ public class ResultValidator {
     public List<String> validateAiProposal(InferenceRequest request, MappingProposal proposal) {
         List<String> errors = new ArrayList<>(validateProposal(request, proposal));
         errors.addAll(AiValueContract.validate(request, proposal));
+        errors.addAll(QuantityEvidenceValidator.validate(request, proposal));
         return errors.stream().distinct().toList();
     }
 

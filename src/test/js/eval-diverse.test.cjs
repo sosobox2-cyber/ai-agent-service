@@ -46,6 +46,32 @@ test('미완료 요청과 비용 미상 요청은 각각 예약금으로 남긴�
     { id: 'b', event: 'reserved', reserveUsd: 0.08 }, { id: 'b', event: 'completed', costUsd: null }]);
   assert.equal(a.spent, 0.16); assert.equal(a.pending.length, 1);
 });
+
+test('v28도 이전 비용 원장을 이어 쓰며 미검증 버전은 호출하지 않는다', async t => {
+  const x = setup(t); x.plan.promptVersion = 'coupang-option-v28';
+  fs.writeFileSync(path.join(x.dir, 'ledger.jsonl'), JSON.stringify({ id: 'prior', event: 'completed', costUsd: 0.3305084 }) + '\n');
+  const state = await execute({ ...x, pause: async () => {}, fetcher: async (url, init) => {
+    if (init.method !== 'POST') return { ok: true, json: async () => ({ testCase: x.c }) };
+    const run = runResult(); run.response.promptVersion = 'coupang-option-v28';
+    return { ok: true, status: 200, json: async () => run };
+  } });
+  assert.ok(Math.abs(state.spent - 0.3309184) < 1e-10);
+  x.plan.promptVersion = 'coupang-option-v30';
+  await assert.rejects(execute({ ...x, fetcher: async () => assert.fail('must not call') }), /검증된 실행 설정/);
+});
+test('v29의 늘어난 예산도 기존 비용을 포함하며 1.45달러에서 중단한다', async t => {
+  const x = setup(t); x.plan.promptVersion = 'coupang-option-v29'; x.plan.budgetUsd = 1.45;
+  fs.writeFileSync(path.join(x.dir, 'ledger.jsonl'), JSON.stringify({ id: 'prior', event: 'completed', costUsd: 1.36 }) + '\n');
+  const state = await execute({ ...x, pause: async () => {}, fetcher: async (url, init) => {
+    if (init.method !== 'POST') return { ok: true, json: async () => ({ testCase: x.c }) };
+    const run = runResult(); run.response.promptVersion = 'coupang-option-v29';
+    return { ok: true, status: 200, json: async () => run };
+  } });
+  assert.ok(Math.abs(state.spent - 1.36041) < 1e-10);
+  fs.appendFileSync(path.join(x.dir, 'ledger.jsonl'), JSON.stringify({ id: 'unknown', event: 'completed', costUsd: null, reserveUsd: 0.08 }) + '\n');
+  x.plan.selected[0].trialId = 'new-trial';
+  await execute({ ...x, fetcher: async () => assert.fail('must not call') });
+});
 test('남은 예산으로 다음 요청의 최악 비용을 감당할 수 없으면 전송하지 않는다', async t => {
   const x = setup(t); fs.writeFileSync(path.join(x.dir, 'ledger.jsonl'), JSON.stringify({ id: 'old', caseId: 'old', event: 'completed', costUsd: 0.88 }) + '\n');
   let calls = 0;

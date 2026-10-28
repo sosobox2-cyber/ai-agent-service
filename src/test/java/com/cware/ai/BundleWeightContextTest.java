@@ -27,16 +27,17 @@ class BundleWeightContextTest {
         return new MappingProposal.Entry("1", target, value, .99, "goodsName", r.goodsName());
     }
 
-    @Test void kimchiBundlePassesAiValidationAndTestMode() throws Exception {
+    @Test void legacyBundleProposalRequiresNewEvidenceButMockContractIsPreserved() throws Exception {
         var r = request();
         var proposal = new MappingProposal(true, .99, List.of(entry(r, "수량", "1세트"),
                 entry(r, "개당 중량", "5.2kg")), "두 본품을 합친 1세트의 중량은 5.2kg입니다.");
         var service = new PurchaseOptionInferenceService(new RequestValidator(), ignored -> proposal,
                 new ResultValidator(), new InputHashService(mapper), Fixtures.properties());
         var result = service.infer(r);
-        assertThat(result.success()).isTrue();
-        assertThat(result.items().get(0).purchaseOptions())
-                .containsEntry("수량", "1세트").containsEntry("개당 중량", "5.2kg");
+        assertThat(result.success()).isFalse();
+        assertThat(result.validationErrors()).anyMatch(e -> e.startsWith("QUANTITY_EVIDENCE_REQUIRED"));
+        assertThat(result.items()).isEmpty();
+        assertThat(result.aiAssessment().mappings().get(1).value()).isEqualTo("5.2kg");
         var mock = service.infer(r, true);
         assertThat(mock.errorCode()).isEqualTo("TEST_MODE");
         assertThat(mock.validationErrors()).isEmpty();

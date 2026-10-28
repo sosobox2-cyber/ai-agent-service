@@ -211,7 +211,8 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
         if (reason.length() > 2000) reason = reason.substring(0, 2000);
         return new MappingProposal(false,
                 proposal != null && ResultValidator.validConfidence(proposal.confidence()) ? proposal.confidence() : 0.0,
-                proposal == null ? List.of() : proposal.mappings(), reason);
+                proposal == null ? List.of() : proposal.mappings(), reason,
+                proposal == null ? null : proposal.quantityEvidence());
     }
 
     private record Attempt(MappingProposal proposal, AiInferenceValidationResult validation) {}
@@ -252,14 +253,20 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
                 "calculation", mode == PurchaseOptionPromptMode.LIGHT ? Map.of("type", "null")
                         : Map.of("anyOf", List.of(calculation, Map.of("type", "null")))),
                 "optionId", "targetPurchaseOptionName", "evidenceSource", "evidenceText", "calculation", "value", "confidence");
-        return stableMap(object(Map.of(
+        var root = new LinkedHashMap<String, Object>();
+        if (mode == PurchaseOptionPromptMode.FULL && QuantityEvidenceValidator.required(request))
+            root.put("quantityEvidence", QuantityEvidenceSchema.schema(request));
+        root.putAll(Map.of(
                 "certain", Map.of("type", "boolean"),
                 "confidence", Map.of("type", "number"),
                 "mappings", Map.of("type", "array", "items", entry),
                 "reason", Map.of("type", "string", "description",
                         "certain 값과 관계없이 반드시 작성하는 비어 있지 않은 한국어 판단 근거 요약. "
-                        + "1~3문장, 공백과 줄바꿈을 포함하여 2000자 이내. 전체 매핑 목록을 반복하지 않는다.")),
-                "mappings", "reason", "confidence", "certain"));
+                        + "1~3문장, 공백과 줄바꿈을 포함하여 2000자 이내. 전체 매핑 목록을 반복하지 않는다.")));
+        var order = new ArrayList<String>();
+        if (root.containsKey("quantityEvidence")) order.add("quantityEvidence");
+        order.addAll(List.of("mappings", "reason", "confidence", "certain"));
+        return stableMap(object(root, order.toArray(String[]::new)));
     }
 
     /** 스키마 키워드 키는 정렬하고 properties는 object()가 정한 출력 순서를 유지한다. 배열의 의미와 내용은 유지한다. */

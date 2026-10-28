@@ -36,9 +36,9 @@ class InferenceServiceTest {
         var contents = new MappingProposal.Entry("1", "개당 수량", "10매입", .90,
                 colorEvidence.source(), colorEvidence.text(),
                 new Calculation(Calculation.Operation.PACK_CONTENT, "매입",
-                        List.of(new Calculation.Operand("10", "개", colorEvidence)), colorEvidence));
-        when(ai.infer(any())).thenReturn(new MappingProposal(true, .90, List.of(quantity, contents),
-                "색상 5가지가 각 2개씩 있어 한 세트에 총 10개입니다."));
+                        List.of(new Calculation.Operand("10", "개", packEvidence)), packEvidence));
+        when(ai.infer(any())).thenReturn(Fixtures.grounded(request, new MappingProposal(true, .90, List.of(quantity, contents),
+                "명시된 10개 세트와 색상별 구성을 확인했습니다.")));
 
         var result = service.infer(request);
         assertThat(result.success()).isTrue();

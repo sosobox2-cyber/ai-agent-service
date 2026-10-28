@@ -9,10 +9,10 @@ const { setTimeout: delay } = require('node:timers/promises');
 const ROOT = path.resolve(__dirname, '..');
 const SIMPLE = new Set(['색상', '컬러', 'color', '사이즈', 'size', '패션의류/잡화 사이즈', '핏']);
 const MODEL = /^(gpt-4\.1-mini|gpt-4\.1-mini-2025-04-14)$/;
-// v27, max_tokens=4096, 최대 2회 호출을 확인한 운영 환경 전용 상한.
+// v27/v28/v29, max_tokens=4096, 최대 2회 호출을 확인한 운영 환경 전용 상한.
 // 입력 65,536 tokens/회 + 출력 4,096 tokens/회를 비캐시 단가로 계산하면 $0.065536.
 const RESERVE_USD = 0.08;
-const BUDGET_USD = 0.95; // 사용자가 허용한 $1 중 $0.05는 추가 여유로 남긴다.
+const BUDGET_USD = 1.45; // 사용자가 늘린 누적 $1.50 중 $0.05는 추가 여유로 남긴다.
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
 const readLines = file => fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split(/\r?\n/).filter(Boolean).map(JSON.parse) : [];
@@ -99,7 +99,7 @@ function accounting(events) {
 async function execute({ dir, plan, maxNew = 1, fetcher = fetch, pause = delay }) {
   const base = new URL(plan.baseUrl);
   if (base.protocol !== 'https:' || base.username || base.password || base.pathname !== '/') throw Error('HTTPS origin이 필요합니다.');
-  if (plan.promptVersion !== 'coupang-option-v27' || plan.reserveUsd !== RESERVE_USD || plan.budgetUsd !== BUDGET_USD) throw Error('검증된 실행 설정과 다릅니다.');
+  if (!['coupang-option-v27', 'coupang-option-v28', 'coupang-option-v29'].includes(plan.promptVersion) || plan.reserveUsd !== RESERVE_USD || ![0.95, BUDGET_USD].includes(plan.budgetUsd)) throw Error('검증된 실행 설정과 다릅니다.');
   const ledger = path.join(dir, 'ledger.jsonl'), lock = path.join(dir, 'running.lock');
   const lockFd = fs.openSync(lock, 'wx');
   const append = e => fs.appendFileSync(ledger, JSON.stringify(e) + '\n', { flush: true });
@@ -111,7 +111,7 @@ async function execute({ dir, plan, maxNew = 1, fetcher = fetch, pause = delay }
     for (const selected of plan.selected) {
       const trialId = selected.trialId || selected.caseId;
       if (done.has(trialId)) continue;
-      if (n >= maxNew || state.spent + RESERVE_USD > BUDGET_USD + 1e-10) break;
+      if (n >= maxNew || state.spent + RESERVE_USD > plan.budgetUsd + 1e-10) break;
       const route = new URL(`/api/v1/evaluation/datasets/${plan.datasetId}/cases/${selected.caseId}`, base);
       const detailResponse = await fetcher(route, { signal: AbortSignal.timeout(30000), redirect: 'error' });
       if (!detailResponse.ok) throw Error(`사례 조회 HTTP ${detailResponse.status}`);

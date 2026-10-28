@@ -44,8 +44,11 @@ class AiValueContractTest {
     @ParameterizedTest
     @CsvSource({"병,개", "팩,개", "롤,개", "매,매입", "개,개입", "ml,ml", "g,g"})
     void preservesCountFallbackAndPhysicalUnits(String input, String output) {
-        assertThat(assess(request("수량", output),
-                proposal("수량", "70" + output, input, output, "70" + input)).success()).isTrue();
+        String target = input.equals("ml") ? "개당 용량" : input.equals("g") ? "개당 중량" : "수량";
+        var original = request(target, output);
+        var r = new InferenceRequest(original.goodsId(), original.goodsName(), null, original.allowedPurchaseOptions(),
+                original.options(), "70" + input, original.purchaseOptionUnits());
+        assertThat(assess(r, Fixtures.grounded(r, proposal(target, "70" + output, input, output, "70" + input))).success()).isTrue();
     }
     @ParameterizedTest
     @CsvSource({"PLUS,false", "PLUS8,false", "대형,false", "0명,false", "-2명,false", "0.5명,false",
@@ -61,13 +64,13 @@ class AiValueContractTest {
         assertThat(assess(request("모델명/품번", null), proposal("모델명/품번", "MODEL-27",
                 null, null, "모델명 MODEL-27")).success()).isTrue();
     }
-    @Test void keepsMockAndUnconfiguredUnitContractsAndDoesNotRecalculate() {
+    @Test void keepsMockButActualQuantityRequiresEvidenceEvenWithoutUnitSettings() {
         var validator = new ResultValidator();
         var p = proposal("수량", "70개", "ml", "개", "70ml");
         assertThat(validator.validateProposal(request("수량", "개"), p)).isEmpty();
-        assertThat(validator.validateAiProposal(request("수량", null), p)).isEmpty();
-        // 숫자 대조는 이번 변경의 대상이 아니다. 같은 차원의 AI 판단은 재계산하지 않는다.
-        assertThat(assess(request("수량", "개"), proposal("수량", "12개", "병", "개", "70병")).success()).isTrue();
+        assertThat(validator.validateAiProposal(request("수량", null), p))
+                .anyMatch(e -> e.startsWith("QUANTITY_EVIDENCE_REQUIRED"));
+        assertThat(assess(request("수량", "개"), proposal("수량", "12개", "병", "개", "70병")).success()).isFalse();
         assertThat(assess(Fixtures.request(), Fixtures.proposal()).success()).isTrue();
     }
 }

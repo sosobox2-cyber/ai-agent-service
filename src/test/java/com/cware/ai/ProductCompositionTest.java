@@ -59,6 +59,7 @@ class ProductCompositionTest {
                 new Calculation(Calculation.Operation.DIRECT, "개",
                         List.of(new Calculation.Operand("7", "개", evidence)), null));
         var proposal = new MappingProposal(true, .95, List.of(entry), "기술서의 본품 수량을 판단했습니다.");
+        proposal = Fixtures.grounded(request, proposal);
         var model = mock(ChatModel.class);
         when(model.call(any(Prompt.class))).thenReturn(new ChatResponse(List.of(new Generation(
                 new AssistantMessage(mapper.writeValueAsString(proposal)),

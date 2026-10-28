@@ -47,14 +47,14 @@ class CalculationValidatorTest {
         var contents = entry("개당 수량", "10매입", PACK_CONTENT, "매입", context,
                 operand("10", "개", "goodsName", "10개"));
         var proposal = new MappingProposal(true, .90, List.of(quantity, contents), "칫솔 10개 한 세트입니다.");
-        var service = new PurchaseOptionInferenceService(new RequestValidator(), ignored -> proposal,
+        var service = new PurchaseOptionInferenceService(new RequestValidator(), ignored -> Fixtures.grounded(r, proposal),
                 new ResultValidator(), new InputHashService(mapper), Fixtures.properties());
         var result = service.infer(r);
-        assertThat(result.success()).isTrue();
-        assertThat(result.items().get(0).purchaseOptions()).containsEntry("수량", "1세트").containsEntry("개당 수량", "10매입");
+        assertThat(result.success()).isFalse();
+        assertThat(result.items()).isEmpty();
+        assertThat(result.validationErrors()).anyMatch(e -> e.startsWith("QUANTITY_SOURCE_MISMATCH"));
         assertThat(result.aiAssessment().mappings().get(1).calculation().context().source()).isEqualTo("goodsName");
-        assertThat(result.optionMappings().get(1).calculation()).isEqualTo(contents.calculation());
-        assertThat(result.optionMappings().get(1).calculation().context().source()).isEqualTo("goodsName");
+        assertThat(result.aiAssessment().mappings().get(1).calculation()).isEqualTo(contents.calculation());
     }
 
     @Test void sumsMixedMassUnitsWithExactArithmeticAndRequiresAllComponents() throws Exception {

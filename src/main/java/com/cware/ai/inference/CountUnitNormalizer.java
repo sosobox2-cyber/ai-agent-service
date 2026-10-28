@@ -36,6 +36,6 @@ final class CountUnitNormalizer {
                     match.group(1) + "개", entry.confidence(), entry.evidenceSource(), entry.evidenceText(),
                     new Calculation(Calculation.Operation.PACK_COUNT, "개", calculation.operands(), calculation.context()));
         }).toList();
-        return new MappingProposal(proposal.certain(), proposal.confidence(), entries, proposal.reason());
+        return new MappingProposal(proposal.certain(), proposal.confidence(), entries, proposal.reason(), proposal.quantityEvidence());
     }
 }

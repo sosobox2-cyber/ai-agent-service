@@ -72,8 +72,8 @@ class PurchaseOptionApiTest {
         var request = new InferenceRequest("length-product", "구성품 10개", null,
                 java.util.List.of("길이", "수량", "색상"), java.util.List.of(new SourceOption("1", "10개")),
                 "구성품 10개");
-        when(ai.infer(any())).thenReturn(new MappingProposal(true, .99,
-                java.util.List.of(new MappingProposal.Entry("1", "수량", "10개", .99)), "수량만 추출했습니다."));
+        when(ai.infer(any())).thenReturn(Fixtures.grounded(request, new MappingProposal(true, .99,
+                java.util.List.of(new MappingProposal.Entry("1", "수량", "10개", .99)), "수량만 추출했습니다.")));
         mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -183,10 +183,10 @@ class PurchaseOptionApiTest {
     }
     @Test void callerSuppliedUnitsReachAiAndTestMode() throws Exception {
         String body = Files.readString(Path.of("src/test/resources/unit-request.json"));
-        when(ai.infer(any())).thenReturn(new MappingProposal(true, .9, java.util.List.of(
+        when(ai.infer(any())).thenReturn(Fixtures.grounded(mapper.readValue(body, InferenceRequest.class), new MappingProposal(true, .9, java.util.List.of(
                 new MappingProposal.Entry("1", "수량", "6박스", .9),
                 new MappingProposal.Entry("2", "수량", "6세트", .9),
-                new MappingProposal.Entry("3", "수량", "6개", .9)), "원문 단위와 기본단위를 적용했습니다."));
+                new MappingProposal.Entry("3", "수량", "6개", .9)), "원문 단위와 기본단위를 적용했습니다.")));
         for (String mode : new String[]{"false", "true"}) {
             mvc.perform(post(URL).param("testMode", mode).contentType(MediaType.APPLICATION_JSON).content(body))
                     .andExpect(status().isOk()).andExpect(jsonPath("$.validationErrors").isEmpty())
@@ -210,10 +210,10 @@ class PurchaseOptionApiTest {
     @Test void defaultOutsideChoicesWorksInAiAndTestModes() throws Exception {
         ObjectNode body = (ObjectNode) mapper.readTree(Files.readString(Path.of("src/test/resources/unit-request.json")));
         ((ObjectNode) body.withArray("purchaseOptionUnits").get(0)).putArray("unitOptions").add("박스").add("세트");
-        when(ai.infer(any())).thenReturn(new MappingProposal(true, .9, java.util.List.of(
+        when(ai.infer(any())).thenReturn(Fixtures.grounded(mapper.treeToValue(body, InferenceRequest.class), new MappingProposal(true, .9, java.util.List.of(
                 new MappingProposal.Entry("1", "수량", "6박스", .9),
                 new MappingProposal.Entry("2", "수량", "6세트", .9),
-                new MappingProposal.Entry("3", "수량", "6개", .9)), "기본단위를 적용했습니다."));
+                new MappingProposal.Entry("3", "수량", "6개", .9)), "기본단위를 적용했습니다.")));
         for (String mode : new String[]{"false", "true"})
             mvc.perform(post(URL).param("testMode", mode).contentType(MediaType.APPLICATION_JSON).content(body.toString()))
                     .andExpect(status().isOk()).andExpect(jsonPath("$.validationErrors").isEmpty())
@@ -284,9 +284,9 @@ class PurchaseOptionApiTest {
         var request = mapper.treeToValue(input, com.cware.ai.dto.InferenceRequest.class);
         var calculation = new com.cware.ai.dto.Calculation(com.cware.ai.dto.Calculation.Operation.DIRECT, "ml",
                 java.util.List.of(new com.cware.ai.dto.Calculation.Operand("50", "ml",
-                        new com.cware.ai.dto.Calculation.Evidence("goodsName", "50 ml"))), null);
-        when(ai.infer(any())).thenReturn(new MappingProposal(true, .90, java.util.List.of(
-                new MappingProposal.Entry("1", "개당 용량", "50.0 ML", .90, "goodsName", "50 ml", calculation)), "개당 50ml입니다."));
+                        new com.cware.ai.dto.Calculation.Evidence("goodsName", "50ml"))), null);
+        when(ai.infer(any())).thenReturn(Fixtures.grounded(request, new MappingProposal(true, .90, java.util.List.of(
+                new MappingProposal.Entry("1", "개당 용량", "50.0 ML", .90, "goodsName", "50ml", calculation)), "개당 50ml입니다.")));
         mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(request)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.items[0].purchaseOptions['개당 용량']").value("50.0 ML"))

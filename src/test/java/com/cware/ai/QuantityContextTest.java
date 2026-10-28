@@ -28,7 +28,7 @@ class QuantityContextTest {
 
     @Test void acceptsEvidenceAndReturnsExpectedCountsThroughService() throws Exception {
         var request = request();
-        var service = new PurchaseOptionInferenceService(new RequestValidator(), ignored -> proposal(),
+        var service = new PurchaseOptionInferenceService(new RequestValidator(), ignored -> Fixtures.grounded(request, proposal()),
                 validator, new InputHashService(mapper), Fixtures.properties());
         var result = service.infer(request);
         assertThat(result.success()).isTrue();
@@ -84,7 +84,7 @@ class QuantityContextTest {
                 new MappingProposal.Entry("1", "수량", "7개", .99, "goodsName", "7개"),
                 new MappingProposal.Entry("1", "개당 용량", "50ml", .99, "productNoticeText", "선크림 50ml")),
                 "선크림 7개 구성이고 개당 용량은 50ml입니다.");
-        var service = new PurchaseOptionInferenceService(new RequestValidator(), ignored -> proposal,
+        var service = new PurchaseOptionInferenceService(new RequestValidator(), ignored -> Fixtures.grounded(request, proposal),
                 validator, new InputHashService(mapper), Fixtures.properties());
         var aiResult = service.infer(request);
         assertThat(aiResult.success()).isTrue();

@@ -25,7 +25,7 @@ class NamedSetContextTest {
         var proposal = new MappingProposal(true, .9, List.of(
                 entry("수량", "1세트", "productNoticeText", "10개 세트"),
                 entry("개당 수량", "10매입", "productNoticeText", "10개 세트")), "칫솔 10개로 구성된 1세트입니다.");
-        var service = new PurchaseOptionInferenceService(new RequestValidator(), ignored -> proposal,
+        var service = new PurchaseOptionInferenceService(new RequestValidator(), ignored -> Fixtures.grounded(request, proposal),
                 new ResultValidator(), new InputHashService(mapper), Fixtures.properties());
         assertThat(service.infer(request).items().get(0).purchaseOptions())
                 .containsEntry("수량", "1세트").containsEntry("개당 수량", "10매입");

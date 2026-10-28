@@ -44,10 +44,16 @@ purchaseOptionUnits는 호출자가 구매옵션명별로 전달한 단위 설�
 포장 안의 패치/피스/개 개수는 개입으로, 시트 매수는 매입으로 표시한다. 5매에 총 50패치라면 내용물 기준 50개입이며 50매입이나 5개입으로 바꾸지 않는다. 다만 개 단위 내용물이 세트로 판매되는 R10 예시 4의 칫솔 구성은 서비스 표기를 따라 매입으로 반환한다.
 
 [R6] 수량과 calculation
+스키마에 quantityEvidence가 있으면 수량·개당 수량·개당 중량·개당 용량의 근거를 먼저 구조화하고 마지막에 mappings를 만든다. 이 절의 출처·계층 계약이 이전의 단순 원문 우선순위보다 우선한다. 최종 매핑을 생략하더라도 발견한 충돌 근거는 facts에서 삭제하지 않는다.
+- sourceReviews: 각 optionId의 비어 있지 않은 goodsName, productNoticeText, productCompositionText, optionName1을 모두 검토하고 EXTRACTED(관련 사실 있음), NO_RELEVANT_FACT(관련 사실 없음), AMBIGUOUS(본품·포장 대응 불명확) 중 하나를 기록한다. 정보고시가 상세 참조여도 상품명의 명시 수치를 놓치지 않는다. 여러 단품에 공통 출처를 적용하려면 그 단품과의 대응이 명확해야 하며 불명확하면 AMBIGUOUS다.
+- facts: 각 사실에 고유 id, optionId, componentId, role(MAIN=대상 본품, EXTRA=명시된 사은품/추가 구성), measure(COUNT/WEIGHT/VOLUME), scope(ITEM=제품 한 개, PACK=판매 포장 하나의 내용물 수, TOTAL=판매 전체 포장 수), 원문 amount/unit/source/quote를 기록한다. componentId는 같은 본품에는 모든 출처에서 동일하게 사용한다. 다른 중량의 별도 본품은 다른 componentId이며 사은품 표시 없이 EXTRA로 분류하지 않는다. quote는 해당 출처의 연속된 실제 원문 500자 이내이고 요약·조합하지 않는다. amount와 unit은 환산 전 원문 숫자와 단위다. 숫자 없는 명시적 세트 구성만 amount=null, unit=세트, measure=COUNT, scope=TOTAL로 기록할 수 있다.
+- bindings: 각 수량 계열 mapping에 optionId, targetPurchaseOptionName, componentId, scope, evidenceIds를 연결한다. 수량=COUNT/TOTAL, 개당 수량=COUNT/PACK, 개당 중량=WEIGHT/ITEM, 개당 용량=VOLUME/ITEM이다. 비교용 근거까지 모두 facts에 남기되 계산에 사용한 근거만 연결한다. 다른 본품의 개당 중량·용량을 합산하지 않는다. 여러 본품의 판매 전체 개수 합산에만 componentId=*를 사용할 수 있고 계산은 SUM이다. PACK_COUNT로 명시적 한 세트를 판단하면 숫자 없는 세트 사실 하나에 연결하고 value=1세트, operands=[]로 제출한다.
+- 같은 optionId·componentId·measure·scope에 16매/17매 또는 3팩/4팩이 있으면 충돌이다. 1kg과 1000g처럼 동일한 물리량은 충돌이 아니다. 다른 계층의 17매와 6팩은 충돌이 아니다. 여러 MAIN 본품의 개당 중량·용량이 서로 다르면 대표값을 선택하거나 더하지 말고 해당 매핑을 생략하고 certain=false로 반환한다. 160g×15팩+200g×3팩은 개당 360g이 아니다.
+- 계산 피연산자의 amount/unit/evidence는 연결된 사실의 원문 숫자·단위·출처와 일치해야 한다. 같은 사실을 반복해서 합산하지 않는다. 서로 다른 단위의 물리량 환산은 CONVERT다. 서버는 인용문 존재, 원문 수치, 단위 동치, 근거 연결, 출처 충돌과 계층을 검사한다. 일반 SUM의 산술을 대신 계산하지 않으므로 값과 계산은 정확하게 제출한다.
 수량·개당 수량·개당 용량·개당 중량은 calculation으로 판단 구조를 반드시 제출한다. 상품 전체 원문(goodsName, productNoticeText, productCompositionText)은 단품이 하나이고 optionName1이 단일상품 또는 단품일 때 근거로 사용할 수 있다. 여러 단품이면 각 단품의 optionName1만 근거로 사용한다.
 상품명뿐 아니라 productNoticeText의 품명·포장 구성도 반드시 읽는다. 정보고시에 N개 세트라고 명시되고 상품명의 개수가 같으면 N은 판매 묶음 수가 아닌 한 세트 내 내용물 개수다. 이때 일반 DIRECT 수량=N개를 선택하지 말고 PACK_COUNT 수량=1세트로 반환하며, 개당 수량도 허용되어 있으면 PACK_CONTENT로 N매입을 함께 반환한다. "색상별 2개씩"처럼 세트 안을 나눈 세부 구성은 보조 정보이며 세트 전체 내용물 개수 N을 덮어쓰지 않는다(예시 4). 여러 세트 판매 수량이 명시되어 있으면 그 수량을 따른다.
 calculation은 operation, outputUnit, operands, context를 가진다. operands의 각 항목은 amount(양수 숫자 문자열), unit, evidence={source,text}다. source는 goodsName, productNoticeText, productCompositionText, optionName1 중 실제 출처다. text는 500자 이내 원문으로 숫자와 단위가 함께 있어야 한다. context는 구성 또는 포장 기준의 원문 근거이며 직접 추출·환산은 null로 둘 수 있다.
-value는 판단한 최종 숫자에 outputUnit을 붙인 값이다. 같은 종류의 단위끼리만 환산한다. calculation과 근거는 사용자에게 판단을 설명하는 자료이며, 서버는 제한된 값 유형·단위 차원 모순만 검사하고 원문 대조·출처 보정·재계산은 하지 않는다. 따라서 value와 calculation이 서로 일치하도록 원문에 근거해 정확히 판단한다.
+value는 판단한 최종 숫자에 outputUnit을 붙인 값이다. 같은 종류의 단위끼리만 환산한다. quantityEvidence 대상은 위 출처·계층 검사를 적용한다. 그 밖의 옵션은 기존 형식·단위 검사를 적용한다. 따라서 value와 calculation이 서로 일치하도록 원문에 근거해 정확히 판단한다.
 출처를 정확히 선택하고 근거를 임의로 이어 붙이지 않는다. evidenceSource/evidenceText에는 대표 구성 근거 또는 첫 피연산자 근거를 넣는다. 상품명에 없는 문구의 출처를 goodsName으로 표시하지 않는다.
 SPF, ppm, 날짜, 영양성분의 나트륨·지방 등의 수치를 용량·중량으로 사용하지 않는다.
 연산 규칙:
@@ -103,7 +109,7 @@ confidence는 전체와 매핑별로 0~1의 유한한 수이며 정답 확률이
 
 예시 6. 용량과 수량 분리: 상품명 선크림 50ml 7개이면 수량=7개는 DIRECT(7 개), 개당 용량=50ml는 DIRECT(50 ml)다. 개당 용량을 350ml로 만들지 않는다.
 
-예시 7. 본품 구성의 합산: 상품명 전라도 포기김치 4.2kg + 파김치 1kg이면 수량=1세트는 PACK_COUNT(outputUnit=세트, operands=[], context=goodsName의 전체 구성 문구), 개당 중량=5.2kg는 SUM(outputUnit=kg, operands=[4.2 kg 근거 전라도 포기김치 4.2kg, 1 kg 근거 파김치 1kg], context=동일 구성 문구)다.
+예시 7. 혼합 본품의 개당 중량: 상품명 포기김치 4.2kg + 파김치 1kg이면 두 MAIN 본품을 서로 다른 componentId로 기록하고 각각 WEIGHT/ITEM 사실 4.2kg, 1kg을 보존한다. 개당 중량=5.2kg로 합산하거나 4.2kg을 대표값으로 고르지 않는다. 개당 중량 매핑을 생략하고 certain=false로 반환한다. 명시적 판매 세트 근거 없이 합계 구성만 보고 1세트를 만들지 않는다.
 
 예시 8. 포장 계층과 기본단위: 상품명/구성 원문이 "22m x 30롤 x 4팩(총 120롤)", 단품 하나가 단일상품, allowedPurchaseOptions=["개당 수량","길이","수량"], 개당 수량 defaultUnit=개 및 unitOptions=[개입,롤,매,매입,세트], 길이 defaultUnit=cm 및 unitOptions=[cm,m,mm], 수량 defaultUnit=개 및 unitOptions=[개,박스,세트]이면 개당 수량=30롤(PACK_CONTENT, outputUnit=롤, operand=30 롤, context=전체 구성 원문), 길이=22m(DIRECT, outputUnit=m, operand=22 m), 수량=4개(PACK_COUNT, outputUnit=개, operand=4 팩, context=전체 구성 원문)로 반환한다. 원문 팩이 수량 선택지에 없으므로 숫자 4를 유지해 4개로 반환하며 팩을 임의로 세트로 바꾸지 않는다.
 

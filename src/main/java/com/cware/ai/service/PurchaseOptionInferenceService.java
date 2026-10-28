@@ -64,7 +64,7 @@ public class PurchaseOptionInferenceService {
         // 위의 불확실 판정에 해당하지 않는 제안은 검증 오류가 하나라도 있으면 적용하지 않는다.
         if (!errors.isEmpty()) return diagnose(failure(request, confidence, "결과 검증에 실패했습니다.",
                 errors, "RESULT_VALIDATION_FAILED", hash, source), proposal,
-                "RESULT_VALIDATION_FAILED", "AI 제안이 서버의 응답 형식·단품 ID·허용 옵션명 검증을 통과하지 못했습니다.");
+                "RESULT_VALIDATION_FAILED", "AI 제안이 서버의 형식·단위·출처·계층 검증을 통과하지 못했습니다.");
         // 제안 검증을 통과해도 AI의 확실 판정과 최저 신뢰도 기준을 모두 만족해야 적용한다.
         if (!Boolean.TRUE.equals(proposal.certain()) || confidence < properties.confidenceThreshold())
             return diagnose(failure(request, confidence, proposal.reason(), List.of(), "REVIEW_REQUIRED", hash, source),
@@ -83,7 +83,7 @@ public class PurchaseOptionInferenceService {
         List<OptionMapping> mappings = optionMappings(request, proposal);
         return diagnose(new InferenceResponse(request.goodsId(), true, true, confidence, mappings, items,
                 proposal.reason(), List.of(), null, hash, properties.promptVersion(), source),
-                proposal, "ACCEPTED", "AI의 확실 판정, 신뢰도 기준 및 서버의 기본 구조 검증을 통과했습니다. 값과 근거는 AI 판단을 사용합니다.");
+                proposal, "ACCEPTED", "AI의 확실 판정, 신뢰도 기준 및 서버의 구조·대상별 근거 검증을 통과했습니다. 모든 원문 의미와 합산의 정확성을 보증하지는 않습니다.");
     }
 
     private InferenceResponse simulate(InferenceRequest request, String hash) {
@@ -111,7 +111,8 @@ public class PurchaseOptionInferenceService {
                 proposal.confidence(), proposal.mappings() == null ? null : proposal.mappings().stream()
                     .map(entry -> entry == null ? null : new AiAssessment.ProposedMapping(entry.optionId(),
                             entry.targetPurchaseOptionName(), entry.value(), entry.confidence(),
-                            entry.evidenceSource(), entry.evidenceText(), entry.calculation())).toList(), proposal.reason());
+                            entry.evidenceSource(), entry.evidenceText(), entry.calculation())).toList(), proposal.reason(),
+                proposal.quantityEvidence());
         return response.withAssessments(assessment,
                 new ServerAssessment(decisionCode, serverReason, properties.confidenceThreshold()));
     }
