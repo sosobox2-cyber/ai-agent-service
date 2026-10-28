@@ -53,16 +53,6 @@ class PromptRoutingTest {
         assertThat(new PurchaseOptionPromptProvider("FULL").select(fixture("ai"))).isEqualTo(PurchaseOptionPromptMode.FULL);
         assertThatThrownBy(() -> new PurchaseOptionPromptProvider("LIGHT")).isInstanceOf(IllegalArgumentException.class);
     }
-    @Test void quantityFullUsesFocusedInstructionsWithTheSameFullMode() throws Exception {
-        var provider = new PurchaseOptionPromptProvider("AUTO");
-        var quantity = fixture("quantity");
-        assertThat(provider.select(quantity)).isEqualTo(PurchaseOptionPromptMode.FULL);
-        assertThat(provider.system(PurchaseOptionPromptMode.FULL, quantity))
-                .isEqualTo(Files.readString(Path.of("src/main/resources/prompts/coupang-purchase-option-system-quantity.txt")))
-                .contains("70매X10팩", "sourceReviews", "calculation.operands");
-        assertThat(provider.system(PurchaseOptionPromptMode.FULL, fixture("tv")))
-                .isEqualTo(provider.system(PurchaseOptionPromptMode.FULL));
-    }
 
     @Test void lightMapsAllFourClothingItemsAndUsesSameUserInputWithNullCalculationSchema() throws Exception {
         var request = fixture("ai");

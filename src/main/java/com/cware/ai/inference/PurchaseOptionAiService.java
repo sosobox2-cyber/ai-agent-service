@@ -124,9 +124,7 @@ public class PurchaseOptionAiService implements OptionInferenceGateway {
                 .jsonSchema(ResponseFormat.JsonSchema.builder().name("purchase_option_mapping")
                         .strict(true).schema(schema(request, mode)).build()).build();
         // 모드별 시스템 지침과 상품 입력을 결합하고, 응답 형식 설정을 함께 전달한다.
-        String system = mode == PurchaseOptionPromptMode.FULL && QuantityEvidenceValidator.required(request)
-                ? prompts.system(mode, request) : prompts.system(mode);
-        Prompt prompt = new Prompt(List.of(new SystemMessage(system), new UserMessage(input)),
+        Prompt prompt = new Prompt(List.of(new SystemMessage(prompts.system(mode)), new UserMessage(input)),
                 OpenAiChatOptions.builder().responseFormat(format).build());
         // 파싱·검증 시간을 제외한 모델 호출 소요 시간을 측정한다.
         long started = System.nanoTime();

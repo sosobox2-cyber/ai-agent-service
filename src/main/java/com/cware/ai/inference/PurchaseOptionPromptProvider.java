@@ -11,7 +11,6 @@ import java.nio.charset.StandardCharsets;
 /** 시작 시 두 시스템 프롬프트를 읽고 AUTO 선택 또는 FULL 강제 설정을 적용한다. */
 public final class PurchaseOptionPromptProvider {
     private final String full;
-    private final String quantityFull;
     private final String light;
     private final boolean forceFull;
     private final PurchaseOptionPromptSelector selector = new PurchaseOptionPromptSelector();
@@ -20,7 +19,6 @@ public final class PurchaseOptionPromptProvider {
         if (!mode.equals("AUTO") && !mode.equals("FULL")) throw new IllegalArgumentException("prompt-mode must be AUTO or FULL");
         forceFull = mode.equals("FULL");
         full = read("coupang-purchase-option-system.txt");
-        quantityFull = read("coupang-purchase-option-system-quantity.txt");
         light = read("coupang-purchase-option-system-light.txt");
     }
 
@@ -30,10 +28,6 @@ public final class PurchaseOptionPromptProvider {
     }
 
     public String system(PurchaseOptionPromptMode mode) { return mode == PurchaseOptionPromptMode.LIGHT ? light : full; }
-
-    public String system(PurchaseOptionPromptMode mode, InferenceRequest request) {
-        return mode == PurchaseOptionPromptMode.FULL && QuantityEvidenceValidator.required(request) ? quantityFull : system(mode);
-    }
 
     private static String read(String name) throws IOException {
         return new ClassPathResource("prompts/" + name).getContentAsString(StandardCharsets.UTF_8);

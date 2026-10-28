@@ -392,7 +392,7 @@ API 호출 중 예외가 발생하면 응답은 `aiUsage=[]`입니다. 첫 번�
   "validationErrors": [],
   "errorCode": null,
   "inputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-  "promptVersion": "coupang-option-v33",
+  "promptVersion": "coupang-option-v32",
   "inferenceSource": "AI",
   "aiAssessment": {
     "certain": true,
@@ -596,7 +596,7 @@ AI가 돌려준 JSON을 파싱하지 못하거나 응답이 완료되지 않았�
   "reason": "입력 데이터를 확인하세요.",
   "validationErrors": ["optionId는 중복될 수 없습니다."],
   "errorCode": "INVALID_REQUEST", "inputHash": null,
-  "promptVersion": "coupang-option-v33", "inferenceSource": "NONE",
+  "promptVersion": "coupang-option-v32", "inferenceSource": "NONE",
   "aiAssessment": null,
   "serverAssessment": {"decisionCode": "INVALID_REQUEST", "reason": "입력 데이터를 확인하세요.", "confidenceThreshold": 0.8},
   "aiUsage": []
