@@ -9,6 +9,7 @@ const labels = {UNTESTED:'미실행',MOCK:'모의 실행',MATCH:'기준값 일�
 let datasets = [], datasetId = '', currentPage = 1, pageData = null, selected = new Set();
 let detail = null, displayedRun = null, editingRow = null, busy = false, stopped = false;
 let access = {managementRequiresApiKey:true,aiRequiresApiKey:true};
+let focusRow = null, focusTarget = null, focusOpened = false;
 const number = value => Number(value || 0).toLocaleString('ko-KR');
 function node(tag, text, className) {
   const value = document.createElement(tag);
@@ -326,6 +327,13 @@ function renderDetail() {
     const statusCell = node('td'); if (comparison) statusCell.append(badge(comparison.status)); else statusCell.textContent = '미실행';
     const actual = node('td',comparison?.actual ?? '—'); if (comparison?.evidence) actual.append(node('span',comparison.evidence,'subtext'));
     row.append(identity,node('td',reference.target),baseline,node('td',confirmed || '—'),actual,statusCell,successCell,reviewCell); $('comparisons').append(row);
+    if (focusRow === reference.row) { row.classList.add('focused'); focusTarget = {row, reference}; }
+  }
+  // 링크로 지정된 행은 한 번만 강조하고 검토 입력을 연다. 이후 다시 그릴 때는 강조만 유지한다.
+  if (focusTarget) {
+    const target = focusTarget; focusTarget = null;
+    target.row.scrollIntoView({block:'center'});
+    if (!focusOpened && current) { focusOpened = true; editReview(target.reference); }
   }
   $('raw-request').textContent = JSON.stringify(run?.request || detail.testCase.request,null,2);
   $('raw-response').textContent = run ? JSON.stringify(run.response || {error:run.error},null,2) : '아직 실행하지 않았습니다.';
@@ -394,7 +402,7 @@ $('confirm-selected').addEventListener('click',() => {
 });
 $('run-detail').addEventListener('click',() => handle(runCases([detail.testCase.id]),true));
 $('stop').addEventListener('click',() => { stopped = true; $('stop').disabled = true; $('stop').textContent = '현재 사례 완료 후 중지합니다'; });
-$('close-detail').addEventListener('click',() => $('detail-dialog').close());
+$('close-detail').addEventListener('click',() => { focusRow = null; $('detail-dialog').close(); });
 $('history').addEventListener('change',() => { displayedRun = detail.history.find(value => value.id === $('history').value) || null; $('review-form').hidden = true; renderDetail(); });
 $('cancel-review').addEventListener('click',() => $('review-form').hidden = true);
 $('review-form').addEventListener('submit',event => { event.preventDefault(); if (busy) return;
@@ -441,6 +449,16 @@ async function initialize() {
     ? '이 서버의 접근 인증이 필요합니다. 서버 인증 설정을 확인하세요.'
     : '';
   $('access-hint').hidden = !access.managementRequiresApiKey;
-  await connect();
+  // 검토 목록 CSV의 링크(?dataset=&case=&row=)로 들어오면 해당 상품과 행을 바로 연다.
+  const link = deepLink(location.search);
+  await connect(link.dataset);
+  if (link.dataset && link.dataset !== datasetId) { message('링크의 데이터 세트가 이 서버에 없습니다. 복원된 데이터 세트 ID를 확인하세요.',true); return; }
+  if (link.caseId) { focusRow = link.row; await openDetail(link.caseId); }
+}
+function deepLink(search) {
+  const params = new URLSearchParams(search), row = Number(params.get('row'));
+  const dataset = params.get('dataset') || '', caseId = params.get('case') || '';
+  return { dataset: /^[a-f0-9-]{36}$/.test(dataset) ? dataset : '', caseId: /^[A-Za-z0-9_-]{1,64}$/.test(caseId) ? caseId : '',
+    row: Number.isInteger(row) && row > 0 ? row : null };
 }
 handle(initialize());

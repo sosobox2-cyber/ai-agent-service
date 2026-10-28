@@ -111,6 +111,8 @@ th {
 }
 td { padding: 13px 12px; border-top: 1px solid var(--border-faint); vertical-align: top; }
 tbody tr:hover { background: var(--surface-alt); }
+/* 검토 목록 링크로 지정한 행. 배경색만으로 구분하지 않도록 왼쪽 선을 함께 둔다. */
+tbody tr.focused { background: var(--surface-alt); box-shadow: inset 4px 0 0 var(--border); }
 
 /* 수치 열은 오른쪽 정렬하고 자릿수를 고정해 세로로 비교되게 한다. */
 th.num, .case-table td:nth-child(3), .case-table td:nth-child(5), .case-table td:nth-child(6) {
