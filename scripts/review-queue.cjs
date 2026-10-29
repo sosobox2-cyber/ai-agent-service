@@ -57,7 +57,11 @@ function main() {
   if (!out.startsWith(path.join(ROOT, 'logs') + path.sep)) throw Error('출력은 이 저장소 logs 아래여야 합니다.');
   const priority = (targets || '').split(',').map(t => t.trim()).filter(Boolean);
   const result = queue(parseCsv(fs.readFileSync(path.resolve(input), 'utf8')), datasetId, priority);
-  fs.writeFileSync(out, '﻿' + result.map(r => r.map(csvField).join(',')).join('\r\n') + '\r\n', { flag: 'wx' });
+  if (/\.txt$/i.test(out)) {
+    // 엑셀 2007 등 구버전은 UTF-8 CSV를 CP949로 읽어 한글이 깨진다. UTF-16LE 탭 구분 텍스트는 더블클릭으로 바로 열린다.
+    const tsv = result.map(r => r.map(v => String(v ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t')).join('\r\n') + '\r\n';
+    fs.writeFileSync(out, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(tsv, 'utf16le')]), { flag: 'wx' });
+  } else fs.writeFileSync(out, '﻿' + result.map(r => r.map(csvField).join(',')).join('\r\n') + '\r\n', { flag: 'wx' });
   const counts = {};
   const targetCol = result[0].indexOf('구매옵션명');
   for (const r of result.slice(1)) counts[r[targetCol]] = (counts[r[targetCol]] || 0) + 1;

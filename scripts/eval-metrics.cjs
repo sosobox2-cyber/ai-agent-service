@@ -27,6 +27,7 @@ function compareValue(expected, actual) {
   return 'DIFFERENT';
 }
 
+const EMPTY_MARK = '[정답=값없음]', EMPTY_VALUE = '(값 없음)';
 // 최신 검토로 비교를 다시 계산한다. 확정값이 없는 REFERENCE_ISSUE 행은 기준이 틀렸다는 뜻이므로 채점에서 뺀다.
 function rescore(run, reviews) {
   if (!run || !reviews || !Array.isArray(run.comparisons)) return run;
@@ -36,6 +37,12 @@ function rescore(run, reviews) {
     // 검토가 취소된 행은 원본 등록값 기준으로 되돌린다.
     if (!review) return c.confirmedValue ? { ...c, confirmedValue: '', status: compareValue(c.baseline, c.actual) } : c;
     const confirmed = (review.confirmedValue || '').trim();
+    // 화면의 확정값은 빈 값을 저장할 수 없다. 메모에 EMPTY_MARK가 있으면 "정답은 값 없음"으로 채점한다.
+    // 예: 사이즈만 다른 묶음 상품의 색상. AI가 생략하면 정답, 값을 내면 오답이다.
+    if (!confirmed && (review.note || '').includes(EMPTY_MARK)) {
+      const empty = c.actual == null || !String(c.actual).trim();
+      return { ...c, confirmedValue: EMPTY_VALUE, status: empty ? 'EXACT' : 'REGRESSION' };
+    }
     if (!confirmed) return review.status === 'REFERENCE_ISSUE' ? { ...c, confirmedValue: '', status: 'NO_REFERENCE' } : c;
     let status = compareValue(confirmed, c.actual);
     if (!MATCH.has(status)) status = 'REGRESSION';
@@ -224,5 +231,5 @@ function main() {
   console.log(json ? JSON.stringify(result, null, 2) : render(result, planSize));
 }
 
-module.exports = { classify, wilson, summarize, collect, compareValue, nearMatch, listReferenceOmitted, rescore, loadReviews };
+module.exports = { EMPTY_MARK, classify, wilson, summarize, collect, compareValue, nearMatch, listReferenceOmitted, rescore, loadReviews };
 if (require.main === module) try { main(); } catch (e) { console.error(e.message); process.exitCode = 1; }

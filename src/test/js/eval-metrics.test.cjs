@@ -120,6 +120,17 @@ test('최신 검토 스냅샷으로 실행 당시 비교를 다시 채점한다'
   assert.equal(rescore(stored, undefined), stored);
 });
 
+test('메모의 값없음 표식은 AI 생략을 정답, 값 제시를 오답으로 채점한다', () => {
+  const reviews = loadReviews({ cases: [{ testCase: { id: 'c1' }, reviews: [
+    { row: 1, status: 'REFERENCE_ISSUE', confirmedValue: '', note: 'AI 초안·사람 승인 [정답=값없음] 묶음 색상' },
+    { row: 2, status: 'NEEDS_FIX', confirmedValue: '', note: '[정답=값없음]' }] }] });
+  const fresh = rescore(run(true, [
+    { row: 1, target: '색상', baseline: '블랙, 레드', actual: null, status: 'MISSING', confirmedValue: '' },
+    { row: 2, target: '색상', baseline: '3종', actual: '차콜', status: 'DIFFERENT', confirmedValue: '' }]), reviews.get('c1'));
+  assert.deepEqual(fresh.comparisons.map(c => c.status), ['EXACT', 'REGRESSION']);
+  assert.equal(classify(fresh, true), 'FALSE_APPROVAL');
+});
+
 test('collect는 검토가 있으면 다시 채점한 결과로 집계한다', t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-rescore-'));
   t.after(() => fs.rmSync(dir, { recursive: true }));
