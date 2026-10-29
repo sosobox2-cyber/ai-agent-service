@@ -13,6 +13,23 @@ import static org.assertj.core.api.Assertions.*;
 
 /** 운영에서 발견한 오류를 익명화한 고정 기준. 등록 기준값과의 문자열 일치율을 정답률로 쓰지 않는다. */
 class AiValueContractTest {
+    @ParameterizedTest
+    @CsvSource({"FREE", "F", "프리", "없음", "해당없음", "-", "S", "M", "L", "XL", "XXL", "90", "230mm", "S/M/L", "블랙/화이트", "'블랙, 레드'", "블랙·레드"})
+    void rejectsNonColorAndColorLists(String value) {
+        for (String target : List.of("색상", "컬러", "색상/향", "COLOR", "color")) {
+            var result = assess(request(target, null), proposal(target, value, null, null, value));
+            assertThat(result.success()).as(target + "=" + value).isFalse();
+            assertThat(result.validationErrors()).anyMatch(e -> e.startsWith("COLOR_VALUE_INVALID"));
+            assertThat(result.optionMappings()).isEmpty();
+            assertThat(result.aiAssessment().mappings().get(0).value()).isEqualTo(value);
+        }
+    }
+    @ParameterizedTest
+    @CsvSource({"네온/옐로우", "블랙", "Carhartt Brown", "오프화이트", "라벤더향", "F블루"})
+    void keepsSingleColorNamesAndCombinedColorFragranceTarget(String value) {
+        assertThat(assess(request("색상/향", null), proposal("색상/향", value, null, null, value)).success()).isTrue();
+        assertThat(assess(request("사이즈", null), proposal("사이즈", "FREE", null, null, "FREE")).success()).isTrue();
+    }
     static InferenceRequest request(String target, String unit) {
         return new InferenceRequest("contract-fixture", "평가 상품", null, List.of(target),
                 List.of(new SourceOption("1", "단일상품")), "검증용 상품 정보",

@@ -16,6 +16,22 @@ final class AiValueContract {
             + "|(?:한|두|세|네|다섯|여섯|일곱|여덟|아홉|열|일|이|삼|사|오|육|칠|팔|구|십)\\s*(?:명|인)(?:용)?)"
             + "(?:\\s*(?:이상|이하|내외))?");
     private static final Pattern CERTIFICATE = Pattern.compile("(?i)^(?:R-[RC]-|MSIP-).+");
+    private static final Pattern SIZE_ONLY = Pattern.compile(
+            "(?i)(?:FREE|F|프리|X{0,4}[SML]|[2-6]XL|[0-9]+(?:\\.[0-9]+)?(?:MM|CM|호|인치)?)"
+            + "(?:\\s*[/~～-]\\s*(?:X{0,4}[SML]|[0-9]+(?:\\.[0-9]+)?(?:MM|CM|호|인치)?))*");
+    private static final Set<String> BASIC_COLORS = Set.of("블랙", "화이트", "레드", "블루", "그린", "옐로우",
+            "핑크", "퍼플", "브라운", "베이지", "그레이", "네이비", "오렌지", "검정", "흰색", "빨강", "파랑",
+            "black", "white", "red", "blue", "green", "yellow", "pink", "purple", "brown", "beige", "gray", "navy", "orange");
+
+    private static boolean invalidColor(String value) {
+        String text = value.strip();
+        if (Set.of("없음", "해당없음", "-").contains(text.replaceAll("\\s+", ""))
+                || SIZE_ONLY.matcher(text).matches()) return true;
+        // 슬래시는 색 이름 내부에도 쓰인다. 명확한 목록 구분자 또는 기본 색 이름끼리의 슬래시만 차단한다.
+        if (Pattern.compile("[,，、;；|+&·\\r\\n]").matcher(text).find()) return true;
+        String[] parts = text.toLowerCase(Locale.ROOT).split("/", -1);
+        return parts.length > 1 && Arrays.stream(parts).allMatch(p -> BASIC_COLORS.contains(p.strip()));
+    }
 
     static List<String> validate(InferenceRequest request, MappingProposal proposal) {
         List<String> errors = new ArrayList<>();
@@ -23,6 +39,9 @@ final class AiValueContract {
         for (var entry : proposal.mappings()) {
             if (entry == null || entry.value() == null || entry.targetPurchaseOptionName() == null) continue;
             String target = entry.targetPurchaseOptionName();
+            if ((target.contains("색상") || target.contains("컬러") || target.equalsIgnoreCase("color"))
+                    && invalidColor(entry.value()))
+                errors.add("COLOR_VALUE_INVALID: 색상에 자리표시자·사이즈 또는 여러 색 목록을 사용할 수 없습니다.");
             if (target.equals("사용 인원") && !PEOPLE.matcher(entry.value().strip()).matches())
                 errors.add("사용 인원 값에는 인원 수를 나타내는 표현이 필요합니다.");
             if ((target.equals("모델명/품번") || target.equals("모델명"))
