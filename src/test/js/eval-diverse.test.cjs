@@ -56,11 +56,11 @@ test('v28도 이전 비용 원장을 이어 쓰며 미검증 버전은 호출하
     return { ok: true, status: 200, json: async () => run };
   } });
   assert.ok(Math.abs(state.spent - 0.3309184) < 1e-10);
-  x.plan.promptVersion = 'coupang-option-v44';
+  x.plan.promptVersion = 'coupang-option-v45';
   await assert.rejects(execute({ ...x, fetcher: async () => assert.fail('must not call') }), /검증된 실행 설정/);
 });
 test('2달러 상한 계획도 누적 원장을 이어 쓰며 2달러를 넘기지 않는다', async t => {
-  const x = setup(t); x.plan.promptVersion = 'coupang-option-v43'; x.plan.budgetUsd = 2.0;
+  const x = setup(t); x.plan.promptVersion = 'coupang-option-v44'; x.plan.budgetUsd = 2.0;
   fs.writeFileSync(path.join(x.dir, 'ledger.jsonl'), JSON.stringify({ id: 'prior', event: 'completed', costUsd: 1.93 }) + '\n');
   await execute({ ...x, fetcher: async () => assert.fail('must not call') });
   x.plan.budgetUsd = 1.7;
