@@ -4,6 +4,26 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { collectSnapshot } = require('../../../scripts/eval-metrics.cjs');
+
+test('운영 표본 스냅샷은 사례별 최신 AI 실행과 검토로 집계한다', () => {
+  const runOf = (id, startedAt, actual, auto) => ({ id, mode: 'AI', startedAt,
+    response: { success: true, autoApplyCandidate: auto, promptVersion: 'coupang-option-v45', validationErrors: [] },
+    comparisons: [{ row: 1, target: '색상', baseline: '', actual, status: 'NO_REFERENCE', confirmedValue: '' }] });
+  const snapshot = { cases: [
+    { testCase: { id: 'p20261029-a' }, reviews: [{ row: 1, status: 'SUCCESS', confirmedValue: '블랙' }],
+      runs: [runOf('r1', '2026-10-29T01:00:00Z', '블랙', true)] },
+    { testCase: { id: 'p20261029-b' }, reviews: [{ row: 1, status: 'NEEDS_FIX', confirmedValue: '화이트', note: '오답' }],
+      runs: [runOf('r2', '2026-10-29T02:00:00Z', '블랙', true)] },
+    { testCase: { id: 'p20261029-c' }, reviews: [{ row: 1, status: 'SUCCESS', confirmedValue: '네이비' }],
+      runs: [runOf('r3', '2026-10-29T03:00:00Z', '네이비', false)] }] };
+  const gold = collectSnapshot(snapshot).versions['coupang-option-v45'].gold;
+  assert.equal(gold.counts.APPROVED_CORRECT, 1);
+  assert.equal(gold.counts.FALSE_APPROVAL, 1);
+  assert.equal(gold.counts.REVIEW_BUT_CORRECT, 1);
+  assert.equal(collectSnapshot(snapshot).budget, null);
+});
+
 const { classify, wilson, collect, compareValue, nearMatch, listReferenceOmitted, rescore, loadReviews } = require('../../../scripts/eval-metrics.cjs');
 
 test('목록 기준값에서 AI가 생략한 행만 기준값 의심으로 본다', () => {

@@ -174,6 +174,22 @@ function collect(dir, trialIds, reviews = null) {
     budget: { limitUsd: BUDGET_USD, accountedUsd: ledger.spent, remainingUsd: BUDGET_USD - ledger.spent, pending: ledger.pending.length } };
 }
 
+// 운영 표본처럼 로컬 원장이 없는 데이터셋은 git-snapshot의 사례별 최신 실행과 검토로 바로 집계한다.
+function collectSnapshot(snapshot) {
+  const reviews = loadReviews(snapshot), byVersion = new Map();
+  for (const item of snapshot.cases || []) {
+    const runs = (item.runs || []).filter(r => r.mode === 'AI').sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)));
+    const latest = runs[runs.length - 1];
+    if (!latest) continue;
+    const run = rescore(latest, reviews.get(item.testCase.id));
+    const version = run?.response?.promptVersion || '(응답 없음)';
+    if (!byVersion.has(version)) byVersion.set(version, []);
+    byVersion.get(version).push({ caseId: item.testCase.id, costUsd: null, run });
+  }
+  return { versions: Object.fromEntries([...byVersion].map(([v, list]) =>
+      [v, { gold: summarize(list, true), baseline: summarize(list, false) }])), budget: null };
+}
+
 const pct = r => r ? `${(r.rate * 100).toFixed(1)}% [${(r.low * 100).toFixed(1)}–${(r.high * 100).toFixed(1)}]` : '-';
 
 function render(result, planSize) {
@@ -200,7 +216,7 @@ function render(result, planSize) {
     if (s.topReviewReasons.length) lines.push('  검토 사유: ' + s.topReviewReasons.map(([k, n]) => `${k} ${n}`).join(', '));
   }
   const b = result.budget;
-  lines.push(`\n예산 원장 $${b.accountedUsd.toFixed(4)} / $${b.limitUsd} (남은 $${b.remainingUsd.toFixed(4)}, 미완료 예약 ${b.pending})`);
+  if (b) lines.push(`\n예산 원장 $${b.accountedUsd.toFixed(4)} / $${b.limitUsd} (남은 $${b.remainingUsd.toFixed(4)}, 미완료 예약 ${b.pending})`);
   lines.push('구간은 Wilson 95%. ' + (result.reviewSnapshot
     ? `검토 스냅샷(${result.reviewSnapshot.cases}상품, ${result.reviewSnapshot.rows}행)으로 다시 채점했다.`
     : '실행 당시 비교 결과다. 최신 검토를 반영하려면 --reviews <git-snapshot.json>을 지정한다.'));
@@ -209,6 +225,18 @@ function render(result, planSize) {
 
 function main() {
   const args = process.argv.slice(2), json = args.includes('--json');
+  // --snapshot <git-snapshot.json>: 운영 표본처럼 원장 없는 데이터셋을 검토된 사례만으로 집계한다.
+  const snap = args.indexOf('--snapshot');
+  if (snap >= 0) {
+    const file = path.resolve(args[snap + 1] || '');
+    if (!args[snap + 1] || !file.startsWith(ROOT + path.sep)) throw Error('스냅샷은 이 저장소 안의 git-snapshot JSON이어야 합니다.');
+    const snapshot = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^﻿/, ''));
+    const result = collectSnapshot(snapshot);
+    const reviews = loadReviews(snapshot);
+    result.reviewSnapshot = { cases: reviews.size, rows: [...reviews.values()].reduce((s, m) => s + m.size, 0) };
+    console.log(json ? JSON.stringify(result, null, 2) : render(result, null));
+    return;
+  }
   const at = args.indexOf('--reviews'), reviewFile = at >= 0 ? args[at + 1] : null;
   const [folder, planFile] = args.filter((a, i) => a !== '--json' && (at < 0 || (i !== at && i !== at + 1)));
   if (!folder || (at >= 0 && !reviewFile)) throw Error(
@@ -232,5 +260,5 @@ function main() {
   console.log(json ? JSON.stringify(result, null, 2) : render(result, planSize));
 }
 
-module.exports = { EMPTY_MARK, classify, wilson, summarize, collect, compareValue, nearMatch, listReferenceOmitted, rescore, loadReviews };
+module.exports = { EMPTY_MARK, classify, wilson, summarize, collect, collectSnapshot, compareValue, nearMatch, listReferenceOmitted, rescore, loadReviews };
 if (require.main === module) try { main(); } catch (e) { console.error(e.message); process.exitCode = 1; }
