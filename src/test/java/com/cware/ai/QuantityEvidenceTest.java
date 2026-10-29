@@ -9,6 +9,52 @@ import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 
 class QuantityEvidenceTest {
+    @Test void rejectsTruncatedDurationQuote() {
+        for (String amount : List.of("36", "24", "12")) {
+            var r = request(List.of("수량"), "판매 상품", "사용기한 " + amount + "개월");
+            var f = fact("count", "main", Measure.COUNT, Scope.TOTAL, amount, "개",
+                    "productCompositionText", amount + "개");
+            assertThat(AiValueContractTest.assess(r, proposal(r, List.of(f), "수량", amount + "개",
+                    Calculation.Operation.DIRECT, "개", "count")).success()).isFalse();
+        }
+    }
+    @Test void rejectsDurationFactsAndOperandsButKeepsPureCounts() {
+        for (String suffix : List.of("개월", "월", "년", "일", "주", "시간", "분", "초", "개월분", "일분")) {
+            var r = request(List.of("수량"), "판매 상품", "기간 30" + suffix);
+            var f = fact("count", "main", Measure.COUNT, Scope.TOTAL, "30", "개",
+                    "productCompositionText", "30" + suffix);
+            assertThat(errors(r, proposal(r, List.of(f), "수량", "30개",
+                    Calculation.Operation.DIRECT, "개", "count"))).as(suffix)
+                    .anyMatch(e -> e.startsWith("QUANTITY_EVIDENCE_INVALID"));
+        }
+        for (String text : List.of("30개입", "12개", "3개", "3개월분 30개입")) {
+            String amount = text.contains("30개") ? "30" : text.contains("12개") ? "12" : "3";
+            var r = request(List.of("수량"), "판매 상품", text);
+            var f = fact("count", "main", Measure.COUNT, Scope.TOTAL, amount, "개",
+                    "productCompositionText", amount + "개");
+            assertThat(AiValueContractTest.assess(r, proposal(r, List.of(f), "수량", amount + "개",
+                    Calculation.Operation.DIRECT, "개", "count")).success()).as(text).isTrue();
+        }
+    }
+    @Test void checksOriginalOccurrenceAndOperandEvenWhenFactContainsOtherValidCount() {
+        var r = request(List.of("수량"), "판매 상품", "36개월 36개");
+        var f = fact("count", "main", Measure.COUNT, Scope.TOTAL, "36", "개",
+                "productCompositionText", "36개월 36개");
+        var p = proposal(r, List.of(f), "수량", "36개", Calculation.Operation.DIRECT, "개", "count");
+        var badOperand = new MappingProposal.Entry("1", "수량", "36개", .95,
+                "productCompositionText", "36개월", new Calculation(Calculation.Operation.DIRECT, "개",
+                List.of(new Calculation.Operand("36", "개", new Calculation.Evidence("productCompositionText", "36개월"))), null));
+        assertThat(errors(r, new MappingProposal(true, .95, List.of(badOperand), p.reason(), p.quantityEvidence())))
+                .anyMatch(e -> e.startsWith("QUANTITY_EVIDENCE_INVALID"));
+        assertThat(errors(r, p)).isEmpty();
+    }
+    @Test void unusedDurationFactDoesNotInvalidateIndependentPackagingCount() {
+        var r = request(List.of("수량"), "6개월분", "30정 * 6박스");
+        var duration = fact("duration", "main", Measure.COUNT, Scope.TOTAL, "6", "개", "goodsName", "6개");
+        var packaging = fact("pack", "main", Measure.COUNT, Scope.TOTAL, "6", "박스", "productCompositionText", "6박스");
+        assertThat(AiValueContractTest.assess(r, proposal(r, List.of(duration, packaging), "수량", "6박스",
+                Calculation.Operation.PACK_COUNT, "박스", "pack")).success()).isTrue();
+    }
     @Test void fullPromptExampleIncludesValidQuantityEvidence() throws Exception {
         String prompt;
         try (var stream = getClass().getResourceAsStream("/prompts/coupang-purchase-option-system.txt")) {

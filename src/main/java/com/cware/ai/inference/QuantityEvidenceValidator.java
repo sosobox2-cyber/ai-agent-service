@@ -64,9 +64,21 @@ public final class QuantityEvidenceValidator {
             if (amount == null || canonical == null || !quotedNumber(fact)) {
                 errors.add("QUANTITY_EVIDENCE_INVALID: 근거 숫자·단위가 원문 또는 측정 종류와 맞지 않습니다."); continue;
             }
+            // 기간 숫자는 사실 값으로 등록하지 않는다. 사용하지 않은 사실 때문에 정상 포장 근거까지 반려하지 않는다.
+            if (fact.measure() == Measure.COUNT && !countQuoteInSource(fact.amount(), fact.quote(), input)) continue;
             values.put(fact.id(), canonical);
         }
         validateReviews(request, context, facts, errors);
+        if (proposal.mappings() != null) for (var entry : proposal.mappings()) {
+            if (entry == null || !TARGETS.contains(Objects.toString(entry.targetPurchaseOptionName(), ""))
+                    || entry.calculation() == null || entry.calculation().operands() == null) continue;
+            for (var operand : entry.calculation().operands()) {
+                if (operand != null && COUNTS.contains(unit(operand.unit())) && operand.evidence() != null
+                        && !countQuoteInSource(operand.amount(), operand.evidence().text(),
+                                source(request, entry.optionId(), operand.evidence().source())))
+                    errors.add("QUANTITY_EVIDENCE_INVALID: 개수 피연산자의 숫자가 원문에서 개수 근거가 아닙니다.");
+            }
+        }
         validateExplicitCrossSourceCounts(request, errors);
         // 매핑에서 빠진 항목의 충돌도 검사한다. 같은 본품·같은 측정 계층만 비교한다.
         Map<List<Object>, String> observations = new HashMap<>();
@@ -265,6 +277,8 @@ public final class QuantityEvidenceValidator {
                 errors.add("QUANTITY_SCOPE_MISMATCH: 근거의 본품·단품·측정 종류·계층이 매핑과 다릅니다."); continue;
             }
             selected.add(fact);
+            if (!values.containsKey(fact.id()))
+                errors.add("QUANTITY_EVIDENCE_INVALID: 연결된 사실의 숫자를 개수 근거로 사용할 수 없습니다.");
         }
         if (selected.isEmpty()) return;
         if (scope == Scope.ITEM && selected.stream().map(Fact::componentId).distinct().count() > 1)
@@ -338,6 +352,24 @@ public final class QuantityEvidenceValidator {
             // 개수로 선언한 사실이 실제로는 g/ml/cm 등의 숫자이면 unit 필드만 바꿔 우회할 수 없다.
             if (fact.measure() != Measure.COUNT || !Pattern.compile("(?i)^\\s*(?:kg|mg|g|ml|l|cc|cm|mm|m|㎎|㎏|㎖|ℓ)(?![a-zA-Z])")
                     .matcher(fact.quote().substring(matches.end())).find()) return true;
+        }
+        return false;
+    }
+    private static final Pattern NON_COUNT_SUFFIX = Pattern.compile(
+            "(?i)^\\s*(?:개월|월|년|일|주|시간|분|초|kg|mg|g|ml|l|cc|cm|mm|m|㎎|㎏|㎖|ℓ)(?![a-zA-Z])");
+
+    /** 잘린 인용문도 원문 위치로 되돌려 숫자 바로 뒤 단위를 확인한다. 다른 개수는 추출하지 않는다. */
+    private static boolean countQuoteInSource(String amount, String quote, String input) {
+        if (blank(amount) || blank(quote) || input == null) return false;
+        String text = normalize(input), cited = normalize(quote);
+        var numbers = Pattern.compile("(?<![0-9.,+\\-])" + Pattern.quote(amount) + "(?![0-9.,])").matcher(cited);
+        while (numbers.find()) {
+            for (int at = text.indexOf(cited); at >= 0; at = text.indexOf(cited, at + 1)) {
+                int start = at + numbers.start(), end = at + numbers.end();
+                if (start > 0 && "0123456789.,+-".indexOf(text.charAt(start - 1)) >= 0) continue;
+                if (end < text.length() && "0123456789.,".indexOf(text.charAt(end)) >= 0) continue;
+                if (!NON_COUNT_SUFFIX.matcher(text.substring(end)).find()) return true;
+            }
         }
         return false;
     }
