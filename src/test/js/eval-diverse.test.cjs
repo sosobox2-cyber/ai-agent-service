@@ -66,6 +66,25 @@ test('2달러 상한 계획도 누적 원장을 이어 쓰며 2달러를 넘기�
   x.plan.budgetUsd = 1.7;
   await assert.rejects(execute({ ...x, fetcher: async () => assert.fail('must not call') }), /검증된 실행 설정/);
 });
+
+test('3달러 상한도 기존 원장과 미측정 예약금을 포함해 다음 요청을 차단한다', async t => {
+  const x = setup(t); x.plan.promptVersion = 'coupang-option-v44'; x.plan.budgetUsd = 3.0;
+  fs.writeFileSync(path.join(x.dir, 'ledger.jsonl'), JSON.stringify({ id: 'prior', event: 'completed', costUsd: 2.91 }) + '\n');
+  let posts = 0;
+  const state = await execute({ ...x, pause: async () => {}, fetcher: async (url, init) => {
+    if (init.method !== 'POST') return { ok: true, json: async () => ({ testCase: x.c }) };
+    posts++;
+    const run = runResult(); run.response.promptVersion = 'coupang-option-v44';
+    return { ok: true, status: 200, json: async () => run };
+  } });
+  assert.equal(posts, 1);
+  assert.ok(Math.abs(state.spent - 2.91041) < 1e-10);
+  fs.appendFileSync(path.join(x.dir, 'ledger.jsonl'), JSON.stringify({ id: 'unknown', event: 'completed', costUsd: null, reserveUsd: 0.08 }) + '\n');
+  x.plan.selected[0].trialId = 'next-trial';
+  await execute({ ...x, fetcher: async () => assert.fail('must not call') });
+  x.plan.budgetUsd = 2.7;
+  await assert.rejects(execute({ ...x, fetcher: async () => assert.fail('must not call') }), /검증된 실행 설정/);
+});
 test('v29의 늘어난 예산도 기존 비용을 포함하며 1.45달러에서 중단한다', async t => {
   const x = setup(t); x.plan.promptVersion = 'coupang-option-v29'; x.plan.budgetUsd = 1.45;
   fs.writeFileSync(path.join(x.dir, 'ledger.jsonl'), JSON.stringify({ id: 'prior', event: 'completed', costUsd: 1.36 }) + '\n');

@@ -12,10 +12,10 @@ const MODEL = /^(gpt-4\.1-mini|gpt-4\.1-mini-2025-04-14)$/;
 // v27/v28/v29/v30/v31/v32/v34/v35/v36/v37/v38/v39/v40/v41/v42/v43/v44, max_tokens=4096, 최대 2회 호출을 확인한 운영 환경 전용 상한.
 // 입력 65,536 tokens/회 + 출력 4,096 tokens/회를 비캐시 단가로 계산하면 $0.065536.
 const RESERVE_USD = 0.08;
-// 사용자가 2026-10-28 누적 승인 상한을 $2로 올렸다. 예전 계획 파일의 상한($0.95, $1.45)도 계속 실행할 수 있지만
-// 실제 차단은 계획에 적힌 상한으로 한다. 새 계획은 $2를 쓴다.
-const BUDGET_USD = 2.0;
-const KNOWN_BUDGETS = [0.95, 1.45, BUDGET_USD];
+// 사용자가 2026-10-29 누적 승인 상한을 $3로 올렸다. 예전 계획 파일의 상한($0.95, $1.45, $2)도 유지한다.
+// 실제 차단은 계획에 적힌 상한으로 한다. 새 계획은 $3를 쓴다.
+const BUDGET_USD = 3.0;
+const KNOWN_BUDGETS = [0.95, 1.45, 2.0, BUDGET_USD];
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
 const readLines = file => fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split(/\r?\n/).filter(Boolean).map(JSON.parse) : [];
