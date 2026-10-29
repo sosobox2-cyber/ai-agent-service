@@ -9,7 +9,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 const ROOT = path.resolve(__dirname, '..');
 const SIMPLE = new Set(['색상', '컬러', 'color', '사이즈', 'size', '패션의류/잡화 사이즈', '핏']);
 const MODEL = /^(gpt-4\.1-mini|gpt-4\.1-mini-2025-04-14)$/;
-// v27/v28/v29/v30/v31/v32/v34/v35/v36/v37/v38/v39/v40/v41/v42/v43/v44, max_tokens=4096, 최대 2회 호출을 확인한 운영 환경 전용 상한.
+// v27/v28/v29/v30/v31/v32/v34/v35/v36/v37/v38/v39/v40/v41/v42/v43/v44/v45, max_tokens=4096, 최대 2회 호출을 확인한 운영 환경 전용 상한.
 // 입력 65,536 tokens/회 + 출력 4,096 tokens/회를 비캐시 단가로 계산하면 $0.065536.
 const RESERVE_USD = 0.08;
 // 사용자가 2026-10-29 누적 승인 상한을 $3로 올렸다. 예전 계획 파일의 상한($0.95, $1.45, $2)도 유지한다.
@@ -126,7 +126,7 @@ function accounting(events) {
 async function execute({ dir, plan, maxNew = 1, fetcher = fetch, pause = delay }) {
   const base = new URL(plan.baseUrl);
   if (base.protocol !== 'https:' || base.username || base.password || base.pathname !== '/') throw Error('HTTPS origin이 필요합니다.');
-  if (!['coupang-option-v27', 'coupang-option-v28', 'coupang-option-v29', 'coupang-option-v30', 'coupang-option-v31', 'coupang-option-v32', 'coupang-option-v34', 'coupang-option-v35', 'coupang-option-v36', 'coupang-option-v37', 'coupang-option-v38', 'coupang-option-v39', 'coupang-option-v40', 'coupang-option-v41', 'coupang-option-v42', 'coupang-option-v43', 'coupang-option-v44'].includes(plan.promptVersion) || plan.reserveUsd !== RESERVE_USD || !KNOWN_BUDGETS.includes(plan.budgetUsd)) throw Error('검증된 실행 설정과 다릅니다.');
+  if (!['coupang-option-v27', 'coupang-option-v28', 'coupang-option-v29', 'coupang-option-v30', 'coupang-option-v31', 'coupang-option-v32', 'coupang-option-v34', 'coupang-option-v35', 'coupang-option-v36', 'coupang-option-v37', 'coupang-option-v38', 'coupang-option-v39', 'coupang-option-v40', 'coupang-option-v41', 'coupang-option-v42', 'coupang-option-v43', 'coupang-option-v44', 'coupang-option-v45'].includes(plan.promptVersion) || plan.reserveUsd !== RESERVE_USD || !KNOWN_BUDGETS.includes(plan.budgetUsd)) throw Error('검증된 실행 설정과 다릅니다.');
   const ledger = path.join(dir, 'ledger.jsonl'), lock = path.join(dir, 'running.lock');
   const lockFd = fs.openSync(lock, 'wx');
   const append = e => fs.appendFileSync(ledger, JSON.stringify(e) + '\n', { flush: true });
