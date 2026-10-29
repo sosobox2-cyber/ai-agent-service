@@ -13,7 +13,8 @@ const NOTE_PREFIX = 'AI 초안·사람 승인';
 // 초안 한 행을 평가 API 검토 명령으로 바꾼다. 빈 정답은 확정값을 비우고 메모 표식으로 남긴다.
 function command(draft, runId) {
   const empty = draft.value == null || !String(draft.value).trim();
-  const note = `${NOTE_PREFIX}${empty ? ' ' + EMPTY_MARK : ''} ${String(draft.reason || '').slice(0, 1500)}`.trim();
+  // 사람이 행마다 보지 않은 초안은 notePrefix로 출처를 구분한다(예: "AI 초안·표본 확인").
+  const note = `${draft.notePrefix || NOTE_PREFIX}${empty ? ' ' + EMPTY_MARK : ''} ${String(draft.reason || '').slice(0, 1500)}`.trim();
   return { status: draft.status, note, confirmedValue: draft.status === 'SUCCESS' || empty ? '' : String(draft.value), runId };
 }
 
