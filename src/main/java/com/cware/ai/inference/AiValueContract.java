@@ -41,6 +41,7 @@ final class AiValueContract {
     static List<String> validate(InferenceRequest request, MappingProposal proposal) {
         List<String> errors = new ArrayList<>();
         if (proposal == null || proposal.mappings() == null) return errors;
+        errors.addAll(ExplicitSizeValidator.validate(request, proposal));
         for (var entry : proposal.mappings()) {
             if (entry == null || entry.value() == null || entry.targetPurchaseOptionName() == null) continue;
             String target = entry.targetPurchaseOptionName();
