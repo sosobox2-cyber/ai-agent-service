@@ -41,6 +41,27 @@ class AiValueContractTest {
                 List.of(new SourceOption("1", "블랙, 레드")), "검증용 상품 정보", List.of(), null);
         assertThat(assess(listInName, proposal("색상", "블랙, 레드", null, null, "블랙, 레드")).success()).isFalse();
     }
+    // holdout150에서 확인한 유형: 모델 코드에 상품명의 제품 설명 단어를 붙인 값.
+    @Test
+    void rejectsModelCodeMixedWithProductNameWords() {
+        String[][] rows = {
+                {"[쿠쿠]무선주전자 KO1531KR 1.5L", "무선주전자 KO1531KR", "KO1531KR"},
+                {"헤르젠 쌀냉장고 AICARE 블랙 31KG SSR-E31", "헤르젠 쌀냉장고 AICARE 블랙 31KG SSR-E31", "SSR-E31"},
+                {"3M 맞춤정수기 필터 S (HF25-S-SR)", "3M 맞춤정수기 필터 S (HF25-S-SR) - C1전용", "HF25-S-SR"}};
+        for (String[] row : rows) {
+            var request = new InferenceRequest("contract-fixture", row[0], null, List.of("모델명/품번"),
+                    List.of(new SourceOption("1", "단일상품")), "검증용 상품 정보", List.of());
+            var bad = assess(request, proposal("모델명/품번", row[1], null, null, row[1]));
+            assertThat(bad.success()).as(row[1]).isFalse();
+            assertThat(bad.validationErrors()).anyMatch(e -> e.startsWith("MODEL_VALUE_INVALID"));
+            assertThat(assess(request, proposal("모델명/품번", row[2], null, null, row[2])).success()).as(row[2]).isTrue();
+        }
+        // 상품명에 없는 한글(색상·주석)이나 코드 없는 한글 모델명은 이 규칙으로 막지 않는다.
+        var request = new InferenceRequest("contract-fixture", "브라운 면도기 시리즈3", null, List.of("모델명/품번"),
+                List.of(new SourceOption("1", "단일상품")), "검증용 상품 정보", List.of());
+        for (String ok : List.of("SIF-PA40WS 다크그레이", "아쿠아케어"))
+            assertThat(assess(request, proposal("모델명/품번", ok, null, null, ok)).success()).as(ok).isTrue();
+    }
     static InferenceRequest request(String target, String unit) {
         return new InferenceRequest("contract-fixture", "평가 상품", null, List.of(target),
                 List.of(new SourceOption("1", "단일상품")), "검증용 상품 정보",

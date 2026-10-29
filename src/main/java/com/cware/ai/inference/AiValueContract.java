@@ -38,6 +38,20 @@ final class AiValueContract {
         return parts.length > 1 && Arrays.stream(parts).allMatch(p -> BASIC_COLORS.contains(p.strip()));
     }
 
+    // 영문·숫자가 함께 있는 3자 이상 토큰(KO1531KR, SSR-E31, HF25-S-SR)을 모델 코드로 본다.
+    private static final Pattern MODEL_CODE = Pattern.compile(
+            "(?<![A-Za-z0-9])(?=[A-Za-z0-9-]*[0-9])(?=[A-Za-z0-9-]*[A-Za-z])[A-Za-z0-9][A-Za-z0-9-]{2,}(?![A-Za-z0-9])");
+    private static final Pattern HANGUL_WORD = Pattern.compile("[가-힣]{2,}");
+
+    /** 모델 코드가 있는데 상품명의 한글 제품 설명 단어(무선주전자, 쌀냉장고 등)를 함께 붙였으면 true. */
+    private static boolean modelWithProductWords(String value, String goodsName) {
+        if (goodsName == null || !MODEL_CODE.matcher(value).find()) return false;
+        String name = goodsName.replaceAll("\\s+", "");
+        var words = HANGUL_WORD.matcher(MODEL_CODE.matcher(value).replaceAll(" "));
+        while (words.find()) if (name.contains(words.group())) return true;
+        return false;
+    }
+
     static List<String> validate(InferenceRequest request, MappingProposal proposal) {
         List<String> errors = new ArrayList<>();
         if (proposal == null || proposal.mappings() == null) return errors;
@@ -57,6 +71,8 @@ final class AiValueContract {
                     && entry.evidenceText() != null
                     && (entry.evidenceText().contains("등록번호") || entry.evidenceText().contains("인증번호")))
                 errors.add("인증·등록번호를 모델명/품번으로 사용할 수 없습니다.");
+            if ((target.equals("모델명/품번") || target.equals("모델명")) && modelWithProductWords(entry.value(), request.goodsName()))
+                errors.add("MODEL_VALUE_INVALID: 모델명/품번에 상품명의 제품 설명 단어를 섞을 수 없습니다.");
             var calculation = entry.calculation();
             if (calculation == null || calculation.operands() == null) continue;
             // 단위 미설정 옵션과 알 수 없는 단위에는 임의의 기본 단위/차원을 부여하지 않는다.
