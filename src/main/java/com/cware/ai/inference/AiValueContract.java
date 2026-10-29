@@ -1,6 +1,7 @@
 package com.cware.ai.inference;
 
 import com.cware.ai.dto.InferenceRequest;
+import com.cware.ai.dto.SourceOption;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -23,12 +24,16 @@ final class AiValueContract {
             "핑크", "퍼플", "브라운", "베이지", "그레이", "네이비", "오렌지", "검정", "흰색", "빨강", "파랑",
             "black", "white", "red", "blue", "green", "yellow", "pink", "purple", "brown", "beige", "gray", "navy", "orange");
 
-    private static boolean invalidColor(String value) {
+    private static boolean invalidColor(String value, String optionName) {
         String text = value.strip();
         if (Set.of("없음", "해당없음", "-").contains(text.replaceAll("\\s+", ""))
                 || SIZE_ONLY.matcher(text).matches()) return true;
-        // 슬래시는 색 이름 내부에도 쓰인다. 명확한 목록 구분자 또는 기본 색 이름끼리의 슬래시만 차단한다.
-        if (Pattern.compile("[,，、;；|+&·\\r\\n]").matcher(text).find()) return true;
+        // 쉼표 계열은 여러 색 목록으로 본다.
+        if (Pattern.compile("[,，、;；|\\r\\n]").matcher(text).find()) return true;
+        // `+`, `&`, `·`, 기본 색끼리의 `/`는 투톤 한 색상명(단품명 `화이트+블랙`)에도 쓰인다.
+        // 단품 옵션명에 그 값이 그대로 있으면 단품의 색상명으로 인정하고, 아니면 여러 색 목록으로 본다.
+        if (optionName != null && optionName.replaceAll("\\s+", "").contains(text.replaceAll("\\s+", ""))) return false;
+        if (Pattern.compile("[+&·]").matcher(text).find()) return true;
         String[] parts = text.toLowerCase(Locale.ROOT).split("/", -1);
         return parts.length > 1 && Arrays.stream(parts).allMatch(p -> BASIC_COLORS.contains(p.strip()));
     }
@@ -40,7 +45,9 @@ final class AiValueContract {
             if (entry == null || entry.value() == null || entry.targetPurchaseOptionName() == null) continue;
             String target = entry.targetPurchaseOptionName();
             if ((target.contains("색상") || target.contains("컬러") || target.equalsIgnoreCase("color"))
-                    && invalidColor(entry.value()))
+                    && invalidColor(entry.value(), request.options().stream()
+                            .filter(o -> o.optionId().equals(entry.optionId())).map(SourceOption::optionName1)
+                            .findFirst().orElse(null)))
                 errors.add("COLOR_VALUE_INVALID: 색상에 자리표시자·사이즈 또는 여러 색 목록을 사용할 수 없습니다.");
             if (target.equals("사용 인원") && !PEOPLE.matcher(entry.value().strip()).matches())
                 errors.add("사용 인원 값에는 인원 수를 나타내는 표현이 필요합니다.");

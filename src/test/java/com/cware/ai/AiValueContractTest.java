@@ -30,6 +30,17 @@ class AiValueContractTest {
         assertThat(assess(request("색상/향", null), proposal("색상/향", value, null, null, value)).success()).isTrue();
         assertThat(assess(request("사이즈", null), proposal("사이즈", "FREE", null, null, "FREE")).success()).isTrue();
     }
+    // 단품명 자체가 투톤 색상명이면 `+`·`&`·`·`·기본 색 슬래시도 한 색상으로 인정한다. 쉼표 목록은 계속 막는다.
+    @ParameterizedTest
+    @CsvSource({"화이트+블랙", "화이트&실버", "블랙·스킨", "베이지/블랙"})
+    void keepsTwoToneColorNamedByTheOption(String value) {
+        var request = new InferenceRequest("contract-fixture", "평가 상품", null, List.of("색상"),
+                List.of(new SourceOption("1", value + " 세트")), "검증용 상품 정보", List.of(), null);
+        assertThat(assess(request, proposal("색상", value, null, null, value)).success()).as(value).isTrue();
+        var listInName = new InferenceRequest("contract-fixture", "평가 상품", null, List.of("색상"),
+                List.of(new SourceOption("1", "블랙, 레드")), "검증용 상품 정보", List.of(), null);
+        assertThat(assess(listInName, proposal("색상", "블랙, 레드", null, null, "블랙, 레드")).success()).isFalse();
+    }
     static InferenceRequest request(String target, String unit) {
         return new InferenceRequest("contract-fixture", "평가 상품", null, List.of(target),
                 List.of(new SourceOption("1", "단일상품")), "검증용 상품 정보",
