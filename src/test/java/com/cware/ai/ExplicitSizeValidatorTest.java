@@ -54,6 +54,26 @@ class ExplicitSizeValidatorTest {
             assertThat(AiValueContractTest.assess(r, proposal("사이즈", null)).success()).as(Arrays.toString(row)).isTrue();
         }
     }
+    // 전체 데이터셋에서 확인한 오인: 의류·잡화 상품명의 "더블 버튼", 시즌 "SS", 판매처 "SK 스토아", 용량 "L".
+    @Test void doesNotTakeApparelOrGoodsSizeFromProductNameWords() {
+        for (String[] row : List.of(new String[]{"패션의류/잡화 사이즈", "울 더블 버튼 하프 코트", "다크네이비/55", "55"},
+                new String[]{"패션의류/잡화 사이즈", "20 SS 하이웨이스트 인견 팬티", "90(55)", "90(55)"},
+                new String[]{"패션의류/잡화 사이즈", "★SK 스토아 단독★ 남성 바지", "블랙/100", "100"},
+                new String[]{"사이즈", "올인원 2단 식기건조대 L", "없음", "41 x 33 x 40 cm"})) {
+            var r = request(row[0], row[1], row[2], "검증용 정보");
+            assertThat(AiValueContractTest.assess(r, proposal(row[0], row[3])).success()).as(Arrays.toString(row)).isTrue();
+        }
+        for (String[] row : List.of(new String[]{"90(S)", "90"}, new String[]{"블랙/M(95)", "95"}, new String[]{"110(XXL)", "110"})) {
+            var r = request("패션의류/잡화 사이즈", "벨로아 상의", row[0], "검증용 정보");
+            assertThat(AiValueContractTest.assess(r, proposal("패션의류/잡화 사이즈", row[1])).success()).as(row[0]).isTrue();
+            assertThat(AiValueContractTest.assess(r, proposal("패션의류/잡화 사이즈", "105")).success()).as(row[0]).isFalse();
+        }
+        var colorInSize = request("패션의류/잡화 사이즈", "벨로아 상의", "블랙/M(95)", "검증용 정보");
+        assertThat(AiValueContractTest.assess(colorInSize, proposal("패션의류/잡화 사이즈", "블랙")).success()).isFalse();
+        var bed = request("침구류사이즈", "★SK 스토아 단독★ 호텔 침대 퀸", "브라운", "정보");
+        assertThat(AiValueContractTest.assess(bed, proposal("침구류사이즈", "퀸")).success()).isTrue();
+        assertThat(AiValueContractTest.assess(bed, proposal("침구류사이즈", null)).success()).isFalse();
+    }
     @Test void preservesNoticeDimensionsForMatAndBag() {
         var mat = request("전기/온수매트 사이즈", "카본 매트 더블", "없음", "크기:1400*1800 (± 20mm)");
         assertThat(AiValueContractTest.assess(mat, proposal("전기/온수매트 사이즈", "1400*1800 (± 20mm)")).success()).isTrue();

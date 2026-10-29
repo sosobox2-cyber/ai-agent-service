@@ -17,6 +17,7 @@ final class ExplicitSizeValidator {
     private static final Pattern LATIN = Pattern.compile(
             "(?i)(?<![\\p{L}\\p{N}])(?:FAMILY|FREE|XXXL|XXL|XL|XS|SS|SK|LK|S|M|L|Q|K|D)(?![\\p{L}\\p{N}])");
     private static final Set<String> APPAREL = Set.of("XS", "S", "M", "L", "XL", "XXL", "XXXL");
+    private static final Pattern NUMERIC_SIZE = Pattern.compile("(?<![0-9.])[0-9]{2,3}(?![0-9]|\\s*(?:mm|cm|ml|g|kg|L|개|매|입))");
     private static final Pattern DIMENSION = Pattern.compile("(?i)[0-9].*(?:mm|cm|㎜|㎝|[x×*])");
 
     static List<String> validate(InferenceRequest request, MappingProposal proposal) {
@@ -36,6 +37,8 @@ final class ExplicitSizeValidator {
                 for (var entry : entries) {
                     if (entry.value() == null) continue; // 기본 구조 검증에서 처리한다.
                     String value = entry.value();
+                    // 단품명 "90(S)"의 "90"처럼 단품명에 적힌 사이즈 표기 한 조각을 그대로 옮긴 값은 인정한다.
+                    if (optionParts(option.optionName1()).contains(compact(value).toUpperCase(Locale.ROOT))) continue;
                     // 매트의 고시 치수는 명칭(더블 등)과 별개로 인정된 제품 규격이다.
                     if (target.contains("매트") && DIMENSION.matcher(value).find()
                             && compact(request.productNoticeText()).contains(compact(value))) continue;
@@ -50,9 +53,15 @@ final class ExplicitSizeValidator {
     private static String expected(InferenceRequest request, String target, String optionName) {
         Set<String> local = sizes(optionName, target);
         if (!local.isEmpty()) return local.size() == 1 ? local.iterator().next() : null;
-        // 상품명 맨 앞의 (SK)는 판매 채널 표기일 수 있어 슈퍼킹 근거로 단정하지 않는다.
+        // 상품명 대체는 침구·매트·기저귀처럼 상품명의 사이즈 명칭이 곧 규격인 대상만 쓴다.
+        // 의류·잡화 상품명의 "더블 버튼", 시즌 "SS", 판매처 "SK 스토아"를 사이즈로 오인하지 않는다.
+        if (!(target.contains("침구") || target.contains("매트") || target.contains("기저귀"))) return null;
+        // 단품명에 55·100·230 같은 숫자 사이즈가 있으면 그 단품의 사이즈가 따로 있으므로 상품명을 쓰지 않는다.
+        if (optionName != null && NUMERIC_SIZE.matcher(optionName).find()) return null;
+        // 상품명 맨 앞의 (SK)와 판매처 표기 SK스토아는 슈퍼킹 근거로 단정하지 않는다.
         String name = request.goodsName() == null ? "" : request.goodsName()
-                .replaceFirst("(?i)^(?:\\[[^\\]]*\\]\\s*)*\\(SK\\)\\s*", "");
+                .replaceFirst("(?i)^(?:\\[[^\\]]*\\]\\s*)*\\(SK\\)\\s*", "")
+                .replaceAll("(?i)SK\\s*스토아", "");
         Set<String> common = sizes(name, target);
         if (common.size() != 1) return null;
         // 상품명과 다른 사이즈를 선택하는 단품이 있으면 이름 없는 다른 단품에 공통값을 강제하지 않는다.
@@ -82,6 +91,15 @@ final class ExplicitSizeValidator {
         // 55/S, S(90)처럼 단품명의 의류 호수 병기는 유지한다. 물리 치수 단위는 남으므로 허용되지 않는다.
         if (APPAREL.contains(expected)) rest = rest.replaceAll("[0-9]+", "");
         return rest.replaceAll("[\\s()\\[\\]/-]", "").isEmpty();
+    }
+
+    private static Set<String> optionParts(String optionName) {
+        var parts = new HashSet<String>();
+        if (optionName == null) return parts;
+        // 숫자 사이즈(55·90·230)만 조각으로 인정한다. 단품명의 색상 같은 다른 조각은 사이즈 값으로 받지 않는다.
+        for (String part : optionName.split("[/()\\[\\]\\s,]+"))
+            if (part.matches("[0-9]{2,3}")) parts.add(part);
+        return parts;
     }
 
     private static String compact(String text) { return text == null ? "" : text.replaceAll("\\s+", ""); }
