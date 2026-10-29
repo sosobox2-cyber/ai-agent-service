@@ -70,7 +70,8 @@ function classify(run, gold = false) {
   const scored = scoredRows(run, gold);
   if (!scored.length) return 'UNSCORED';
   const correct = scored.every(c => MATCH.has(c.status));
-  if (run.response.success === true) return correct ? 'APPROVED_CORRECT' : 'FALSE_APPROVAL';
+  // 자동 적용 기준. 검증은 통과했지만 정책으로 보류된 결과(autoApplyCandidate=false)는 검토로 센다.
+  if (run.response.success === true && run.response.autoApplyCandidate !== false) return correct ? 'APPROVED_CORRECT' : 'FALSE_APPROVAL';
   return correct ? 'REVIEW_BUT_CORRECT' : 'REVIEW_AND_WRONG';
 }
 
@@ -128,7 +129,7 @@ function summarize(entries, gold = false) {
         const key = String(code).split(':')[0].trim().slice(0, 60); reasons[key] = (reasons[key] || 0) + 1;
       }
     if (kind === 'ERROR' || kind === 'UNSCORED') continue;
-    const approved = run.response.success === true;
+    const approved = run.response.success === true && run.response.autoApplyCandidate !== false;
     if (kind === 'FALSE_APPROVAL' || kind === 'REVIEW_AND_WRONG') {
       const wrong = scoredRows(run, gold).filter(c => !MATCH.has(c.status));
       // 사람 확정값은 이미 사람이 판단한 기준이므로 의심 분류에서 뺀다.

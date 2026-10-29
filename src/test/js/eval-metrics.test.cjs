@@ -32,6 +32,9 @@ test('승인·검토와 정답 여부로 상품을 분류하고 기준값 없는
   assert.equal(classify(run(false, [row('MISSING')])), 'REVIEW_AND_WRONG');
   assert.equal(classify(run(true, [row('NO_REFERENCE')])), 'UNSCORED');
   assert.equal(classify({ error: 'AI_TIMEOUT' }), 'ERROR');
+  // 검증은 통과했지만 정책으로 자동 적용에서 빠진 결과는 검토로 센다.
+  const held = run(true, [row('DIFFERENT')]); held.response.autoApplyCandidate = false;
+  assert.equal(classify(held), 'REVIEW_AND_WRONG');
 });
 
 test('확정값 기준은 사람이 확정한 행만 채점한다', () => {
