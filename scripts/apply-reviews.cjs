@@ -19,11 +19,14 @@ function command(draft, runId) {
 }
 
 // 서버 상태가 초안 작성 시점과 같은지 확인한다. 다르면 저장하지 않고 사유를 돌려준다.
-function check(draft, detail, expectedRunId) {
+// replace=true이면 이 도구가 저장한 검토(메모가 초안 표식으로 시작)만 고쳐 쓴다. 사람이 화면에서 쓴 검토는 덮지 않는다.
+const TOOL_NOTES = [NOTE_PREFIX, 'AI 초안·', '사람 답변'];
+function check(draft, detail, expectedRunId, replace = false) {
   const latest = detail.latest;
   if (!latest || latest.id !== expectedRunId) return '최신 실행이 초안 작성 때와 다름';
   const prior = detail.reviews?.[draft.row];
-  if (prior && prior.status !== 'UNREVIEWED') return `이미 검토됨(${prior.status})`;
+  if (prior && prior.status !== 'UNREVIEWED'
+      && !(replace && TOOL_NOTES.some(p => String(prior.note || '').startsWith(p)))) return `이미 검토됨(${prior.status})`;
   const cmp = (latest.comparisons || []).find(c => c.row === draft.row);
   if (!cmp) return '기준 행 없음';
   if (draft.status === 'SUCCESS' && (!latest.response?.success || cmp.actual !== draft.value)) return '성공 체크 조건 불일치';
@@ -31,8 +34,8 @@ function check(draft, detail, expectedRunId) {
 }
 
 async function main() {
-  const args = process.argv.slice(2), apply = args.includes('--apply');
-  const [folder, draftFile, planFile, datasetId] = args.filter(a => a !== '--apply');
+  const args = process.argv.slice(2), apply = args.includes('--apply'), replace = args.includes('--replace');
+  const [folder, draftFile, planFile, datasetId] = args.filter(a => a !== '--apply' && a !== '--replace');
   if (!folder || !draftFile || !planFile || !/^[a-f0-9-]{36}$/.test(datasetId || ''))
     throw Error('사용법: node scripts/apply-reviews.cjs logs/<평가폴더> <초안.json> <계획파일> <운영데이터셋ID> [--apply]');
   const dir = path.resolve(folder);
@@ -60,7 +63,7 @@ async function main() {
       if (!r.ok) throw Error(`사례 조회 HTTP ${r.status}: ${draft.caseId}`);
       details.set(draft.caseId, await r.json());
     }
-    const skip = check(draft, details.get(draft.caseId), runIds.get(draft.caseId));
+    const skip = check(draft, details.get(draft.caseId), runIds.get(draft.caseId), replace);
     const body = command(draft, runIds.get(draft.caseId));
     let outcome = skip ? 'skipped' : apply ? 'saved' : 'wouldSave', error = skip;
     if (!skip && apply) {
