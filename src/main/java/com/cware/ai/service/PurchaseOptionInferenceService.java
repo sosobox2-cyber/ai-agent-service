@@ -83,6 +83,15 @@ public class PurchaseOptionInferenceService {
         // 모든 검증을 통과하면 원본 옵션명을 포함한 매핑과 단품 결과를 성공 응답으로 반환한다.
         // diagnose는 AI의 판단 내용과 서버의 승인 사유를 함께 기록한다.
         List<OptionMapping> mappings = optionMappings(request, proposal);
+        // 오답률이 높은 구매옵션이 허용된 상품은 검증을 통과해도 사람 확인 후 적용한다.
+        // 값과 단품 결과는 그대로 돌려주고 autoApplyCandidate만 false로 둔다. 생략된 허용 옵션은 기존처럼 승인한다.
+        List<String> held = request.allowedPurchaseOptions().stream()
+                .filter(properties.reviewOnlyTargets()::contains).toList();
+        if (!held.isEmpty())
+            return diagnose(new InferenceResponse(request.goodsId(), true, false, confidence, mappings, items,
+                    proposal.reason(), List.of(), null, hash, properties.promptVersion(), source),
+                    proposal, "ACCEPTED_REVIEW_POLICY", "서버 검증은 통과했지만 사람 확인 대상 구매옵션("
+                            + String.join(", ", held) + ")이 있어 자동 적용 후보에서 제외했습니다.");
         return diagnose(new InferenceResponse(request.goodsId(), true, true, confidence, mappings, items,
                 proposal.reason(), List.of(), null, hash, properties.promptVersion(), source),
                 proposal, "ACCEPTED", "AI의 확실 판정, 신뢰도 기준 및 서버의 구조·대상별 근거 검증을 통과했습니다. 모든 원문 의미와 합산의 정확성을 보증하지는 않습니다.");

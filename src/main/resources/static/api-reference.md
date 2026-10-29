@@ -119,7 +119,7 @@ curl --request POST 'http://127.0.0.1:8081/api/v1/coupang/purchase-options/infer
 | `RESULT_VALIDATION_FAILED` | 결과 검증 실패. HTTP 200이어도 최종 목록은 비어 있으므로 검토 |
 | `TEST_MODE` | 모의 결과가 있어도 실제 적용 대상으로 사용하지 않음 |
 
-현재 구현은 승인 시 두 플래그를 모두 true, 그 외에는 모두 false로 반환합니다. `autoApplyCandidate=true`는 후속 시스템의 적용 후보라는 뜻이며 **이 API가 쿠팡 상품을 등록하거나 수정했다는 뜻이 아닙니다.**
+검증을 통과하면 `success=true`입니다. 다만 사람 확인 대상 구매옵션(기본: `사이즈`, `모델명/품번`, `개당 캡슐/정`, `침구류사이즈`, 설정 `app.inference.review-only-targets`)이 허용된 상품은 `autoApplyCandidate=false`, `serverAssessment.decisionCode=ACCEPTED_REVIEW_POLICY`로 반환합니다. 이때도 `optionMappings`와 `items`는 채워져 있어 검토 화면에 AI 값을 그대로 보여 줄 수 있습니다. 그 외 반려는 두 플래그가 모두 false입니다. `autoApplyCandidate=true`는 후속 시스템의 적용 후보라는 뜻이며 **이 API가 쿠팡 상품을 등록하거나 수정했다는 뜻이 아닙니다.**
 
 허용 목록은 사용할 수 있는 구매옵션의 범위입니다. 서버는 단품마다 최소 하나의 AI 매핑을 요구합니다. 최종 `items.purchaseOptions`에서는 AI가 매핑하지 않은 항목 중 기본단위 설정이 없는 항목을 `"없음"`으로 채우며, 기본단위가 설정된 누락 항목은 생략합니다. 후속 시스템이 반드시 요구하는 구매옵션은 실제 값이 추출되었는지 호출자가 추가로 확인하세요.
 
@@ -285,7 +285,7 @@ AI가 매핑하지 않은 허용 구매옵션 중 기본단위 설정이 없는 
 | `aiAssessment.confidence` | number 또는 null | 제안 전체 신뢰도. 최상위 최저 신뢰도와 다를 수 있음 |
 | `aiAssessment.mappings` | object[] 또는 null | 제안 매핑. 항목 필드는 `optionMappings`와 같으나 `sourceOptionName` 없음. 실패 정보에서는 null 항목이나 잘못된 값이 남을 수 있음 |
 | `aiAssessment.reason` | string 또는 null | AI 판단 또는 검토 사유 |
-| `serverAssessment.decisionCode` | string | `ACCEPTED`, `AI_UNCERTAIN`, `LOW_CONFIDENCE`, `RESULT_VALIDATION_FAILED`, `TEST_MODE` 또는 예외 오류 코드 |
+| `serverAssessment.decisionCode` | string | `ACCEPTED`, `ACCEPTED_REVIEW_POLICY`(검증 통과·사람 확인 대상), `AI_UNCERTAIN`, `LOW_CONFIDENCE`, `RESULT_VALIDATION_FAILED`, `TEST_MODE` 또는 예외 오류 코드 |
 | `serverAssessment.reason` | string | 서버 승인·보류 사유 |
 | `serverAssessment.confidenceThreshold` | number | 서버의 최종 승인 신뢰도 기준 |
 

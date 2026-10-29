@@ -31,6 +31,7 @@ ApiProtectionConfig → PurchaseOptionController → InferenceRequest / RequestV
 
 - 실제 AI와 모의 추출의 호출 경로를 구분한다. `*Context`, `MockCalculation`이 실제 AI 승인에 사용된다고 추측하지 않는다.
 - 실제 AI 최종 승인은 `certain=true`, 전체·개별 매핑 최저 신뢰도 기준 충족, 구조·단위 형식·단품 조합 검사 통과가 필요하다. 기본 신뢰도 기준은 0.80이며 설정을 확인한다.
+- 승인된 상품이라도 `app.inference.review-only-targets`(기본: 사이즈, 모델명/품번, 개당 캡슐/정, 침구류사이즈) 대상이 허용돼 있으면 `autoApplyCandidate=false`, `ACCEPTED_REVIEW_POLICY`로 사람 확인을 요구한다. 허용 옵션 생략은 승인한다. 대상 목록은 확정값 평가 근거 없이 바꾸지 않는다.
 - 정상 모의 결과도 `inferenceSource=TEST`, `errorCode=TEST_MODE`, `success=false`, `autoApplyCandidate=false`다. 모의 테스트 성공을 실제 AI 정확성으로 보고하지 않는다.
 - 반려된 AI 제안은 `aiAssessment`에 보존하며 자동 적용 결과와 구분한다. `serverAssessment`, 오류 코드와 빈 결과 목록의 의미를 유지한다.
 - 기본 LIGHT 재추론은 불확실 또는 검증 실패 시 FULL로 한 번만 전환한다. 통신 오류와 낮은 confidence만으로 재호출하지 않는다. 관련 설정과 `AiFailoverTest`를 함께 확인한다.

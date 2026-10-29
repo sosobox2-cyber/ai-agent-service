@@ -97,6 +97,10 @@ final class Fixtures {
                 new MappingProposal.Entry("1","사이즈","100",.99)),"명확하게 매핑 가능");
     }
     static InferenceProperties properties() {
-        return new InferenceProperties(.80,"coupang-option-v6",Duration.ofSeconds(5),Duration.ofSeconds(30));
+        // 공통 고정값은 자동 적용 보류 대상 없이 신뢰도·검증 판정만 본다. 보류 정책은 AutoApplyPolicyTest에서 검증한다.
+        return properties(java.util.List.of());
+    }
+    static InferenceProperties properties(java.util.List<String> reviewOnlyTargets) {
+        return new InferenceProperties(.80,"coupang-option-v6",Duration.ofSeconds(5),Duration.ofSeconds(30), reviewOnlyTargets);
     }
 }
