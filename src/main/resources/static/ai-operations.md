@@ -421,6 +421,26 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\measure-ai-failove
 
 Docker 이미지의 /app는 root가 만들고 실행자는 app 사용자이며 logs 폴더·쓰기 권한을 별도로 마련하지 않습니다. 현재 Compose에는 로그 볼륨도 없습니다. 파일 생성이 실패할 수 있고 컨테이너 교체 시 로컬 로그가 유실될 수 있으므로 실제 배포 환경의 쓰기 가능 경로·영속 저장 정책을 확인하세요. JSONL의 30일 설정만으로 배포 환경의 영속 보관을 보장하지 않습니다. 이번 작업은 이를 문서 TODO로만 기록하며 배포 설정을 변경하지 않습니다.
 
+### 운영 표본
+
+평가 기능(`app.evaluation.enabled=true`)이 켜져 있고 파일 저장소를 쓰면, 운영 추론 API(`/infer`)의 실제 AI 승인 결과 일부를 평가 데이터셋 "운영 표본"(sourceHash `production-sample`)에 저장합니다. 평가 화면에서 실행한 결과는 표본에 넣지 않습니다.
+
+- 자동 적용 결과(`autoApplyCandidate=true`)는 10%, 정책 보류 결과(`ACCEPTED_REVIEW_POLICY`)는 5%를 무작위로 저장합니다. 반려와 테스트 모드는 저장하지 않습니다.
+- 사례 ID는 `pYYYYMMDD-xxxxxxxx`(서울 날짜)입니다. 기본 보관 기한은 없습니다. `retention-days`를 양수로 설정하면, 그 일수가 지난 표본을 하루 한 번 표본을 저장할 때 함께 지웁니다.
+- 저장 내용은 요청 전체(goodsId, 상품명, 정보고시, 구성, 단품명)와 응답입니다. 개인정보는 없지만 상품 식별정보가 있으므로 평가 API 접근 제한을 유지합니다.
+- 기준값은 비어 있습니다. 평가 화면에서 정답을 확정하고 git-snapshot을 받으면 `node scripts/eval-metrics.cjs --snapshot <스냅샷.json>`으로 검토된 사례의 오승인율을 집계할 수 있습니다.
+- 저장에 실패해도 API 응답은 바뀌지 않고 `production_sample_failed` 경고 로그만 남습니다.
+- 설정 키와 기본값:
+
+| 키 | 기본값 |
+| --- | --- |
+| `app.evaluation.production-sample.enabled` | true |
+| `app.evaluation.production-sample.auto-apply-rate` | 0.10 |
+| `app.evaluation.production-sample.review-policy-rate` | 0.05 |
+| `app.evaluation.production-sample.retention-days` | 0 (기한 없음) |
+
+- 배포 주의: 배포할 때마다 로컬 데이터가 지워집니다. "운영 표본"도 다른 평가 데이터셋처럼 배포 전에 백업하고 배포 후 복원해야 합니다. 복원 전에 들어온 표본은 새 "운영 표본" 데이터셋에 따로 쌓이므로, 복원을 트래픽보다 먼저 끝내는 것이 좋습니다.
+
 ## 11. 관련 자료와 검증 근거
 
 정본 API 계약: `src/main/resources/static/api-reference.md`. 화면 상단의 API 명세서 링크에서 읽을 수 있습니다.
