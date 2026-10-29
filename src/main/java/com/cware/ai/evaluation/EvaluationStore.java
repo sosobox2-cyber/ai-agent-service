@@ -22,7 +22,7 @@ public class EvaluationStore {
     private final ObjectMapper mapper;
     private final Map<String, Data> cache = new ConcurrentHashMap<>();
     static final class Data {
-        final Dataset metadata;
+        volatile Dataset metadata;
         final Map<String, Case> cases = new LinkedHashMap<>();
         final Map<String, Run> latest = new ConcurrentHashMap<>();
         final Map<String, Map<Integer, Review>> reviews = new ConcurrentHashMap<>();
@@ -47,6 +47,49 @@ public class EvaluationStore {
         imported.cases().forEach(test -> data.cases.put(test.id(), test));
         cache.put(data.metadata.id(), data);
         return data.metadata;
+    }
+    /** 운영 표본처럼 사례가 계속 늘어나는 데이터셋에 사례 하나와 첫 실행을 추가한다. 없으면 빈 데이터셋을 만든다. */
+    synchronized void appendCase(Dataset dataset, Case test, Run run) throws IOException {
+        Path folder = folder(dataset.id());
+        if (!Files.exists(folder.resolve("metadata.json"))) save(new Imported(dataset, List.of()));
+        Data data = data(dataset.id());
+        if (data.cases.containsKey(test.id())) return;
+        Files.writeString(folder.resolve("cases.jsonl"), mapper.writeValueAsString(test) + System.lineSeparator(),
+                StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        data.cases.put(test.id(), test);
+        saveRun(dataset.id(), data, run);
+        updateCounts(data);
+    }
+    /** keep가 false인 사례와 그 실행·검토 파일을 지운다. 보관 기간이 지난 운영 표본 정리에 쓴다. */
+    synchronized int prune(String datasetId, java.util.function.Predicate<String> keep) throws IOException {
+        Data data = data(datasetId);
+        List<String> removed = data.cases.keySet().stream().filter(id -> !keep.test(id)).toList();
+        if (removed.isEmpty()) return 0;
+        Path folder = folder(datasetId);
+        removed.forEach(id -> { data.cases.remove(id); data.latest.remove(id); data.reviews.remove(id); data.summaries.remove(id); });
+        Path stage = folder.resolve("cases.jsonl.tmp");
+        try (var writer = Files.newBufferedWriter(stage, StandardCharsets.UTF_8)) {
+            for (Case test : data.cases.values()) { writer.write(mapper.writeValueAsString(test)); writer.newLine(); }
+        }
+        Files.move(stage, folder.resolve("cases.jsonl"), StandardCopyOption.REPLACE_EXISTING);
+        for (String id : removed) for (Path path : List.of(folder.resolve("latest").resolve(id + ".json"),
+                folder.resolve("reviews").resolve(id + ".json"), folder.resolve("runs").resolve(id), folder.resolve("review-history").resolve(id)))
+            deleteTree(path);
+        updateCounts(data);
+        return removed.size();
+    }
+    private void updateCounts(Data data) throws IOException {
+        Dataset old = data.metadata;
+        Dataset updated = new Dataset(old.id(), old.filename(), old.sourceHash(), old.importedAt(),
+                data.cases.values().stream().mapToInt(c -> c.references().size()).sum(), data.cases.size(),
+                data.cases.values().stream().mapToInt(c -> c.request().options().size()).sum(),
+                (int) data.cases.values().stream().flatMap(c -> c.references().stream()).filter(r -> !r.issues().isEmpty()).count());
+        atomic(folder(old.id()).resolve("metadata.json"), updated);
+        data.metadata = updated;
+    }
+    private static void deleteTree(Path path) throws IOException {
+        if (!Files.exists(path)) return;
+        try (var paths = Files.walk(path)) { for (Path p : paths.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(p); }
     }
     public synchronized List<Dataset> datasets() throws IOException {
         List<Dataset> result = new ArrayList<>();

@@ -41,4 +41,15 @@ class LocalEvaluationAccessTest {
         request.addHeader("Sec-Fetch-Site","cross-site");
         assertThat(access.available(request)).isFalse();
     }
+    @Test void productionSampleUsesSameLocalReviewBoundaryAsImportedCases() {
+        var access = new LocalEvaluationAccess(true, "127.0.0.1");
+        String sample = CASE.replace("c00001", "p20261029-12abcdef");
+        var request = new MockHttpServletRequest("GET", sample);
+        assertThat(access.allows(request, sample)).isTrue();
+        request.setMethod("PUT");
+        assertThat(access.allows(request, sample + "/reviews/1")).isTrue();
+        assertThat(access.allows(request, sample.replace("12abcdef", "../escape") + "/reviews/1")).isFalse();
+        request.setServerName("external.example");
+        assertThat(access.allows(request, sample + "/reviews/1")).isFalse();
+    }
 }

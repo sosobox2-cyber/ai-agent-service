@@ -42,9 +42,10 @@ public class LocalEvaluationAccess {
         if(method.equals("PUT") && path.matches(root+"/imports/[a-f0-9-]{36}/parts/[0-9]+")) return true;
         if (method.equals("POST") && (path.equals(root + "/sample") || path.equals(root + "/datasets"))) return true;
         String dataset = root + "/datasets/[a-f0-9-]{36}";
+        String caseId = "(?:c[0-9]+|p[0-9]{8}-[a-f0-9]{8})";
         if (method.equals("GET")) return path.equals(root + "/datasets")
-                || path.matches(dataset + "/(?:cases(?:/c[0-9]+)?|backup|git-snapshot)");
-        if (method.equals("PUT")) return path.matches(dataset + "/cases/c[0-9]+/reviews/[0-9]+");
-        return method.equals("POST") && path.matches(dataset + "/cases/c[0-9]+/(?:mock-runs|runs)");
+                || path.matches(dataset + "/(?:cases(?:/" + caseId + ")?|backup|git-snapshot)");
+        if (method.equals("PUT")) return path.matches(dataset + "/cases/" + caseId + "/reviews/[0-9]+");
+        return method.equals("POST") && path.matches(dataset + "/cases/" + caseId + "/(?:mock-runs|runs)");
     }
 }

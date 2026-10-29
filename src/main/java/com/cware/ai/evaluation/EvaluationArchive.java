@@ -14,6 +14,7 @@ import static com.cware.ai.evaluation.EvaluationModels.*;
 public final class EvaluationArchive {
     private EvaluationArchive() {}
     static final long MAX_EXPANDED = 128L * 1024 * 1024;
+    private static final String CASE_ID = "(?:c[0-9]+|p[0-9]{8}-[a-f0-9]{8})";
     public record History(Case testCase, Run latest, List<Run> runs, Map<Integer, Review> reviews, List<Review> events) {}
     public record Snapshot(Dataset dataset, List<History> cases) {}
     public record GitCase(Case testCase, List<Review> reviews, List<Run> runs) {}
@@ -26,7 +27,7 @@ public final class EvaluationArchive {
             try (var zip = new ZipInputStream(new ByteArrayInputStream(bytes), StandardCharsets.UTF_8)) {
                 for (var entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
                     String name = entry.getName();
-                    if (entry.isDirectory() || !name.matches("(?:metadata\\.json|cases\\.jsonl|state\\.json|(?:latest|reviews)/c[0-9]+\\.json|(?:runs|review-history)/c[0-9]+/[a-f0-9-]{36,73}\\.json)")
+                    if (entry.isDirectory() || !name.matches("(?:metadata\\.json|cases\\.jsonl|state\\.json|(?:latest|reviews)/" + CASE_ID + "\\.json|(?:runs|review-history)/" + CASE_ID + "/[a-f0-9-]{36,73}\\.json)")
                             || files.containsKey(name) || files.size() >= 100_000) throw invalid();
                     var out = new ByteArrayOutputStream();
                     byte[] buffer = new byte[8192];
@@ -46,12 +47,12 @@ public final class EvaluationArchive {
             try (var reader = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(required(files, "cases.jsonl")), StandardCharsets.UTF_8))) {
                 for (String line; (line = reader.readLine()) != null;) {
                     Case test = mapper.readValue(line, Case.class);
-                    if (test.id() == null || !test.id().matches("c[0-9]+") || !ids.add(test.id()) || test.request() == null
+                    if (test.id() == null || !test.id().matches(CASE_ID) || !ids.add(test.id()) || test.request() == null
                             || test.references() == null || test.references().isEmpty() || test.issues() == null) throw invalid();
                     cases.add(test);
                 }
             }
-            if (cases.isEmpty() || original.products() != cases.size()
+            if ((cases.isEmpty() && !"production-sample".equals(original.sourceHash())) || original.products() != cases.size()
                     || original.rows() != cases.stream().mapToInt(c -> c.references().size()).sum()
                     || original.options() != cases.stream().mapToInt(c -> c.request().options().size()).sum()) throw invalid();
             BlobEvaluationStore.State state = files.containsKey("state.json")
