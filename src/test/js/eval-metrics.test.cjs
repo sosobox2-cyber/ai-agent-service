@@ -24,7 +24,18 @@ test('운영 표본 스냅샷은 사례별 최신 AI 실행과 검토로 집계�
   assert.equal(collectSnapshot(snapshot).budget, null);
 });
 
-const { classify, wilson, collect, compareValue, nearMatch, listReferenceOmitted, rescore, loadReviews } = require('../../../scripts/eval-metrics.cjs');
+const { classify, wilson, collect, compareValue, nearMatch, listReferenceOmitted, rescore, loadReviews, assertSameSource } = require('../../../scripts/eval-metrics.cjs');
+
+// caseId는 가져오기 순번이라 원본이 바뀌면 같은 번호가 다른 상품이 된다. 재채점 전에 막아야 한다.
+test('계획과 검토 스냅샷의 원본이 다르면 재채점하지 않는다', () => {
+  const snapshot = source => ({ source: { sourceHash: source }, cases: [] });
+  assert.throws(() => assertSameSource('aaa', snapshot('bbb')), /원본이 다릅니다/);
+  // 같은 원본이거나, 한쪽에 sourceHash가 없으면(운영 표본) 통과시킨다.
+  assertSameSource('aaa', snapshot('aaa'));
+  assertSameSource(null, snapshot('bbb'));
+  assertSameSource('aaa', snapshot(null));
+  assertSameSource('aaa', { cases: [] });
+});
 
 test('목록 기준값에서 AI가 생략한 행만 기준값 의심으로 본다', () => {
   assert.equal(listReferenceOmitted('블랙, 그린, 레드', null), true);

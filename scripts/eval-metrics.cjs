@@ -50,6 +50,16 @@ function rescore(run, reviews) {
   }) };
 }
 
+// caseId는 가져오기 순번(c%05d)이라 엑셀이 바뀌면 같은 번호가 다른 상품을 가리킨다.
+// 재채점은 caseId로만 검토를 연결하므로, 계획과 스냅샷이 같은 원본인지 먼저 확인한다.
+// 어느 한쪽에 sourceHash가 없으면(운영 표본 등) 대조하지 않는다.
+function assertSameSource(planSourceHash, snapshot) {
+  const snapshotHash = snapshot && snapshot.source ? snapshot.source.sourceHash : null;
+  if (!planSourceHash || !snapshotHash || planSourceHash === snapshotHash) return;
+  throw Error(`계획과 검토 스냅샷의 원본이 다릅니다. 같은 caseId가 다른 상품일 수 있습니다.\n`
+    + `  계획   sourceHash ${planSourceHash}\n  스냅샷 sourceHash ${snapshotHash}`);
+}
+
 // export-evaluation.ps1의 git-snapshot JSON에서 상품별 검토를 읽는다.
 function loadReviews(snapshot) {
   const result = new Map();
@@ -243,22 +253,25 @@ function main() {
     '사용법: node scripts/eval-metrics.cjs logs/<평가폴더> [계획파일] [--reviews <git-snapshot.json>] [--json]');
   const dir = path.resolve(folder);
   if (!dir.startsWith(path.join(ROOT, 'logs') + path.sep)) throw Error('평가 폴더는 이 저장소 logs 아래여야 합니다.');
-  let trialIds = null, planSize = null;
+  let trialIds = null, planSize = null, planSourceHash = null;
   if (planFile) {
     if (!/^(plan|fixed)[a-z0-9-]*\.json$/.test(planFile)) throw Error('계획 파일 이름이 잘못되었습니다.');
     const plan = JSON.parse(fs.readFileSync(path.join(dir, planFile), 'utf8').replace(/^﻿/, ''));
     trialIds = new Set(plan.selected.map(s => s.trialId || s.caseId)); planSize = plan.selected.length;
+    planSourceHash = plan.sourceHash || null;
   }
   let reviews = null;
   if (reviewFile) {
     const file = path.resolve(reviewFile);
     if (!file.startsWith(ROOT + path.sep)) throw Error('검토 스냅샷은 이 저장소 안에 있어야 합니다.');
-    reviews = loadReviews(JSON.parse(fs.readFileSync(file, 'utf8').replace(/^﻿/, '')));
+    const snapshot = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^﻿/, ''));
+    assertSameSource(planSourceHash, snapshot);
+    reviews = loadReviews(snapshot);
   }
   const result = collect(dir, trialIds, reviews);
   if (reviews) result.reviewSnapshot = { cases: reviews.size, rows: [...reviews.values()].reduce((s, m) => s + m.size, 0) };
   console.log(json ? JSON.stringify(result, null, 2) : render(result, planSize));
 }
 
-module.exports = { EMPTY_MARK, classify, wilson, summarize, collect, collectSnapshot, compareValue, nearMatch, listReferenceOmitted, rescore, loadReviews };
+module.exports = { EMPTY_MARK, classify, wilson, summarize, collect, collectSnapshot, compareValue, nearMatch, listReferenceOmitted, rescore, loadReviews, assertSameSource, readLines };
 if (require.main === module) try { main(); } catch (e) { console.error(e.message); process.exitCode = 1; }

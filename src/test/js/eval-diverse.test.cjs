@@ -142,3 +142,24 @@ test('대조 실험도 같은 예산 원장을 사용하고 다른 상품의 입
     return { ok: true, json: async () => ({ testCase: x.c }) };
   } }), /상품 또는 크기/);
 });
+
+// plan 명령이 promptVersion을 기본값으로 채우면 서버 버전과 어긋난 계획이 만들어진다.
+// 인자 검증은 파일을 읽기 전에 끝나므로 존재하지 않는 폴더로도 확인할 수 있다.
+function runPlanCli(args) {
+  const script = path.join(__dirname, '..', '..', '..', 'scripts', 'eval-diverse.cjs');
+  const result = require('node:child_process').spawnSync(process.execPath, [script, ...args],
+    { encoding: 'utf8', cwd: path.join(__dirname, '..', '..', '..') });
+  return { code: result.status, stderr: result.stderr || '' };
+}
+test('plan 명령은 promptVersion 인자가 없으면 계획을 만들지 않는다', () => {
+  const result = runPlanCli(['plan', 'logs/plan-arg-check', '10']);
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /promptVersion을 네 번째 인자로 지정하세요/);
+});
+test('plan 명령은 형식이 틀린 promptVersion을 거부한다', () => {
+  for (const bad of ['v45', 'coupang-option-x45', 'coupang-option-v']) {
+    const result = runPlanCli(['plan', 'logs/plan-arg-check', '10', bad]);
+    assert.notEqual(result.code, 0, bad);
+    assert.match(result.stderr, /promptVersion을 네 번째 인자로 지정하세요/, bad);
+  }
+});

@@ -119,15 +119,48 @@ Vercel의 [Container Images](https://vercel.com/docs/functions/container-images)
 |---|---|
 | `PORT` | `8081` — Vercel이 전달할 포트와 서버 포트를 일치시킵니다. |
 | `SERVER_ADDRESS` | `0.0.0.0` |
+| `AI_AGENT_SECURITY_ENABLED` | `true` — 운영 서비스 API 인증을 활성화합니다. 기본값도 `true`입니다. |
+| `AI_AGENT_API_KEY` | 필수. `OPENAI_API_KEY`와 별도로 발급한 충분히 긴 임의 Secret입니다. 모의 테스트만 사용해도 인증이 켜져 있으면 필요합니다. |
+| `AI_AGENT_API_KEY_ID` | `internal-test` 또는 영문·숫자·점·밑줄·하이픈으로 된 1~100자 식별자. Secret과 다른 값을 사용합니다. |
 | `OPENAI_API_KEY` | 실제 AI 추론에 사용할 API 키. 모의 테스트만 할 때는 생략합니다. |
 | `OPENAI_MODEL` | `gpt-4.1-mini` (선택) |
 
 4. **Deploy**를 실행합니다. 이미지 빌드 중 `mvn verify`로 테스트도 실행합니다.
-5. 발급된 배포 주소의 `/`에 접속하고, 테스트 모드를 켜서 모의 추출을 확인합니다. 실제 AI는 API 키를 설정하고 테스트 모드를 해제해 확인합니다.
+5. 발급된 배포 주소의 `/`에서 화면과 문서가 열리는지 확인합니다. 인증이 켜진 운영 환경에서는 API 클라이언트나 사내 서버에서 `X-API-Key` 헤더에 서비스 키를 넣어 추론 API를 호출합니다. `testMode=true`도 동일하게 인증이 필요합니다. 브라우저 테스트 페이지는 서비스 키를 전송하지 않으므로 추론 요청이 401로 거부됩니다. 실제 AI 호출에는 별도로 `OPENAI_API_KEY`가 필요합니다. 호출 예시는 [API 보호 안내](docs/api-protection.md)를 참고하세요.
+
+### 시작 실패: Service API key and a valid API key ID must be configured
+
+`ApiProtectionConfig` 생성 중 이 오류가 발생하면 서비스 API 인증 설정을 확인하세요. 인증은 기본적으로 켜져 있으며, `AI_AGENT_API_KEY`가 비어 있거나 키와 ID가 같거나 `AI_AGENT_API_KEY_ID`가 위 형식에 맞지 않으면 서버 시작을 중단합니다. `OPENAI_API_KEY`만 설정해도 이 검증을 통과하지 못합니다.
+
+Vercel 프로젝트의 **Settings → Environment Variables**에서 `AI_AGENT_API_KEY`와 유효한 `AI_AGENT_API_KEY_ID`를 설정하고, 실패한 배포의 환경(Production 또는 Preview)에 적용했는지 확인한 뒤 새로 배포하세요. 기존 배포에는 환경변수 변경이 반영되지 않습니다([Vercel 환경변수 안내](https://vercel.com/docs/environment-variables)). Docker Compose에서는 같은 값을 `.env`에 설정한 뒤 컨테이너를 다시 생성합니다. Java 직접 실행은 `.env`를 자동으로 읽지 않으므로 실행 환경변수로 전달해야 합니다.
+
+로컬 브라우저 테스트에는 `SPRING_PROFILES_ACTIVE=dev` 또는 `AI_AGENT_SECURITY_ENABLED=false`를 사용할 수 있습니다. 공개 운영 서비스에는 인증을 켜 둡니다.
 
 Vercel은 로컬 `.env`나 `compose.yaml`을 실행 환경 설정으로 사용하지 않습니다. 환경 변수를 변경했다면 새로 배포해야 반영됩니다. 한동안 요청이 없으면 컨테이너가 내려갔다가 다음 요청에 다시 시작하므로 첫 접속은 느릴 수 있습니다. 실제 AI 호출에 사용하는 페이지이므로 공유 범위에 맞게 Vercel Deployment Protection 또는 앱 인증으로 접근을 제한하세요.
 
 `AI_RATE_LIMIT`(HTTP 429)은 OpenAI의 크레딧 또는 호출·사용 한도 문제일 수 있습니다. Vercel 배포로 해결되지 않으며, OpenAI 계정의 크레딧과 한도를 별도로 확인해야 합니다.
+
+## Railway에서 인증 설정이 반영되지 않을 때
+
+Railway의 해당 서비스 **Variables**에서 `AI_AGENT_SECURITY_ENABLED=false`를 설정했는데도 `Service API key and a valid API key ID must be configured`로 종료된다면 다음을 확인하세요. 현재 코드에서는 인증 설정의 최종값이 `false`일 때 이 예외를 발생시키지 않습니다.
+
+1. 실패한 Spring Boot 서비스와 동일한 Railway 환경에 변수를 설정했는지 확인합니다. Shared Variable이라면 해당 서비스에 연결되어 있는지도 확인합니다.
+2. 변수 변경으로 생긴 **staged changes**를 검토하고 **Deploy**로 적용합니다. 변수 저장만으로 실행 중인 배포에 적용되는 것은 아닙니다([Railway 변수 안내](https://docs.railway.com/variables)). 변경 적용 후 생성된 배포의 로그를 확인합니다.
+3. 계속 실패하면 `APP_SECURITY_ENABLED`, `SPRING_APPLICATION_JSON`, Java 옵션의 `-Dapp.security.enabled`, Start Command의 `--app.security.enabled` 등 같은 설정을 직접 지정하는 항목과 외부 Spring 설정 파일을 확인합니다. 배포한 브랜치·커밋에 현재 `application.yml`의 환경변수 연결이 포함되어 있는지도 확인합니다.
+
+`false`를 사용하면 서비스 키는 필수가 아닙니다. `OPENAI_API_KEY`는 실제 AI 호출에만 별도로 필요합니다. 문제 확인 시에는 비밀 키나 전체 환경변수 목록을 로그에 출력하지 마세요.
+
+### EvaluationStore 빈을 찾지 못해 시작이 실패할 때
+
+`EvaluationController required a bean of type 'EvaluationStore' that could not be found`는 평가 기능은 활성화됐지만 저장소 빈이 등록되지 않았다는 의미입니다. 현재 저장소 선택값은 정확히 소문자 `file` 또는 `blob`이며, `EVALUATION_STORAGE`를 빈 문자열이나 다른 값으로 지정하면 두 저장소 모두 등록되지 않습니다. 이 변수 외에 `app.evaluation.storage`를 직접 지정하는 설정도 확인하세요.
+
+Railway에서 파일 저장소를 사용할 때는 `EVALUATION_ENABLED=true`, `EVALUATION_STORAGE=file`로 설정하고 staged changes를 배포합니다. 데이터를 유지하려면 Railway Volume을 연결하고 `EVALUATION_DATA_DIRECTORY`를 해당 볼륨 아래의 쓰기 가능한 경로로 지정하세요. 평가 관리 기능이 필요 없다면 `EVALUATION_ENABLED=false`로 끌 수 있습니다. `blob`은 Vercel Blob 구현이며 별도의 저장소와 인증 설정이 필요합니다.
+
+### Railway에서 Excel 샘플을 불러올 수 없을 때
+
+`전달한 샘플 데이터 불러오기`는 서버에 존재하는 파일 또는 이미 가져온 데이터 세트를 읽습니다. 로컬의 `data/evaluation-samples/sample.xls`는 Git과 Docker 이미지에서 제외되므로 Railway 배포에는 자동으로 포함되지 않습니다. 로컬 IntelliJ 샘플 경로를 환경변수로 지정해도 Railway에서 해당 파일을 읽을 수 없습니다.
+
+`EVALUATION_SAMPLE_UNAVAILABLE`가 표시되면 평가 화면의 **데이터 새로 가져오기 → Excel 또는 백업 ZIP**에서 PC의 `.xls` 또는 `.xlsx` 파일을 선택하고 **데이터 가져오기**를 누르세요. 최대 32MB이며 3MB를 넘는 Excel은 1MB 조각으로 전송됩니다. 가져온 데이터의 재배포 후 보존에는 파일 저장소 경로에 연결한 Railway Volume이 필요합니다.
 
 ## API
 

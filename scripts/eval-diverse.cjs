@@ -126,7 +126,7 @@ function accounting(events) {
 async function execute({ dir, plan, maxNew = 1, fetcher = fetch, pause = delay }) {
   const base = new URL(plan.baseUrl);
   if (base.protocol !== 'https:' || base.username || base.password || base.pathname !== '/') throw Error('HTTPS origin이 필요합니다.');
-  if (!['coupang-option-v27', 'coupang-option-v28', 'coupang-option-v29', 'coupang-option-v30', 'coupang-option-v31', 'coupang-option-v32', 'coupang-option-v34', 'coupang-option-v35', 'coupang-option-v36', 'coupang-option-v37', 'coupang-option-v38', 'coupang-option-v39', 'coupang-option-v40', 'coupang-option-v41', 'coupang-option-v42', 'coupang-option-v43', 'coupang-option-v44', 'coupang-option-v45'].includes(plan.promptVersion) || plan.reserveUsd !== RESERVE_USD || !KNOWN_BUDGETS.includes(plan.budgetUsd)) throw Error('검증된 실행 설정과 다릅니다.');
+  if (!['coupang-option-v27', 'coupang-option-v28', 'coupang-option-v29', 'coupang-option-v30', 'coupang-option-v31', 'coupang-option-v32', 'coupang-option-v33', 'coupang-option-v34', 'coupang-option-v35', 'coupang-option-v36', 'coupang-option-v37', 'coupang-option-v38', 'coupang-option-v39', 'coupang-option-v40', 'coupang-option-v41', 'coupang-option-v42', 'coupang-option-v43', 'coupang-option-v44', 'coupang-option-v45'].includes(plan.promptVersion) || plan.reserveUsd !== RESERVE_USD || !KNOWN_BUDGETS.includes(plan.budgetUsd)) throw Error('검증된 실행 설정과 다릅니다.');
   const ledger = path.join(dir, 'ledger.jsonl'), lock = path.join(dir, 'running.lock');
   const lockFd = fs.openSync(lock, 'wx');
   const append = e => fs.appendFileSync(ledger, JSON.stringify(e) + '\n', { flush: true });
@@ -181,7 +181,8 @@ async function execute({ dir, plan, maxNew = 1, fetcher = fetch, pause = delay }
 async function main() {
   const [command, folder, value, extra, more] = process.argv.slice(2);
   if (!folder || !['plan', 'run', 'status', 'freeze', 'trial'].includes(command)) throw Error(
-    '사용법: node scripts/eval-diverse.cjs plan|run|status logs/<평가폴더> [최대상품수] [계획파일]\n'
+    '사용법: node scripts/eval-diverse.cjs plan logs/<평가폴더> <최대상품수> <promptVersion>\n'
+    + '       node scripts/eval-diverse.cjs run|status logs/<평가폴더> [최대상품수] [계획파일]\n'
     + '       node scripts/eval-diverse.cjs freeze logs/<평가폴더> <표본수> <라벨>\n'
     + '       node scripts/eval-diverse.cjs trial logs/<평가폴더> <라벨> <promptVersion> <운영데이터셋ID>');
   const dir = path.resolve(folder);
@@ -207,9 +208,11 @@ async function main() {
     writeJson(path.join(dir, file), plan);
     console.log(JSON.stringify({ plan: file, selected: plan.selected.length }));
   } else if (command === 'plan') {
+    // promptVersion은 인자로만 받는다. 기본값을 두면 서버 버전과 어긋난 라벨이 원장·지표에 그대로 쌓인다.
+    if (!/^coupang-option-v\d+$/.test(extra || '')) throw Error('promptVersion을 네 번째 인자로 지정하세요.');
     const cases = readLines(path.join(dir, 'cases.jsonl')), metadata = readJson(path.join(dir, 'metadata.json'));
     const plan = { baseUrl: 'https://ai-agent-service-production-7624.up.railway.app/', datasetId: metadata.id,
-      sourceHash: metadata.sourceHash, promptVersion: 'coupang-option-v27', reserveUsd: RESERVE_USD, budgetUsd: BUDGET_USD,
+      sourceHash: metadata.sourceHash, promptVersion: extra, reserveUsd: RESERVE_USD, budgetUsd: BUDGET_USD,
       createdAt: new Date().toISOString(), ...selectCases(cases, Number(value || 72)) };
     writeJson(path.join(dir, 'plan.json'), plan);
     const { selected, ...summary } = plan;
